@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Thomas Stoll
+# SPDX-License-Identifier: Apache-2.0
+
 idf_component_register(
     SRCS "mariadb_client.cpp" "mariadb_sync.cpp" "mariadb_sync_web.cpp"
     INCLUDE_DIRS "include"

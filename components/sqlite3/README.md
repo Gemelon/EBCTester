@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+
 # SQLite for the SD card
 
 This component builds the official SQLite 3.53.4 amalgamation from the

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Thomas Stoll
+# SPDX-License-Identifier: Apache-2.0
+
 """Local-only UI fixture; never sends tester commands or accesses device storage."""
 import json
 import os

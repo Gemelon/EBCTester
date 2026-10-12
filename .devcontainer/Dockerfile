@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Thomas Stoll
+# SPDX-License-Identifier: Apache-2.0
+
 ARG DOCKER_TAG=v6.0.1
 FROM espressif/idf:${DOCKER_TAG}
 

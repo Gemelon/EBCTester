@@ -1,502 +1,231 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+
 # EBCTester
 
-ESP-IDF 6.0+ application for ESP32-S3, firmware **1.3.34**: WLAN provisioning,
-authenticated local Bootstrap UI, manifest-based availability checks, and
-**manual-only** OTA, EBC-A20 control, offline measurement charts, internal
-resistance tests and MariaDB backup.
+**Batterien testen, Messdaten behalten – ohne wochenlang einen PC laufen zu lassen.**
 
-## Clone and first build
+EBCTester verbindet einen ZKE EBC-A20 mit einem kleinen ESP32-S3. Der
+Mikrocontroller übernimmt die Bedienung, führt Testpläne aus und zeichnet
+Messdaten auf einer SD-Karte auf. Über das Webinterface lassen sich Batterien
+verwalten, Messungen verfolgen und Ergebnisse als Diagramme ansehen – auch mit
+dem Handy und ohne Verbindung zum Heim-WLAN.
 
-The project uses two **pinned Git submodules**. Access to all three private
-repositories is required:
+## Warum dieses Projekt?
+
+ZKE-Geräte sind für Hobbyanwender brauchbar und bezahlbar. Die Geräte und ihre
+PC-Software sind allerdings technisch schon etwas älter. Aus meiner Sicht wird
+die Software nicht mehr wesentlich weiterentwickelt; da sie proprietär ist,
+kann ich gewünschte Funktionen auch nicht selbst ergänzen.
+
+Besonders wichtig war mir eine komfortablere Speicherung der Messdaten. Der
+größte Nachteil war jedoch der dauerhaft benötigte PC: Batterietests können
+Tage oder sogar Wochen dauern. Mein Laptop wäre währenddessen ständig an das
+Testgerät gebunden und für andere Aufgaben nur eingeschränkt verfügbar.
+
+Mit EBCTester kann ich Funktionen selbst hinzufügen, statt darauf zu warten,
+ob der Hersteller sie irgendwann anbietet. Die Speicherung in einer Datenbank
+schafft eine Grundlage für spätere Auswertungen über mehrere Batterien hinweg
+und für weitere Exportformate.
+
+Eine optionale Übertragung in MariaDB ermöglicht die Archivierung großer
+Datenmengen außerhalb der SD-Karte. Nach einer überprüften Sicherung kann ich
+lokale Testläufe gezielt löschen, ohne ihre extern gesicherten Daten zu verlieren.
+Die Software löscht lokale Daten dabei **nicht automatisch**.
+
+Begonnen habe ich mit ESPHome. Einige meiner Batterien befinden sich jedoch
+außerhalb der Reichweite des Heim-WLANs. Ich brauchte eine eigenständige Lösung,
+die auch dort weiter aufzeichnet und über einen eigenen WLAN-Zugangspunkt mit
+dem Handy bedienbar bleibt.
+
+— **Thomas Stoll**
+
+## Was funktioniert bereits?
+
+- **Ohne laufenden PC:** Manuelle Bedienung und automatische Lade-/Entladepläne
+  laufen auf dem ESP32-S3; die Browserseite darf geschlossen werden.
+- **Offline-Aufzeichnung:** SQLite-Datenbank auf einer FAT32-SD-Karte.
+  Die Aufzeichnung benötigt kein Heim-WLAN, aber eine verfügbare SD-Datenbank.
+- **Bedienung per Browser:** Lokales Bootstrap-Webinterface mit Diagrammen,
+  Batterieinformationen und getrennten Bereichen für Tests und Verwaltung.
+  CSS, JavaScript und Diagrammbibliothek liegen auf dem Gerät, nicht auf einem CDN.
+- **Innenwiderstandsmessung:** Lastpulstest mit getrennten Ergebnissen bei
+  standardmäßig 1, 5 und 10 Sekunden, gemessenem Strom und einstellbaren Grenzen.
+  Vorbereiteter Ladezustand oder automatische Vorbereitung sind möglich.
+- **Optionale MariaDB-Sicherung:** Testläufe und strukturierte
+  Innenwiderstandsergebnisse können in eine externe Datenbank übertragen werden.
+- **Sprachen:** Deutsch und Englisch; Englisch als Rückfallsprache.
+  Zusätzliche Sprachdateien werden von der SD-Karte geladen.
+- **Bewusst gestartete Updates:** Eine neue Firmware wird angezeigt, aber
+  erst nach einem Klick und einer Bestätigung installiert.
+
+**Aktueller Stand:** Firmware 1.3.35, entwickelt und gebaut mit ESP-IDF 6.0.1
+für ESP32-S3. Der EBC-A20 ist das derzeit unterstützte Testgerät; eine
+allgemeine Unterstützung aller ZKE-Modelle wird nicht behauptet.
+
+Weitere Exportformate und batterieübergreifende Analysen sind
+Erweiterungsmöglichkeiten, noch keine fertigen Funktionen.
+
+## Aufbau und Wiederverwendung
+
+Das Projekt ist bewusst in Funktionseinheiten aufgeteilt. Das Hauptprogramm
+bleibt klein und initialisiert die Komponenten; die eigentliche Arbeit liegt
+in den jeweiligen Modulen.
+
+Zwei Pakete sind eigenständige Repositories, damit sie in anderen Projekten
+wiederverwendet werden können, ohne WLAN, Updates und SD-Verwaltung erneut
+schreiben zu müssen:
+
+| Repository | Aufgabe |
+| --- | --- |
+| **[EBCTester](https://github.com/Gemelon/EBCTester)** | Batteriebedienung, Testpläne, Aufzeichnung, Diagramme, DCIR und MariaDB-Sicherung |
+| **[ota-suite](https://github.com/Gemelon/ota-suite)** | WLAN-Einrichtung, manuelle OTA-Updates, gemeinsames Webinterface, Sprachunterstützung und Status-LED |
+| **[sd-card-manager](https://github.com/Gemelon/sd-card-manager)** | SDMMC-/SPI-Anbindung, Kartenwechsel, gemeinsame Speicherzugriffssperre und Dateiverwaltung |
+
+EBCTester bindet die beiden Pakete als **Git-Submodule mit festen
+Commit-Ständen** in `external/` ein. Die SD-Verwaltung nutzt das Webinterface
+der OTA Suite. OTA Suite selbst benötigt weder EBCTester noch eine SD-Karte.
+
+Die projektspezifischen Komponenten liegen in `components/`:
+
+| Komponente | Aufgabe |
+| --- | --- |
+| `ebc_link` | UARTs, Protokollparser und Testerkommunikation |
+| `test_control` / `test_store` | Bedienung, Testplanablauf, Batterien und Aufzeichnung |
+| `resistance_test` | DCIR-Vorbereitung, Lastpuls und Auswertung |
+| `sqlite3` / `battery_database` | SQLite-Anbindung, SD-VFS und Datenbankschema |
+| `battery_dashboard` | Messdaten und lokale Diagramme |
+| `mariadb_sync` | Inkrementelle externe Sicherung |
+| `ui_localization` | Zusätzliche SD-Sprachen |
+
+API-Endpunkte, Zustandsabläufe und detaillierte Parameter sind in der
+[technischen Referenz](docs/TECHNICAL_REFERENCE.md) beschrieben.
+
+## Selbst verwenden und kompilieren
+
+### Voraussetzungen
+
+- ESP32-S3 mit **16 MiB Flash**, beispielsweise N16R8; die Defaults verwenden
+  optionales Octal-PSRAM. Andere Boards benötigen passende Einstellungen.
+- ZKE EBC-A20 und eine geeignete **3,3-V-/5-V-TTL-Pegelanpassung**.
+  ESP32-GPIOs sind nicht 5-V-tolerant.
+- FAT32-SD-Karte und passende SD-Anbindung mit Pull-ups.
+- VS Code mit ESP-IDF-Erweiterung, ESP-IDF **6.0.1** und Git.
+- Internet beim ersten Build für verwaltete Komponenten und den
+  hashgeprüften SQLite-Download. Die fertige Oberfläche arbeitet offline.
+
+### Projekt herunterladen
+
+Die Repositories sind derzeit privat; dein GitHub-Konto benötigt Zugriff auf
+alle drei. Ein ZIP-Download allein enthält die Submodule nicht.
 
 ```powershell
 git clone --recurse-submodules https://github.com/Gemelon/EBCTester.git
 ```
 
-For an existing checkout, run `git submodule update --init --recursive`.
-Do not use `git submodule update --remote` for a reproducible release: the
-parent repository records the tested package commits.
+In einem vorhandenen Checkout:
 
-Open the project in VS Code with the ESP-IDF extension and ESP-IDF **6.0.1**,
-select target **esp32s3**, configure your hardware/network in menuconfig and
-build using **ESP-IDF: Build your project**. The optional dev container pins
-the same IDF version. A first build requires internet access for managed
-components and the hash-verified SQLite amalgamation; the device UI works
-offline after installation. This project's partition table requires
-**16 MiB flash**; check the module and GPIO assignments before flashing.
-Building does not flash the device or start a battery test.
-
-`sdkconfig.defaults` contains portable board defaults, not credentials.
-The default update URL is a placeholder; configure your own HTTPS manifest.
-Wi-Fi and MariaDB settings are entered through the authenticated web UI.
-Keep `sdkconfig`, `CMakeUserConfig.cmake`, editor settings, database files,
-build outputs and credentials local: they are ignored by Git. The dependency
-lock file is committed; managed dependency sources are downloaded, not copied
-into this repository. No battery measurements are included.
-
-No license has yet been granted for the project's original code.
-Third-party assets retain their own licenses; see
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-## Reusable component packages
-
-The OTA, networking, status LED, update-check, and shared web UI components come
-from `external/ota-suite`. SD-card storage and its UI extension come from
-`external/sd-card-manager`. Set the CMake cache variable
-`OTA_SUITE_DIR` to another checkout if needed; the build fails early when the
-package is missing. `SD_CARD_MANAGER_DIR` can similarly select the SD package.
-No reusable component is copied into or shadows this project's `components`
-directory.
-
-| Component | Responsibility |
-| --- | --- |
-| `ota-suite/components/device_app` | Start shared services; confirm boot after a 10-second startup window |
-| `ota-suite/components/network_manager` | WPA2 setup AP, station credentials in NVS, reconnect, SNTP |
-| `ota-suite/components/update_check` | Manifest parsing, numeric versions, scheduling, candidate reservation |
-| `ota-suite/components/ota_manager` | Manual download, exact binary size/hash checks, image validation, rollback |
-| `ota-suite/components/web_interface` | Basic authentication, CSRF protection, local UI |
-| `ota-suite/components/status_led` | Optional WS2812 RGB LED using RMT/DMA |
-| `sd-card-manager/components/sd_card_manager` | 4-bit SDMMC, FAT32 file operations and authenticated file-manager tab |
-| `components/sqlite3` | Official SQLite amalgamation with durable ESP-IDF FATFS VFS |
-| `components/battery_database` | Initialize, version and integrity-check the SQLite database on SD |
-| `components/battery_dashboard` | Offline "Messdaten" tab: charts, segment timeline, demo data (Chart.js bundled) |
-| `components/mariadb_sync` | Incremental backup of SQLite test runs to the NAS MariaDB; settings card in "Einstellungen" |
-| `components/ebc_link` | UART init (tester + dongle), EBC-A20 protocol: frame parser, connect/keep-alive, command queue |
-| `components/test_store` | Batteries, test plans and asynchronous measurement recorder in the SQLite database |
-| `components/test_control` | Manual commands, test-plan runner, averaging; tabs "Batterie", "Manuell", "Automatik" |
-| `components/resistance_test` | DCIR last-pulse state machine, automatic SOC preparation, raw measurement evaluation and protection limits |
-| `components/ui_localization` | Authenticated SD language catalog/file provider and language settings card |
-| `main` | Initialize SD, schedule database initialization, register application UI components, start shared device services |
-
-## UI languages and SD template
-
-The header language selector supports built-in **English** and **Deutsch**.
-English is the fallback for every missing translation. On the first visit,
-a German browser selects German; other browser languages select English.
-The selection is saved per browser, not in device NVS. Switching language
-asks for confirmation and reloads the page: unsaved form edits are lost, but
-the firmware's running test/plan is not stopped.
-
-All authored tabs, forms, chart labels, confirmations and status/error messages
-use the same catalog, including lazily loaded tabs. Backend protocol messages
-are emitted in English and translated at their UI display points; old German
-protocol messages remain recognized. User-entered battery labels, plan names,
-manufacturers, notes and filenames are never translated. Raw stored notes and
-third-party diagnostic details remain as recorded.
-
-The complete, ready-to-copy template is
-[`sd_card/languages/en-custom.json`](sd_card/languages/en-custom.json).
-Copy it to **`/languages/en-custom.json` at the SD card root** (the ESP mount
-path is normally `/sdcard/languages/en-custom.json`). Alternatively, create
-the `languages` folder and upload the file using **Administration → SD card**.
-Then reload the page or use **Settings → Language → Reload languages**.
-It appears as **English (SD template) (SD)** in the selector.
-
-To add a language:
-
-1. Copy the template, for example as `fr.json`.
-2. Set `"code": "fr"` and `"name": "Français"`.
-3. Translate only values in `"strings"`; keep all keys unchanged.
-4. Preserve placeholders such as `{p0}`, `{p1}`, `%u` and `%s`.
-   Named placeholders may be reordered; printf placeholders must retain order
-   and types. They carry measurement values and diagnostic parameters.
-5. Save as UTF-8 without BOM, upload to `/languages/fr.json`, then reload.
-
-Partial files are supported: omitted keys fall back to built-in English,
-not to the previously selected language. Files named `en.json` or `de.json`
-with matching codes replace that built-in language's texts while present on
-the card. Additional codes create additional choices. Remove a file and reload
-to restore the built-in language. No firmware rebuild is needed for SD edits.
-Unknown keys are ignored for forward compatibility.
-
-A Filipino (Tagalog) SD test catalog is provided as
-[`sd_card/languages/fil.json`](sd_card/languages/fil.json). Upload it as
-`/languages/fil.json`, reload languages and select **Filipino (Tagalog) (SD)**.
-It translates navigation, common forms, measurement labels and SD operations.
-This is a partial catalog: untranslated detailed messages remain in English,
-also exercising the per-key fallback. For a quick SD-loading check, the
-language label becomes **Wika**, the battery tab **Baterya**, and the primary
-section **Tagasubok ng baterya**. Filipino is not embedded in the firmware.
-
-Limits: at most **16 JSON files**, **128 KiB per file**, **1024 string entries**,
-**4096 UTF-8 bytes per value**, and **80 bytes for the display name**.
-Codes use lowercase ASCII letters, digits and hyphens, start with a letter,
-do not end with a hyphen and have at most 24 characters. Use normal language
-tags (`fr`, `es`, `en-gb`) for appropriate date/number formatting.
-Bad JSON, wrong metadata, non-string values, unavailable selected files and
-placeholder mismatches are shown as warnings; an unusable selected language
-falls back to English. Translations are assigned using `textContent` and
-safe attribute setters, never inserted as HTML or executed as scripts.
-
-English/German resources and the browser runtime are bundled in the shared
-`ota-suite/components/web_interface` component. This project enables
-`CONFIG_OTA_SUITE_WEB_SD_LANGUAGES=y` and registers `ui_localization` before
-starting the server. The shared web component also works standalone with
-that option disabled. SD language reads hold the same storage lock as SQLite;
-no card is formatted and the database schema is unchanged.
-
-Validation: `node tests\ui_languages_test.js` checks catalog coverage, English
-fallback, German, partial overrides, malformed values, placeholders, safe text,
-persistence and the standalone shared UI. The optional local browser fixture
-`python tests\ui_language_fixture.py` serves only `127.0.0.1:8766` and never
-connects to the tester, SD card or MariaDB.
-
-## Setup and migration
-
-Use the ESP-IDF VS Code extension, target **esp32s3**. The starter package's
-components are imported through `EXTRA_COMPONENT_DIRS`. On first reconfigure,
-the project maps saved BatteryTester settings to their OTA Suite symbols,
-including the configured AP password, SNTP server, manifest URL, HTTP opt-in,
-and LED GPIO. Station credentials and a generated AP password remain in the
-same `network` NVS namespace and are not erased. New builds keep the
-`BatteryTester-XXXXXX` setup AP name and enable the onboard LED on GPIO 48.
-
-In menuconfig:
-
-- **OTA Suite update checks → Fixed firmware manifest URL**:
-  your deployment URL, e.g. `https://updates.example.org/BatteryTester/firmware.json`.
-- HTTP requires **OTA Suite firmware updates → Allow unencrypted HTTP OTA**.
-  Fresh configurations default to HTTP disabled; the existing saved opt-in is
-  migrated. HTTPS always retains CA,
-  hostname and certificate date validation, including when HTTP is allowed.
-- The legacy **Fixed firmware URL** setting is retained for configuration
-  compatibility but is not used by the manifest-based updater.
-- **OTA Suite network**: optional AP/admin password (8–63 characters)
-  and SNTP server. An empty password setting uses the stored password or
-  generates and persists one in NVS. NVS errors never silently erase settings.
-
-For initial provisioning, install the partition table and rollback-enabled
-bootloader serially. This project requires a **16 MiB flash** module, such as an
-ESP32-S3 N16R8. The two OTA app slots each have **0x570000 (5,701,632) bytes**
-and the `storage` data partition has **0x500000 (5 MiB)**. It is reserved for
-LittleFS but is not mounted or used by the application yet.
-Changing the partition table cannot be done through OTA; install the new
-partition table and firmware over USB. Back up important device settings before
-repartitioning, and verify the exact module marking before flashing.
-Existing `sdkconfig` selections take priority over defaults; legacy BatteryTester
-settings are imported by Kconfig on the first rebuild.
-
-Connect to `BatteryTester-XXXXXX` using the password printed on the serial
-console, open **http://192.168.4.1**, log in as **admin** with the AP password,
-and enter WLAN credentials. The protected AP remains a recovery path; channel
-changes can briefly interrupt AP access. The UI also displays the station IP.
-
-The project remains compatible with the existing manifest and immutable release
-layout. Firmware **1.3.34** removes machine-specific defaults for new
-installations; existing local `sdkconfig` and saved NVS settings are preserved.
-
-## SD card
-
-The SD-card component defaults to 4-bit SDMMC with CLK=GPIO14, CMD=GPIO15,
-D0=GPIO2, D1=GPIO4, D2=GPIO5 and D3=GPIO6. In **menuconfig → SD Card Manager
-→ SD card bus mode**, select either **4-bit SDMMC** or **SPI**. SPI defaults to
-MISO=GPIO2, MOSI=GPIO15, CS=GPIO6 and CLK=GPIO14; GPIO 7 remains the separate,
-active-high card-detect input in either mode. SPI and SDMMC clock rates and
-their pin assignments can be configured in the same menu. Both clocks default
-to 10 MHz. Ensure the chosen pins are available on the board and use suitable
-external pull-ups on the SD signal lines (3.3 V only).
-
-Format cards as FAT32. The ESP-IDF 6.0.1 bundled FatFs configuration disables
-exFAT, which this component therefore does not support. FatFs API UTF-8 encoding
-is enabled for international file names. An unavailable or unformatted card is
-reported in the SD-Karte tab and is never automatically formatted; it does not
-block OTA or normal device startup. The tab supports folder listing, upload,
-download, empty-file/folder creation, rename/move and deletion of files or
-empty folders.
-
-## Battery test database (initial offline-storage step)
-
-`battery_database` creates `/sdcard/ebc_a20.db` when a card is mounted; if the
-device boots without a card, it waits and initializes the database after card
-insertion. It never formats the card or deletes an existing database. SQLite
-schema follows the current MariaDB schema after migrations 001–005: the six
-tables `ebc_test_plan`, `ebc_test_plan_step`, `ebc_battery`, `ebc_test_run`,
-`ebc_run_segment` and `ebc_measurement`, plus `ebc_measurement_view` and the
-same column names. A separate `ebc_schema_metadata` table stores SQLite's
-application schema version; startup validates it and the expected schema
-objects. SQLite and MariaDB require different physical column types, but the
-logical fields are kept aligned for the future synchronizer.
-
-SQLite database and rollback-journal writes now use the SD-backed FATFS VFS.
-The database component enables `synchronous=FULL`, real `fsync()` calls, foreign
-keys, and SQLite's integrity check. The VFS does not claim SD atomic-write
-capabilities, and database operations must continue to hold the shared SD lock.
-If the database file has no valid SQLite header, startup preserves it under an
-`ebc_a20.db.invalid-XXXXXXXX` name before creating a fresh database; it never
-silently truncates or deletes that file.
-
-Database initialization runs in a low-priority background task, so
-an unavailable or slow SD/database does not hold up the web interface. The
-database task retries while the card is unavailable; a database error on a
-mounted card is reported once and stops initialization rather than repeatedly
-renaming and recreating the database file.
-
-Measurements from the EBC-A20 are recorded by `test_store` (see "EBC-A20
-tester"); MariaDB backup is described below.
-
-## Measurement dashboard (offline)
-
-The `battery_dashboard` component adds the **Messdaten** tab to the web UI. All
-data comes from the SQLite database on the SD card and Chart.js 4.4.9 is served
-from flash (`/ui/dashboard/chart.js`, MIT license in
-`components/battery_dashboard/assets/CHARTJS-LICENSE.md`), so the page works
-on the setup AP without internet. It shows battery/run selection, cards for
-current, voltage, capacity and status, voltage/current and capacity charts per
-segment, capacity per segment, and the segment timeline. Running tests refresh
-every 15 seconds.
-
-| Endpoint | Purpose |
-| --- | --- |
-| GET `/api/db/runs` | Batteries and up to 300 newest test runs |
-| GET `/api/db/run?id=` | Run, battery, segments and last measurement |
-| GET `/api/db/measurements?id=&max=` | Chunked series `[segment, uptimeMs, epochMs, I, U, Ah]`, stride-sampled to `max` (200–6000, default 1500) keeping segment boundaries |
-| POST `/api/db/demo` | Create a simulated 20 Ah LiFePO4 run (charge, rest, discharge, rest, charge; ~1200 points) |
-| POST `/api/db/run/delete?id=` | Delete a run with segments and measurements (and its demo battery when unused) |
-
-The tab order is set with `CONFIG_OTA_SUITE_WEB_TAB_ORDER` in
-`sdkconfig.defaults` (`dashboard,battery,manual,auto,resistance,overview,sd-card,updates,settings`);
-the first tab opens on page load.
-
-The header and browser title use the firmware project name **EBCTester**.
-The top menu splits tabs into **Batterietester** (Messdaten, Batterie, Manuell,
-Automatik, Innenwiderstand) and **Verwaltung** (Geraeteinformation, SD Karte, Updates,
-Einstellungen); switching sections remembers the last selected tab within each
-section. Green headers and bundled SVG icons work without an internet connection.
-The RX LED in the header toggles for newly counted valid UART frames.
-The browser polls `/api/tester/status` every 500 ms while visible; received
-frames since the previous poll are replayed as LED toggles, not generated by
-a free-running heartbeat. Disconnection turns the LED grey; request errors
-are shown in amber.
-
-All endpoints require web login; POST endpoints also require the CSRF token.
-Each request opens the database under the shared SD lock and closes it again;
-503 means the card or database is not ready or busy.
-
-## MariaDB backup
-
-The `mariadb_sync` component copies local test runs (plan, steps, battery, run,
-segments, measurements) to the existing `ebc_a20` MariaDB schema. Configure it
-in **Einstellungen → MariaDB-Sicherung** (host, port, database, user, password,
-automatic interval in minutes; 0 = manual only). Settings are stored in NVS
-namespace `mariadb_sync`; the password is never returned to the browser.
-There is no default server address and sync is disabled on fresh installations.
-The base MariaDB schema from migrations 001-005 must already exist; this
-repository includes the additional DCIR migration
-[`sql/006_resistance_results_mariadb.sql`](sql/006_resistance_results_mariadb.sql),
-not a replacement for that existing schema.
-
-- Progress per run is tracked locally in `ebc_sync_state`; only new segments
-  and measurements are sent (batches of 200, `INSERT IGNORE`), so repeated or
-  interrupted syncs never duplicate data. "Alles erneut übertragen" resets it.
-- Automatic sync runs only with WLAN, a ready SD database and a stored password.
-- Runs deleted locally stay in MariaDB.
-- Requires a `mysql_native_password` account with SELECT/INSERT/UPDATE on
-  `ebc_test_plan`, `ebc_battery`, `ebc_test_run`, additionally DELETE on
-  `ebc_test_plan_step`, and INSERT on `ebc_run_segment`, `ebc_measurement`.
-- The connection is plain TCP without TLS: use it only in the trusted LAN.
-
-API (login required, POST with CSRF token): `GET /api/mariadb/status`,
-`POST /api/mariadb/settings`, `/api/mariadb/test`, `/api/mariadb/sync`,
-`/api/mariadb/full-sync` (409 while a job is running).
-
-## EBC-A20 tester
-
-UART pins and baud rates are set in menuconfig under **EBC battery tester
-UARTs** (both 8O1):
-
-| UART | Use | TX | RX | Baud |
-| --- | --- | --- | --- | --- |
-| UART1 | Tester ("Prozessor") | 17 | 18 | 9600 |
-| UART2 | Dongle (PC software) | 8 | 9 | 9600 |
-
-The EBC-A20 uses 5 V TTL levels: connect it through a level shifter, the
-ESP32-S3 GPIOs are not 5 V tolerant. The dongle↔tester bridge is not
-implemented yet; UART2 is initialized and its input discarded.
-
-- **Batterie**: label, manufacturer, serial, manufacturing date, nominal
-  capacity, notes; stored in NVS and optionally in the SQLite database.
-- **Manuell**: live values, connect/disconnect, auto-connect, Stop, charging
-  C-CV, discharging D-CC/D-CP.
-  Connect/disconnect and all start buttons are blocked while a command is
-  pending, a manual test is starting/active, or a plan is running (including
-  wait steps). The firmware enforces this too; Stop and Abort remain available.
-  A manual start awaits an active mode for up to 10 seconds before logging
-  an error and requesting Stop.
-- **Automatik**: test plan with up to 10 steps (D-CC, D-CP, C-CV, wait, cycle),
-  stored in NVS and the database. The plan runs on the ESP32; after a reboot
-  a running plan is marked "Unterbrochen" and must be reset.
-
-Active tests are recorded as test runs with segments; each measurement is the
-average of `CONFIG_TEST_CONTROL_AVERAGING_LENGTH` frames (default 20 ≈ 20 s).
-The device id is `CONFIG_TEST_STORE_DEVICE_ID`.
-
-API (login required, POST with CSRF token): `GET /api/tester/status`,
-`/api/tester/settings`, `/api/tester/catalog`; `POST /api/tester/battery`,
-`/api/tester/command`, `/api/tester/plan`, `/api/tester/plan/action`.
-
-## DC resistance / last-pulse test
-
-The **Innenwiderstand** tab uses the separate `resistance_test` component.
-Choose **Ladezustand bereits vorbereitet** for rest followed by a load pulse,
-or **Automatische Vorbereitung und Messung** to fully charge in C-CV mode,
-then remove `usableCapacityAh * (100 - targetSOC) / 100` Ah before resting.
-Capacity removal integrates the **measured current** with monotonic frame
-timestamps (trapezoidal integration); target SOC is a calculated estimate, not
-an independently measured SOC. A target of 100% skips preparation discharge.
-No temperature is assumed: results explicitly report temperature unknown.
-Four-wire voltage measurement is assumed at the hardware.
-
-All measurement parameters are editable and persisted in NVS: usable capacity,
-target/prepared SOC, charge current/voltage/cutoff, preparation discharge current,
-maximum charge/preparation times, rest time, U1 averaging window, permitted idle
-current, pulse current/duration, three sampling times, voltage/power limits,
-maximum UART gap, timing tolerance and minimum credible voltage drop.
-Defaults use separate results at **1, 5, 10 seconds** and a 12-second pulse.
-These are examples, not universal battery ratings; verify them before starting.
-Changing parameters or preparation method resets the UI safety confirmation.
-
-U1 is averaged from idle raw frames at the end of the rest phase (at least
-two samples); U2 and I2 are single **raw frames**, bypassing normal 20-frame
-averaging. `R_mOhm = 1000 * (U1 - U2) / measuredI2`.
-Time zero is the command-queue timestamp after the final idle frame; the link
-sends the command immediately after this callback. The actual load onset lies
-between the final idle frame and first loaded frame; the UI displays this
-sampling gap. The first raw sample at or after each requested time is used and
-its actual time is displayed. Late samples, missing samples, too-small/negative
-voltage drops or absent current are invalid, not zero-ohm results. UART sampling
-and voltage resolution limit accuracy, particularly at 1 second.
-
-All other starts, connect/disconnect and battery changes are blocked until the
-test stops. Stop/Abort remain available. Protection limits, missing frames,
-recorder failures and preparation timeouts request Stop. Completion/abort waits
-for a confirmed idle frame with acceptable idle current. Unconfirmed start or
-Stop times out after 10 seconds; a lost UART cannot guarantee a physical stop,
-so check the tester locally. The EBC discharge command also carries a rounded-up
-whole-minute runtime limit; UART protection is not a replacement for an
-independent battery protection circuit. Tests never resume after reboot.
-
-Raw data is stored as a normal SD test run, visible in **Messdaten**.
-`DCIR v1;` run notes preserve parameters, results, actual sample times, U1/I1,
-onset uncertainty, capacity removal and error information; initial metadata is
-stored with the run so interrupted tests remain identifiable after reboot.
-The tab lists the newest 20 DCIR runs including their structured results.
-MariaDB backup includes raw data, notes and structured results after migration
-006 (see below). A finished result remains in RAM while
-powered; after reboot use the SD history.
-
-Authenticated API: GET `/api/tester/resistance` (configuration and status),
-POST `/api/tester/resistance` (`save`/`start` with complete `config`, or `abort`),
-GET `/api/tester/resistance/history`. POST requires CSRF.
-This feature is a dedicated test; extracting DCIR from ordinary plan transitions
-is not enabled.
-
-### Structured DCIR storage and MariaDB migration
-
-SQLite automatically migrates schema version 1 to **2**, preserving existing
-batteries, runs and measurements. `ebc_resistance_result` contains three rows
-per completed/aborted DCIR run, keyed by `(run_id, result_number)`. Results and
-run completion are committed in the same writer transaction.
-Each row stores the requested/actual sampling time, U1/I1, U2/I2, resistance
-in mOhm (NULL when invalid), validity, error and onset uncertainty.
-`captured_at_utc` is the actual sample timestamp in UTC with millisecond
-precision; `device_uptime_ms` remains available without synchronized wall time.
-Missing samples have NULL timestamps/loaded values. Without synchronized time,
-UTC is NULL, not an invented calendar timestamp. SNTP supplies UTC when WLAN is
-available; an offline start without a valid clock cannot know calendar time.
-
-The battery is linked through `ebc_test_run.battery_id`; the view
-`ebc_resistance_result_view` exposes battery id/label, device, test start and run
-status alongside each result. This avoids duplicating local battery ids in the
-MariaDB results; the existing synchronizer resolves the remote battery id.
-
-Before syncing structured results, back up MariaDB, select the existing
-database (e.g. `ebc_a20`) and execute
-[`sql/006_resistance_results_mariadb.sql`](sql/006_resistance_results_mariadb.sql)
-as a schema administrator. It creates the result table and reporting view,
-matching the existing parent `run_id` column type/charset/collation for its
-foreign key. No existing tables or data are dropped. Grant SELECT/INSERT/UPDATE
-on the new table to the firmware user (example in the SQL file), and SELECT on
-the view for reporting accounts. The firmware does not run server-side DDL.
-
-Sync upserts all three result rows before saving the completed run signature.
-Retries do not duplicate rows; missing MariaDB migration/permissions explicitly
-report a DCIR sync failure. Row count is included in the sync signature so
-new structured results are not skipped for previously transferred runs.
-Old DCIR tests made before this update retain their notes and raw measurements;
-they are not automatically converted to structured rows, since their exact
-per-result UTC timestamps were not previously stored.
-
-Example MariaDB report:
-
-```sql
-SELECT battery_id, battery_label, test_started_at_utc, captured_at_utc,
-       requested_seconds, actual_seconds, resistance_mohm, valid, error
-FROM ebc_resistance_result_view
-ORDER BY test_started_at_utc DESC, run_id, result_number;
+```powershell
+git submodule update --init --recursive
 ```
 
-Run `python tests/resistance_schema_test.py` to validate fresh/existing SQLite
-migrations, battery association, millisecond UTC, NULL handling, constraints,
-deletion cascade, atomic writes and the actual synchronization SELECT statements.
+Für reproduzierbare Builds nicht ungeprüft `git submodule update --remote`
+verwenden: Der Hauptstand referenziert die getesteten Paketversionen.
 
-Standalone host tests in `tests/resistance_host/dcir_host_test.cpp` compile the
-actual component against UART/NVS/clock/recorder stubs. From an MSVC developer
-prompt, use `/std:c++17 /EHsc` with include paths `tests/resistance_host/stubs`,
-`components/resistance_test/include`, `components/ebc_link/include`,
-`components/test_store/include`, and compile that test together with
-`components/resistance_test/resistance_test.cpp`. Run the resulting executable.
-They cover prepared/automatic paths, measured-current resistance and capacity,
-1/5/10-second sampling, invalid results, timeouts, frame gaps, voltage limits,
-recording loss, command errors and stop acknowledgement. Real hardware accuracy
-and battery safety must still be verified.
+### Hardware konfigurieren und bauen
 
-## Update behavior
+1. Projekt in VS Code öffnen und die ESP-IDF-Umgebung auswählen.
+2. Ziel **esp32s3** einstellen.
+3. In menuconfig Board, Flash, PSRAM, SD-Modus und UART-Pins prüfen.
+4. Mit **ESP-IDF: Build your project** kompilieren.
+5. Für die Erstinstallation Bootloader, Partitionstabelle und Anwendung über
+   USB installieren. **Die Partitionstabelle setzt 16 MiB Flash voraus.**
 
-- After WLAN becomes usable and every **six hours**, only `firmware.json` is
-  checked. HTTPS waits for synchronized time. Reconnect checks are rate-limited
-  to at most once per minute; overdue checks run on reconnection.
-  **No automatic binary download, installation or OTA retry occurs.**
-- Browser status polling is read-only. **Updates pruefen** sends authenticated,
-  CSRF-protected **POST `/api/updates/check`** with an empty body.
-- Status exposes check progress/errors, available version, notes, and last
-  successful check (Unix seconds, or uptime seconds without a synchronized clock).
-  These values reset on reboot. Failed checks invalidate the candidate but
-  preserve the last successful check details.
-- **Update starten**, followed by confirmation of the displayed version, sends
-  authenticated, CSRF-protected **POST `/api/ota`** with empty body and
-  `X-Update-Version`. It must match the validated candidate. Boot confirmation,
-  connected WLAN, idle network configuration, and a candidate younger than six
-  hours are required. HTTPS additionally requires synchronized time.
-- Concurrent checks/installations, changed versions, stale candidates and
-  missing candidates are rejected. After a failed installation, check again
-  before retrying. WLAN changes are refused during OTA.
-- Only strictly numeric `major.minor.patch` versions are accepted: no leading
-  zeros, suffixes or integer overflow. Comparison is numeric (`1.10.0 > 1.9.0`);
-  equal/older versions are not installable.
-- Both manifest and image must return **HTTP 200 directly**, without redirects.
-  HTTPS validates the certificate chain, hostname and dates using the ESP CA
-  bundle. Extend the bundle for private CAs; never disable validation.
-- OTA streams into the inactive partition. **Exact downloaded binary size and
-  SHA256**, not the descriptor's ELF digest, are checked **before**
-  `esp_ota_end()` and `esp_ota_set_boot_partition()`. Project/version must match
-  the manifest. IDF additionally validates image integrity and chip target.
-  Previously rolled-back images and identical ELF images are rejected.
-- Chunked images are supported; progress uses the manifest size. Download socket
-  timeout is 15 seconds, overall budget five minutes (a blocking operation may
-  add its timeout). Incomplete/oversized/corrupt images never select a new boot
-  partition. Errors are shown in the UI and logged.
-- On success, restart after three seconds. The pending firmware is confirmed
-  only after local services initialize and survive a 10-second window.
-  Earlier reset/crash triggers bootloader rollback. Internet connectivity is
-  not a boot-health requirement. Add battery-critical self-tests when available;
-  this startup window is not a complete hardware self-test.
+Der optionale Dev Container verwendet ebenfalls ESP-IDF 6.0.1.
+`sdkconfig.defaults` enthält portable Vorgaben; eine vorhandene lokale
+`sdkconfig` hat Vorrang. `dependencies.lock` hält die verwalteten Abhängigkeiten
+fest. Alternative Paketpfade lassen sich über die CMake-Variablen
+`OTA_SUITE_DIR` und `SD_CARD_MANAGER_DIR` einstellen.
 
-## Manifest and atomic NAS publication
+**Ein Build flasht das Gerät nicht und startet keinen Batterietest.**
+Eine geänderte Partitionstabelle kann nicht per OTA installiert werden.
+Vor einer Neuaufteilung vorhandene Einstellungen und Daten sichern.
 
-Publication is **disabled in a fresh checkout**. To retain automatic
-publication on your own machine, create the Git-ignored
-`CMakeUserConfig.cmake` in the project root and reconfigure the project:
+### Voreingestellte Anschlüsse
+
+| Anschluss | TX | RX | Parameter |
+| --- | ---: | ---: | --- |
+| UART1 zum Tester | 17 | 18 | 9600 Baud, 8O1 |
+| UART2 zum PC-Dongle | 8 | 9 | 9600 Baud, 8O1 |
+
+Die Dongle-Brücke ist **noch nicht implementiert**. UART2 wird initialisiert;
+es findet noch keine Weiterleitung zur Herstellersoftware statt.
+
+| SD-Signal | SDMMC-GPIO |
+| --- | ---: |
+| CLK / CMD | 14 / 15 |
+| D0 / D1 / D2 / D3 | 2 / 4 / 5 / 6 |
+| Kartenerkennung | 7, aktiv HIGH |
+
+SPI ist ebenfalls auswählbar: MISO 2, MOSI 15, CS 6, CLK 14.
+Beide Modi starten mit 10 MHz; die Anschlüsse sind konfigurierbar.
+Karten werden **nie automatisch formatiert**. exFAT wird nicht unterstützt.
+Die optionale WS2812-LED nutzt standardmäßig GPIO 48; manche Boards benötigen 38.
+
+### Erster Zugriff und alltägliche Bedienung
+
+1. Gerät starten und das AP-/Admin-Passwort über die serielle Ausgabe ablesen.
+   Ohne fest eingestelltes Passwort wird einmalig ein zufälliges erzeugt.
+2. Handy oder Computer mit `BatteryTester-XXXXXX` verbinden.
+3. `http://192.168.4.1` öffnen und als `admin` mit dem AP-Passwort anmelden.
+4. Optional Heim-WLAN einrichten. Für lokale Bedienung und Aufzeichnung
+   ist diese Verbindung nicht erforderlich.
+5. FAT32-Karte einlegen, Datenbankbereitschaft prüfen, Batterie anlegen und
+   Tester verbinden. Erst danach eine Messung oder einen Plan starten.
+
+Unter **Batterietester** liegen Messdaten, Batterie, Manuell, Automatik und
+Innenwiderstand. Unter **Verwaltung** liegen Geräteinformation, SD-Karte,
+Updates und Einstellungen.
+
+Testpläne unterstützen D-CC, D-CP, C-CV, Wartezeiten und Wiederholungen.
+Ein nach Neustart unterbrochener Plan wird nicht ungeprüft fortgesetzt.
+Stop und Abbruch bleiben verfügbar; konkurrierende Startaktionen sind gesperrt.
+
+### Daten, Sicherung und Sprachen
+
+Die lokale Datenbank ist `/sdcard/ebc_a20.db`. Schema und Integrität werden beim
+Öffnen geprüft. Fehlende Karten verhindern nicht den Start des Webinterfaces,
+aber Messaufzeichnung erfordert eine bereite Datenbank. Ungültige
+Datenbankdateien werden erhalten und nicht stillschweigend überschrieben.
+
+MariaDB ist optional und auf neuen Installationen deaktiviert. Host und
+Zugangsdaten werden in den Einstellungen hinterlegt; die Übertragung benötigt
+eine Netzwerkverbindung. Die Basistabellen aus den bisherigen Migrationen
+001–005 müssen bereits existieren. Dieses Repository enthält zusätzlich
+[Migration 006 für DCIR-Ergebnisse](sql/006_resistance_results_mariadb.sql),
+aber **keine vollständige MariaDB-Ersteinrichtung**. Nach geprüfter Sicherung
+können lokale Testläufe manuell gelöscht werden; die externe Kopie bleibt bestehen.
+
+Deutsch und Englisch sind eingebaut. Die
+[englische Vorlage](sd_card/languages/en-custom.json) und die
+[Filipino-Testdatei](sd_card/languages/fil.json) werden in den Ordner
+`/languages/` auf der SD-Karte kopiert. Danach Sprachen neu laden und auswählen.
+Fehlende Übersetzungen fallen auf Englisch zurück. Ein Sprachwechsel lädt die
+Seite neu und verwirft ungespeicherte Formulare, beendet aber keinen laufenden Test.
+
+## Updates und Veröffentlichung eigener Firmware
+
+Automatische Verfügbarkeitsprüfungen laden nur das Manifest. Installation
+erfolgt ausschließlich manuell nach Bestätigung. HTTPS prüft Zertifikate;
+HTTP muss ausdrücklich für ein vertrauenswürdiges Testnetz freigegeben werden.
+Größe, SHA256 und Firmware-Metadaten werden vor der Boot-Auswahl geprüft.
+Rollback schützt eine neue Firmware, wenn sie das Startfenster nicht übersteht.
+
+Die voreingestellte Manifest-Adresse ist nur ein Beispiel. Eigene
+HTTPS-Adresse in menuconfig unter **OTA Suite update checks** eintragen.
+
+Das Kopieren auf ein NAS ist in einem frischen Checkout deaktiviert.
+Bei Bedarf eine lokale, Git-ignorierte `CMakeUserConfig.cmake` erstellen:
 
 ```cmake
 set(EBCTESTER_PUBLISH_FIRMWARE ON)
@@ -505,110 +234,106 @@ set(EBCTESTER_PUBLISH_ORIGIN "https://updates.example.org")
 set(EBCTESTER_PUBLISH_URL_PATH "/BatteryTester")
 ```
 
-Use your own existing writable local/NAS directory and server origin. The same
-values can be set as CMake cache variables. To disable a local setting, change
-the local file to `OFF` and reconfigure. Configure the matching device manifest
-URL in menuconfig; that URL is independent of the publisher settings.
+Nach Rekonfiguration veröffentlicht jeder erfolgreiche Build die versionierte
+Binärdatei, den Kompatibilitätsnamen und zuletzt atomar `firmware.json`.
+Das Zielverzeichnis muss bereits existieren. Ein veröffentlichter Versionsname
+darf nicht mit anderen Bytes überschrieben werden: **Version vorher erhöhen**.
+Kopierfehler lassen den Veröffentlichungsschritt fehlschlagen.
 
-When enabled, each successful ESP-IDF build:
+Bei der Weitergabe von Firmware die Lizenzunterlagen mitliefern, nicht nur
+die `.bin`: siehe [Drittanbieterhinweise](THIRD_PARTY_NOTICES.md).
+Das aktivierte EBCTester-Publishing kopiert sie automatisch vor dem Image in
+`licenses/EBCTester-<version>/` im Zielverzeichnis. Fehlende Lizenzunterlagen
+lassen den Schritt fehlschlagen. Den vollständigen Ordner mit der Firmware
+weitergeben; das OTA-Manifest selbst wird dadurch nicht verändert.
 
-1. Copies/verifies the actual generated image to immutable **`EBCTester-1.3.34.bin`**.
-   A same-version release with different bytes fails: bump the version, never
-   overwrite a published release.
-2. Atomically replaces **`EBCTester.bin`** for older firmware.
-3. Publishes **`firmware.json` last**, by same-directory `.uploading` + rename.
+## Grenzen, Sicherheit und Mitarbeit
 
-Size and SHA256 come from `build\EBCTester.bin` and are checked after copying.
-Older immutable releases remain for in-progress downloads.
-Publication failure explicitly fails the build step. Serve the directory at
-your configured origin and URL path. The local copy directory
-does not determine the web URL. Existing devices must also have the new
-manifest URL configured in menuconfig and installed in their firmware.
-For a different origin, change publication and device manifest configuration.
-SMB/server rename semantics determine atomicity; use one publisher at a time.
-**A build never installs firmware.**
+- Unabhängiges Hobbyprojekt, **kein offizielles ZKE-Produkt** und keine
+  Zusicherung der Unterstützung durch den Gerätehersteller.
+- Batterieparameter und Schutzgrenzen müssen zur Chemie, Verkabelung und
+  Belastbarkeit passen. Software ersetzt keine Hardware-Schutzmaßnahmen.
+  Ein Langzeittest ist nicht automatisch ein sicher unbeaufsichtigter Test.
+- Der lokale Webserver nutzt HTTP Basic Authentication. Nur in einem
+  vertrauenswürdigen LAN oder geschützten AP verwenden, nicht ins Internet stellen.
+- MariaDB-Kommunikation ist unverschlüsseltes TCP. NVS/Flash sind standardmäßig
+  nicht verschlüsselt; Passwörter und seriellen Zugang schützen.
+- SHA256 allein ist keine Signatur. Secure Boot, signierte Firmware und
+  Flash-/NVS-Verschlüsselung sind gesonderte Deployment-Entscheidungen.
+- UTC-Uhrzeiten benötigen eine gültige Gerätezeit; ohne sie bleibt die
+  Aufzeichnung über Laufzeitwerte möglich. Keine erfundenen Zeitstempel.
+- SD-Karte, Stromversorgung und Backups regelmäßig prüfen. Keine Garantie für
+  Messgenauigkeit, Datenverlustfreiheit oder Eignung für einen bestimmten Zweck.
 
-Manifest schema (all seven fields mandatory; no extra or duplicate fields):
+Fehlerberichte und Verbesserungen sind willkommen. Bitte Board, Firmwarestand,
+Reproduktionsschritte und bereinigte Logs nennen; niemals Passwörter, Tokens
+oder private Messdaten in Issues oder Commits veröffentlichen.
+Änderungen an Protokoll, Datenbankschema und Sicherheitsgrenzen mit Tests begleiten.
+Weitergegebene geänderte Dateien nach Apache-2.0 als geändert kennzeichnen und
+bestehende Urheber-/Lizenzhinweise erhalten.
 
-```json
-{
-  "project": "EBCTester",
-  "target": "esp32s3",
-  "version": "1.3.34",
-  "url": "https://updates.example.org/BatteryTester/EBCTester-1.3.34.bin",
-  "size": 123456,
-  "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-  "notes": "Release notes"
-}
+## Tests
+
+Hosttests benötigen Node.js, Python und für den Publisher CMake; keine
+zusätzlichen Node-Pakete:
+
+```powershell
+node --test tests\web_interface.test.js tests\publication.test.js tests\ui_languages_test.js
+python tests\resistance_schema_test.py
+python tests\license_metadata_test.py
 ```
 
-Example size/hash are illustrative; publication inserts real values. The
-manifest is limited to **less than 2048 bytes**, notes to **512 UTF-8 bytes**,
-positive integer size to OTA partition capacity, and SHA256 to 64 lowercase hex
-digits. Project/target must match the device. Image URL must exactly match the
-configured manifest origin/directory and `<project>-<version>.bin`, with no
-credentials, queries, fragments, traversal or redirects. Manifest socket timeout
-is five seconds; overall budget 20 seconds (blocking operations may add timeout).
-Availability checks never contact the image URL.
+Falls nötig `CMAKE_EXE`, `OTA_SUITE_DIR` und `SD_CARD_MANAGER_DIR` setzen.
+Native Manifest- und DCIR-Tests sowie Hardwareprüfungen stehen in der
+[technischen Referenz](docs/TECHNICAL_REFERENCE.md).
+Der lokale Browser-Testserver `python tests\ui_language_fixture.py` verwendet
+nur simulierte Daten und steuert keine Hardware.
 
-## Security and persistence
+## Lizenz und Urheber
 
-Local administration uses Basic authentication over **HTTP**: trusted LAN or
-protected AP only, never expose port 80 to the Internet. HTTP does not encrypt
-WLAN credentials/admin passwords. AP password grants administration and is
-printed on serial; protect physical access. NVS is not encrypted by default.
-Consider HTTPS administration, flash/NVS encryption, Secure Boot and signed
-images for production. SHA256 protects against accidental corruption, **not**
-replacement of both manifest and image over HTTP. HTTP test mode explicitly
-warns in the UI/confirmation and must only be used on a trusted test LAN.
-No HTTPS-to-HTTP fallback exists. HTTPS transport/image integrity is not a
-substitute for firmware signatures.
+**Copyright 2026 Thomas Stoll.** Der ursprüngliche Code und die Dokumentation
+von EBCTester, OTA Suite und SD Card Manager stehen unter der
+**[Apache License 2.0](LICENSE)**. Sie erlaubt auch gewerbliche Nutzung,
+Änderungen und Verkauf unter ihren Bedingungen. Es gilt der Haftungs- und
+Gewährleistungsausschluss der Lizenz. Sie verleiht keine Rechte an fremden Marken.
 
-Bootstrap **5.3.3** CSS is embedded locally by `ota-suite`; its MIT license is
-in `ota-suite\components\web_interface\assets\BOOTSTRAP-LICENSE`.
+[NOTICE](NOTICE) enthält den Projekthinweis. Quelldateien tragen
+SPDX-Lizenz-/Urheberhinweise; Formate ohne Kommentare sind in
+[.reuse/dep5](.reuse/dep5) zugeordnet. Diese Lizenzzuordnung betrifft
+**nicht** den fremden Code der folgenden Abhängigkeiten.
 
-## RGB LED
+## Drittanbieter und ihre Lizenzen
 
-ESP32-S3-DevKitC-1 uses a single WS2812 (GRB). Default GPIO **48**; select **38**
-for board revisions using that pin in **OTA Suite status LED** menuconfig.
-The separate power LED is unaffected. Brightness is limited to 24/255.
+Dieses Projekt baut auf der Arbeit anderer auf. Ihre Urheberhinweise,
+Lizenztexte und Haftungsausschlüsse bleiben erhalten; keine dieser Bibliotheken
+wird als eigene Entwicklung ausgegeben oder pauschal unter eine neue Lizenz gestellt.
 
-| State | RGB LED |
-| --- | --- |
-| Normal/startup | Smooth 30-second color cycle |
-| Firmware download | Blue pulse (2 seconds) |
-| Validation | Yellow pulse (may be brief) |
-| Waiting for reboot | Solid green |
-| Failed OTA | Red blink (0.5 seconds on/off) until manual attempt or reboot |
+| Bestandteil | Urheber / Herkunft | Lizenz und mitgelieferte Hinweise |
+| --- | --- | --- |
+| Bootstrap 5.3.3 | The Bootstrap Authors | MIT – [Originaltext](external/ota-suite/components/web_interface/assets/BOOTSTRAP-LICENSE) |
+| Chart.js 4.4.9 | Chart.js Contributors | MIT – [Originaltext](components/battery_dashboard/assets/CHARTJS-LICENSE.md) |
+| @kurkle/color 0.3.2, in Chart.js enthalten | Jukka Kurkela | MIT – [Originaltext](components/battery_dashboard/assets/KURKLE-COLOR-LICENSE.md) |
+| SQLite 3.53.4 | SQLite-Autoren | [Public Domain](https://sqlite.org/copyright.html); separat heruntergeladene Amalgamation |
+| ESP-IDF 6.0.1 | Espressif Systems und weitere Beitragende | Apache-2.0 für Espressifs ursprünglichen Code; [SDK-Lizenz](third_party/licenses/esp-idf/LICENSE), weitere SDK-Bestandteile siehe unten |
+| cJSON 1.7.19~2 | Dave Gamble und cJSON contributors | MIT – [Originaltext](third_party/licenses/cjson/LICENSE) |
+| led_strip 3.1.0~1 | Espressif Systems | Apache-2.0 – [Originaltext](third_party/licenses/led_strip/LICENSE) |
+| FreeRTOS-Kernel | Amazon.com und Beitragende | MIT – [Originaltext](third_party/licenses/esp-idf/FreeRTOS-LICENSE.md) |
+| lwIP | Swedish Institute of Computer Science und weitere Autoren | BSD-3-Clause – [Originaltext](third_party/licenses/esp-idf/lwip-COPYING) |
+| FatFs | ChaN | Eigene permissive FatFs-Bedingungen – [Originalhinweis](third_party/licenses/esp-idf/FatFs-NOTICE.txt) |
+| Mbed TLS / TF-PSA-Crypto | Upstream-Autoren laut Lizenz-/Quelldateien | Apache-2.0 als gewählte Dual-License-Option; [Mbed TLS](third_party/licenses/esp-idf/mbedtls-LICENSE), [TF-PSA-Crypto](third_party/licenses/esp-idf/tf-psa-crypto-LICENSE); einzelne Dateien haben eigene Hinweise |
+| wpa_supplicant | Jouni Malinen und Beitragende | BSD-3-Clause – [Lizenz](third_party/licenses/esp-idf/wpa_supplicant-README), [Copyright](third_party/licenses/esp-idf/wpa_supplicant-COPYING) |
+| http_parser | Igor Sysoev, Joyent und Node contributors | MIT – [Originaltext](third_party/licenses/esp-idf/http_parser-LICENSE.txt) |
+| C-Laufzeit: Newlib / Picolibc | Verschiedene Autoren | Sammlung eigener, überwiegend permissiver Bedingungen – [Newlib](third_party/licenses/esp-idf/COPYING.NEWLIB), [Picolibc](third_party/licenses/esp-idf/COPYING.picolibc) |
+| GCC-Laufzeit: libgcc / libstdc++ | Free Software Foundation und Beitragende | GPL-3.0 mit GCC Runtime Library Exception 3.1 – [GPL](third_party/licenses/toolchain/COPYING3), [Ausnahme](third_party/licenses/toolchain/COPYING.RUNTIME) |
+| TLSF-Speicherverwaltung | Matthew Conte | BSD-3-Clause – [Originalhinweis](third_party/licenses/esp-idf/TLSF-NOTICE.txt) |
+| Argtable3 / linenoise | Stewart Heitmann; Salvatore Sanfilippo und Pieter Noordhuis | BSD-Bedingungen – [Argtable3](third_party/licenses/esp-idf/argtable3-LICENSE), [linenoise](third_party/licenses/esp-idf/linenoise-LICENSE) |
+| protobuf-c / SPIFFS, SDK-Komponenten | Dave Benson und protobuf-c authors; Peter Andersson | [BSD-2-Clause](third_party/licenses/esp-idf/protobuf-c-LICENSE) / [MIT](third_party/licenses/esp-idf/spiffs-LICENSE); je nach Build eingebunden |
+| Weitere dateispezifische SDK-Hinweise | Urheber laut ursprünglichen Dateiheadern | [Gesammelte Originalhinweise](third_party/licenses/esp-idf/SOURCE-NOTICES.txt), einschließlich BSD, MIT und CC0; [zugehörige Standardtexte](third_party/licenses/standard/) |
 
-The low-priority LED task updates every 50 ms and never starts OTA.
-Initialization errors prevent boot confirmation; runtime LED errors stop LED
-output without interrupting OTA. LED behavior does not prove hardware health.
-
-## Verification
-
-Build with **ESP-IDF: Build your project** in VS Code; never flash during the
-publication-only workflow. Host UI/publication tests require Node and CMake (no Node packages):
-
-```text
-node --test tests\web_interface.test.js tests\publication.test.js
-```
-
-Set `CMAKE_EXE` for publication tests if CMake is not on PATH. VS Code's
-`Code.exe` can run the tests with `ELECTRON_RUN_AS_NODE=1` when Node is absent.
-If using a non-default package checkout for host tests, set the `OTA_SUITE_DIR`
-environment variable to its path.
-`SD_CARD_MANAGER_DIR` similarly overrides the SD checkout for language tests
-and the local browser fixture.
-`tests\update_manifest.test.c` tests the actual C parser/policy. Compile with
-`update_manifest.c`, `update_policy.c`, managed `cJSON.c` and their include
-directories using a host C compiler. Tests cover strict types, numeric versions,
-URL confinement, duplicates/missing fields, bounded depth/size, notes/hash limits.
-
-On hardware, verify manifest-only automatic checks, six-hour schedule, reconnect
-rate limiting, manual confirmation, stale candidates, unauthorized/CSRF requests,
-TLS expiry/untrusted CA/date, redirects, 404, wrong project/target, truncated,
-oversized and hash-mismatched downloads. Confirm no boot selection on failures.
-Test power loss and pending-image rollback only on a development device, never
-during a real battery test. Host tests/build/NAS hash checks cannot verify flash
-behavior, WLAN event timing, TLS handshakes or hardware rollback.
+Weitere unveränderte SDK-Lizenztexte liegen in
+[third_party/licenses/](third_party/licenses/). Versionen verwalteter Komponenten
+werden durch [dependencies.lock](dependencies.lock) festgehalten.
+Details zur Herkunft, zu dateispezifischen Hinweisen und zur Weitergabe von
+Quellcode oder Firmware stehen in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Bei anderen SDK-Versionen oder zusätzlichen Komponenten ist diese Liste erneut
+zu prüfen; sie ersetzt nicht die Lizenztexte der tatsächlich verwendeten Dateien.

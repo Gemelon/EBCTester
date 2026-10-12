@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+-- SPDX-License-Identifier: Apache-2.0
+
 CREATE TABLE IF NOT EXISTS ebc_schema_metadata (
   singleton INTEGER PRIMARY KEY,
   schema_version INTEGER NOT NULL

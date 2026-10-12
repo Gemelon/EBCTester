@@ -1,6 +1,9 @@
+# SPDX-FileCopyrightText: 2026 Thomas Stoll
+# SPDX-License-Identifier: Apache-2.0
+
 cmake_minimum_required(VERSION 3.22)
 
-set(PROJECT_VER "1.3.34")
+set(PROJECT_VER "1.3.35")
 include("${CMAKE_CURRENT_LIST_DIR}/CMakeUserConfig.cmake" OPTIONAL)
 set(OTA_SUITE_DIR "${CMAKE_CURRENT_LIST_DIR}/external/ota-suite" CACHE PATH
     "Path to the reusable ota-suite package")
@@ -29,6 +32,13 @@ if(EBCTESTER_PUBLISH_FIRMWARE)
         message(FATAL_ERROR "Firmware publication requires EBCTESTER_PUBLISH_DIR and EBCTESTER_PUBLISH_ORIGIN.")
     endif()
     add_custom_target(publish_firmware ALL
+        COMMAND ${CMAKE_COMMAND}
+            "-DPROJECT_SOURCE_DIR=${CMAKE_CURRENT_LIST_DIR}"
+            "-DOTA_SUITE_DIR=${OTA_SUITE_DIR}"
+            "-DSD_CARD_MANAGER_DIR=${SD_CARD_MANAGER_DIR}"
+            "-DDESTINATION_DIR=${EBCTESTER_PUBLISH_DIR}"
+            "-DFIRMWARE_VERSION=${PROJECT_VER}"
+            -P "${CMAKE_CURRENT_LIST_DIR}/cmake/copy_license_bundle.cmake"
         COMMAND ${CMAKE_COMMAND}
             "-DSOURCE_FILE=${CMAKE_BINARY_DIR}/${PROJECT_NAME}.bin"
             "-DDESTINATION_DIR=${EBCTESTER_PUBLISH_DIR}"

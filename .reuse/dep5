@@ -1,0 +1,11 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: EBCTester
+Source: https://github.com/Gemelon/EBCTester
+
+Files: .devcontainer/*.json .gitattributes .gitignore .gitmodules
+       dependencies.lock main/idf_component.yml partitions.csv
+       sd_card/languages/*.json
+Copyright: 2026 Thomas Stoll
+License: Apache-2.0
+Comment: Format-safe attribution for files that cannot contain comments or
+ whose machine-readable format is intentionally preserved.

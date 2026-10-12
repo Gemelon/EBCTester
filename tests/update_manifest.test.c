@@ -1,3 +1,7 @@
+/* SPDX-FileCopyrightText: 2026 Thomas Stoll
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>

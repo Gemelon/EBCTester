@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+-- SPDX-License-Identifier: Apache-2.0
+
 CREATE TABLE IF NOT EXISTS ebc_resistance_result (
   run_id TEXT NOT NULL COLLATE BINARY,
   result_number INTEGER NOT NULL CHECK (result_number BETWEEN 1 AND 3),

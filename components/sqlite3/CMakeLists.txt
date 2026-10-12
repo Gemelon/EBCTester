@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Thomas Stoll
+# SPDX-License-Identifier: Apache-2.0
+
 set(SQLITE_VERSION "3530400")
 set(SQLITE_ZIP_URL "https://sqlite.org/2026/sqlite-amalgamation-${SQLITE_VERSION}.zip")
 set(SQLITE_ZIP_SHA3 "628a44cfe82c66aed1ccbbe85a562d2e33ebe64b3288981ed76285612227934e")

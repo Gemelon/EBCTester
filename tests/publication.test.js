@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Thomas Stoll
+// SPDX-License-Identifier: Apache-2.0
+
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -24,6 +27,45 @@ test("fresh checkouts use pinned packages and opt-in publication without private
   const settings = fs.readFileSync(path.join(root, "components", "mariadb_sync", "mariadb_sync_internal.h"), "utf8");
   assert.match(settings, /bool enabled = false;/);
   assert.match(settings, /std::string host;/);
+});
+
+test("firmware publication includes original and third-party license documents", () => {
+  const dir = path.join(__dirname, `.publication-licenses-${process.pid}`);
+  fs.mkdirSync(dir);
+  try {
+    const sd = process.env.SD_CARD_MANAGER_DIR || path.join(root, "external", "sd-card-manager");
+    const result = spawnSync(cmake, [
+      `-DPROJECT_SOURCE_DIR=${root}`, `-DOTA_SUITE_DIR=${suite}`,
+      `-DSD_CARD_MANAGER_DIR=${sd}`, `-DDESTINATION_DIR=${dir}`,
+      "-DFIRMWARE_VERSION=9.9.9", "-P", path.join(root, "cmake", "copy_license_bundle.cmake"),
+    ], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.error?.message || result.stderr);
+    const bundle = path.join(dir, "licenses", "EBCTester-9.9.9");
+    for (const [source, relative] of [[root, ""], [suite, "external/ota-suite"], [sd, "external/sd-card-manager"]]) {
+      for (const name of ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]) {
+        assert.deepEqual(fs.readFileSync(path.join(bundle, relative, name)), fs.readFileSync(path.join(source, name)));
+      }
+      assert.deepEqual(
+        fs.readFileSync(path.join(bundle, relative, "third_party", "licenses", "cjson", "LICENSE")),
+        fs.readFileSync(path.join(source, "third_party", "licenses", "cjson", "LICENSE")));
+    }
+    for (const file of ["CHARTJS-LICENSE.md", "KURKLE-COLOR-LICENSE.md"]) {
+      const relative = path.join("components", "battery_dashboard", "assets", file);
+      assert.deepEqual(fs.readFileSync(path.join(bundle, relative)), fs.readFileSync(path.join(root, relative)));
+    }
+    const bootstrap = path.join("components", "web_interface", "assets", "BOOTSTRAP-LICENSE");
+    assert.deepEqual(fs.readFileSync(path.join(bundle, "external", "ota-suite", bootstrap)),
+      fs.readFileSync(path.join(suite, bootstrap)));
+    const invalid = spawnSync(cmake, [
+      `-DPROJECT_SOURCE_DIR=${dir}`, `-DOTA_SUITE_DIR=${suite}`,
+      `-DSD_CARD_MANAGER_DIR=${sd}`, `-DDESTINATION_DIR=${dir}`,
+      "-DFIRMWARE_VERSION=9.9.9", "-P", path.join(root, "cmake", "copy_license_bundle.cmake"),
+    ], { encoding: "utf8" });
+    assert.notEqual(invalid.status, 0);
+    assert.match(invalid.stderr, /Required license document is missing/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("publication uses real binary metadata and immutable versioned releases", () => {

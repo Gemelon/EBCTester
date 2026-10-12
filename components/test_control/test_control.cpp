@@ -1,3 +1,7 @@
+/* SPDX-FileCopyrightText: 2026 Thomas Stoll
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "test_control.h"
 #include "test_control_internal.h"
 

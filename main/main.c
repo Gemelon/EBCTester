@@ -1,3 +1,7 @@
+/* SPDX-FileCopyrightText: 2026 Thomas Stoll
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "battery_dashboard.h"
 #include "battery_database.h"
 #include "device_app.h"

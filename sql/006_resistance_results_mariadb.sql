@@ -1,3 +1,6 @@
+-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+-- SPDX-License-Identifier: Apache-2.0
+
 -- Select the existing BatteryTester database in your SQL client first.
 -- Run as a schema administrator, not the restricted firmware account.
 -- Match the parent run_id type and collation exactly for its foreign key.

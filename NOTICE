@@ -1,0 +1,13 @@
+EBCTester
+Copyright 2026 Thomas Stoll
+
+Original project source and documentation are licensed under the Apache
+License, Version 2.0. See LICENSE.
+
+EBCTester is an independent project, not an official ZKE product.
+Third-party components and assets retain their own copyrights and licenses.
+Their license texts and attribution notices are listed in
+THIRD_PARTY_NOTICES.md and at the end of README.md.
+The ota-suite and sd-card-manager packages have their own NOTICE files.
+
+This NOTICE is informational and does not add conditions to Apache-2.0.

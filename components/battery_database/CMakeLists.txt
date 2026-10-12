@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Thomas Stoll
+# SPDX-License-Identifier: Apache-2.0
+
 idf_component_register(
     SRCS "battery_database.cpp" "battery_demo_data.cpp"
     INCLUDE_DIRS "include"

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Thomas Stoll
+# SPDX-License-Identifier: Apache-2.0
+
 menu "EBC battery tester UARTs"
 
     comment "UART1: ESP32 <-> EBC battery tester (5 V TTL: use a level shifter)"
