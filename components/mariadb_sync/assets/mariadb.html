@@ -1,0 +1,64 @@
+<div class="card">
+  <div class="card-body">
+    <h2 class="h4"><span data-i18n="text.773bf230ebfa">MariaDB-Sicherung</span></h2>
+    <p><span data-i18n="text.4266ffdf5dac">Messdaten werden lokal auf der SD-Karte gespeichert und bei WLAN-Verbindung zusaetzlich in die
+      MariaDB auf dem NAS kopiert. Bereits uebertragene Daten werden nicht doppelt gesendet.</span></p>
+    <div id="mdb-message" class="alert d-none" role="status"></div>
+    <form id="mdb-form" class="row g-3" autocomplete="off">
+      <div class="col-md-6">
+        <label for="mdb-host" class="form-label"><span data-i18n="text.48824ce10d24">Server (IP oder Name)</span></label>
+        <input id="mdb-host" class="form-control" maxlength="63" required>
+      </div>
+      <div class="col-md-2">
+        <label for="mdb-port" class="form-label">Port</label>
+        <input id="mdb-port" class="form-control" type="number" min="1" max="65535" required>
+      </div>
+      <div class="col-md-4">
+        <label for="mdb-database" class="form-label"><span data-i18n="text.4cc80701da55">Datenbank</span></label>
+        <input id="mdb-database" class="form-control" maxlength="64" required>
+      </div>
+      <div class="col-md-6">
+        <label for="mdb-user" class="form-label"><span data-i18n="text.80033f8258eb">Benutzer</span></label>
+        <input id="mdb-user" class="form-control" maxlength="64" required>
+      </div>
+      <div class="col-md-6">
+        <label for="mdb-password" class="form-label"><span data-i18n="text.a36c101570cc">Passwort</span></label>
+        <input id="mdb-password" class="form-control" type="password" maxlength="64" autocomplete="new-password">
+        <div id="mdb-password-hint" class="form-text"><span data-i18n="text.a133814e306f">Leer lassen, um das gespeicherte Passwort zu behalten.</span></div>
+      </div>
+      <div class="col-md-6 d-flex align-items-end">
+        <div class="form-check form-switch">
+          <input id="mdb-enabled" class="form-check-input" type="checkbox" role="switch">
+          <label for="mdb-enabled" class="form-check-label"><span data-i18n="text.bba1e58b147e">Automatisch sichern</span></label>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <label for="mdb-interval" class="form-label"><span data-i18n="text.27367f995b60">Intervall (Minuten, 0 = nur manuell)</span></label>
+        <input id="mdb-interval" class="form-control" type="number" min="0" max="1440" required>
+      </div>
+      <div class="col-12">
+        <button id="mdb-save" class="btn btn-primary" type="submit"><span data-i18n="text.f6b2ff39f540">Speichern</span></button>
+      </div>
+    </form>
+    <hr>
+    <dl class="row mb-3">
+      <dt class="col-sm-4"><span data-i18n="text.630d1a734a83">Zustand</span></dt>
+      <dd class="col-sm-8"><span id="mdb-state" class="badge text-bg-secondary">-</span>
+        <span id="mdb-status-text" class="ms-2"></span></dd>
+      <dt class="col-sm-4"><span data-i18n="text.ed2155f4a7fd">Letzte erfolgreiche Sicherung</span></dt>
+      <dd id="mdb-last-success" class="col-sm-8">-</dd>
+      <dt class="col-sm-4"><span data-i18n="text.410492570b80">Letzte Uebertragung</span></dt>
+      <dd id="mdb-last-result" class="col-sm-8">-</dd>
+      <dt class="col-sm-4">Server</dt>
+      <dd id="mdb-server" class="col-sm-8">-</dd>
+    </dl>
+    <div class="d-flex flex-wrap gap-2">
+      <button id="mdb-test" class="btn btn-outline-secondary" type="button"><span data-i18n="text.a5d6a6f03db1">Verbindung testen</span></button>
+      <button id="mdb-sync" class="btn btn-success" type="button"><span data-i18n="text.5d2281a8d230">Jetzt synchronisieren</span></button>
+      <button id="mdb-full-sync" class="btn btn-outline-warning" type="button"><span data-i18n="text.8a93e3cce46b">Alles erneut uebertragen</span></button>
+    </div>
+    <p class="small text-body-secondary mt-3 mb-0"><span data-i18n="text.e0612a52a439">Die Verbindung zur MariaDB ist unverschluesselt
+      (nur im Heimnetz verwenden). Das Passwort wird im Geraet gespeichert und nicht angezeigt.
+      Lokal geloeschte Testlaeufe bleiben in der MariaDB erhalten.</span></p>
+  </div>
+</div>

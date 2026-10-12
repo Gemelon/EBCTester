@@ -1,0 +1,6 @@
+[submodule "external/ota-suite"]
+	path = external/ota-suite
+	url = https://github.com/Gemelon/ota-suite.git
+[submodule "external/sd-card-manager"]
+	path = external/sd-card-manager
+	url = https://github.com/Gemelon/sd-card-manager.git

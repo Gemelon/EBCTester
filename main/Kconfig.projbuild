@@ -1,0 +1,49 @@
+menu "BatteryTester legacy settings"
+    config BATTERY_AP_PASSWORD
+        string "Legacy access point / web admin password"
+        default ""
+        help
+            Kept so existing sdkconfig values can migrate to OTA Suite settings.
+            New configurations should use OTA Suite network settings.
+
+    config BATTERY_SNTP_SERVER
+        string "Legacy time server"
+        default "pool.ntp.org"
+
+    config BATTERY_UPDATE_MANIFEST_URL
+        string "Legacy firmware manifest URL"
+        default "https://updates.example.org/BatteryTester/firmware.json"
+
+    config BATTERY_OTA_ALLOW_HTTP
+        bool "Legacy HTTP OTA opt-in"
+        default n
+
+    config BATTERY_OTA_URL
+        string "Legacy fixed firmware URL (unused by the manifest updater)"
+        default ""
+
+    config BATTERY_LED_GPIO
+        int "Legacy status LED GPIO"
+        range 0 48
+        default 48
+endmenu
+
+config OTA_SUITE_AP_PASSWORD
+    string
+    default BATTERY_AP_PASSWORD
+
+config OTA_SUITE_SNTP_SERVER
+    string
+    default BATTERY_SNTP_SERVER
+
+config OTA_SUITE_UPDATE_MANIFEST_URL
+    string
+    default BATTERY_UPDATE_MANIFEST_URL
+
+config OTA_SUITE_OTA_ALLOW_HTTP
+    bool
+    default BATTERY_OTA_ALLOW_HTTP
+
+config OTA_SUITE_LED_GPIO
+    int
+    default BATTERY_LED_GPIO

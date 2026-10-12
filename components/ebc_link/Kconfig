@@ -1,0 +1,39 @@
+menu "EBC battery tester UARTs"
+
+    comment "UART1: ESP32 <-> EBC battery tester (5 V TTL: use a level shifter)"
+
+    config EBC_TESTER_UART_TX_GPIO
+        int "Tester UART1 TX GPIO"
+        range 0 48
+        default 17
+
+    config EBC_TESTER_UART_RX_GPIO
+        int "Tester UART1 RX GPIO"
+        range 0 48
+        default 18
+
+    config EBC_TESTER_UART_BAUD
+        int "Tester UART1 baud rate"
+        range 1200 115200
+        default 9600
+        help
+            The EBC protocol uses 8 data bits, odd parity and 1 stop bit.
+
+    comment "UART2: PC dongle <-> ESP32 (bridge to UART1 is not implemented yet)"
+
+    config EBC_DONGLE_UART_TX_GPIO
+        int "Dongle UART2 TX GPIO"
+        range 0 48
+        default 8
+
+    config EBC_DONGLE_UART_RX_GPIO
+        int "Dongle UART2 RX GPIO"
+        range 0 48
+        default 9
+
+    config EBC_DONGLE_UART_BAUD
+        int "Dongle UART2 baud rate"
+        range 1200 115200
+        default 9600
+
+endmenu

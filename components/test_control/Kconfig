@@ -1,0 +1,12 @@
+menu "Battery test control"
+
+    config TEST_CONTROL_AVERAGING_LENGTH
+        int "EBC frames averaged into one stored measurement"
+        range 1 120
+        default 20
+        help
+            The EBC sends about one status frame per second. Current, voltage and
+            capacity of this many frames are averaged before a measurement is stored.
+            A mode, step, cycle or setpoint change always starts a new average.
+
+endmenu

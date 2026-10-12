@@ -1,0 +1,107 @@
+<section class="container-fluid px-0" aria-labelledby="auto-title">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+    <div>
+      <h2 id="auto-title" class="h3 mb-1"><span data-i18n="text.dc0082304552">Automatische Bedienung</span></h2>
+      <p class="small text-body-secondary mb-0"><span data-i18n="text.08e20f120c6e">Testplan mit bis zu 10 Schritten. Der Ablauf l&auml;uft auf dem ESP32
+        und wird ohne WLAN fortgesetzt, solange das Ger&auml;t eingeschaltet bleibt.</span></p>
+    </div>
+    <span id="auto-state" class="badge text-bg-secondary fs-6"><span data-i18n="text.8d4d4830b4da">Bereit</span></span>
+  </div>
+
+  <div id="auto-message" class="alert d-none" role="status"></div>
+
+  <div class="row g-3">
+    <div class="col-xl-5">
+      <div class="card shadow-sm h-100"><div class="card-body">
+        <h3 class="h5"><span data-i18n="text.547b88c6a40f">Plan-Ablauf</span></h3>
+        <dl class="row small">
+          <dt class="col-5">Plan</dt><dd id="auto-run-name" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.41b8e19043ca">Schritt</span></dt><dd id="auto-run-step" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.dfd72aef2879">Zyklus</span></dt><dd id="auto-run-cycle" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.1baf84cfa846">Schrittdauer</span></dt><dd id="auto-run-elapsed" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.1b5c331c689d">Meldung</span></dt><dd id="auto-run-message" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.43787dab5fe9">Batterie</span></dt><dd id="auto-run-battery" class="col-7">-</dd>
+          <dt class="col-5">EBC</dt><dd id="auto-run-ebc" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.cb13ea105cb2">Messwerte</span></dt><dd id="auto-run-values" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.8de4880fe7dd">Aufzeichnung</span></dt><dd id="auto-run-recorder" class="col-7">-</dd>
+        </dl>
+        <div class="d-flex flex-wrap gap-2">
+          <button id="auto-start" class="btn btn-success" type="button"><span data-i18n="text.f93310b27311">Plan starten</span></button>
+          <button id="auto-abort" class="btn btn-danger" type="button"><span data-i18n="text.f7ff1178af20">Abbrechen</span></button>
+          <button id="auto-reset" class="btn btn-outline-secondary" type="button"><span data-i18n="text.4d8e168bce72">Status zur&uuml;cksetzen</span></button>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="col-xl-7">
+      <div class="card shadow-sm h-100"><div class="card-body">
+        <h3 class="h5"><span data-i18n="text.2260bc7abe98">Testplan</span></h3>
+        <div class="row g-2 mb-3">
+          <div class="col-md-6">
+            <label for="auto-name" class="form-label">Name</label>
+            <input id="auto-name" class="form-control" maxlength="64" placeholder="z. B. Kapazitaetstest LiFePO4" data-i18n-attrs="placeholder:text.972af3b3f0d9">
+          </div>
+          <div class="col-md-6">
+            <label for="auto-db-list" class="form-label"><span data-i18n="text.5a707eb22b0b">Gespeicherte Pl&auml;ne</span></label>
+            <div class="input-group">
+              <select id="auto-db-list" class="form-select"></select>
+              <button id="auto-db-load" class="btn btn-outline-primary" type="button"><span data-i18n="language.loadPlan">Laden</span></button>
+              <button id="auto-db-refresh" class="btn btn-outline-secondary" type="button" title="Liste aktualisieren" data-i18n-attrs="title:text.46cab1548f3e">&#x21bb;</button>
+            </div>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-2">
+            <thead><tr><th>#</th><th><span data-i18n="text.45517c77e57e">Modus</span></th><th><span data-i18n="text.f0ca2758be5a">Wert 1</span></th><th><span data-i18n="text.4b75d83a52fa">Wert 2</span></th><th><span data-i18n="text.78eb87b5f0e4">Wert 3</span></th></tr></thead>
+            <tbody id="auto-steps"></tbody>
+          </table>
+        </div>
+        <p id="auto-steps-empty" class="small text-body-secondary"><span data-i18n="text.f65753b9af13">Noch keine Schritte. Unten einen Schritt anlegen.</span></p>
+        <div class="d-flex flex-wrap gap-2">
+          <button id="auto-db-save" class="btn btn-success" type="button"><span data-i18n="text.c83b003182c2">In Datenbank speichern</span></button>
+          <button id="auto-clear" class="btn btn-outline-danger" type="button"><span data-i18n="text.a3047b2439ca">Alle Schritte l&ouml;schen</span></button>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="col-12">
+      <div class="card shadow-sm"><div class="card-body">
+        <h3 class="h5"><span data-i18n="text.9b6aa065f827">Schritt-Editor</span></h3>
+        <form id="auto-editor" class="row g-3 align-items-end" autocomplete="off">
+          <div class="col-md-3">
+            <label for="auto-mode" class="form-label"><span data-i18n="text.45517c77e57e">Modus</span></label>
+            <select id="auto-mode" class="form-select">
+              <option value="1" data-i18n="text.cbdf92d0d6d6">Entladen Konstantstrom (D-CC)</option>
+              <option value="2" data-i18n="text.5ab59b9aed5b">Entladen Konstantleistung (D-CP)</option>
+              <option value="3" data-i18n="text.5e35d776c45d">Laden (C-CV)</option>
+              <option value="4" data-i18n="text.233631694afc">Warten</option>
+              <option value="5" data-i18n="text.527801123aeb">Zyklus (zur&uuml;ck zu Schritt 1)</option>
+            </select>
+          </div>
+          <div id="auto-field-1" class="col-md-2">
+            <label id="auto-label-1" for="auto-value-1" class="form-label"><span data-i18n="text.f0ca2758be5a">Wert 1</span></label>
+            <input id="auto-value-1" class="form-control" type="number" step="0.01">
+          </div>
+          <div id="auto-field-2" class="col-md-2">
+            <label id="auto-label-2" for="auto-value-2" class="form-label"><span data-i18n="text.4b75d83a52fa">Wert 2</span></label>
+            <input id="auto-value-2" class="form-control" type="number" step="0.01">
+          </div>
+          <div id="auto-field-3" class="col-md-2">
+            <label id="auto-label-3" for="auto-value-3" class="form-label"><span data-i18n="text.78eb87b5f0e4">Wert 3</span></label>
+            <input id="auto-value-3" class="form-control" type="number" step="1">
+          </div>
+          <div class="col-md-3 d-flex flex-wrap gap-2">
+            <button id="auto-add" class="btn btn-primary" type="submit"><span data-i18n="text.cbb95cf02b7d">Hinzuf&uuml;gen</span></button>
+            <button id="auto-replace" class="btn btn-outline-primary" type="button"><span data-i18n="text.494905e681cc">Ersetzen</span></button>
+          </div>
+          <div class="col-12 d-flex flex-wrap gap-2">
+            <button id="auto-up" class="btn btn-sm btn-outline-secondary" type="button"><span data-i18n="text.7e2851623556">&uarr; Nach oben</span></button>
+            <button id="auto-down" class="btn btn-sm btn-outline-secondary" type="button"><span data-i18n="text.b37b85d1fa2e">&darr; Nach unten</span></button>
+            <button id="auto-delete" class="btn btn-sm btn-outline-danger" type="button"><span data-i18n="text.98ce7a11a701">Schritt l&ouml;schen</span></button>
+            <span id="auto-hint" class="small text-body-secondary align-self-center"></span>
+          </div>
+        </form>
+      </div></div>
+    </div>
+  </div>
+</section>

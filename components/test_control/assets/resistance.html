@@ -1,0 +1,82 @@
+<section aria-labelledby="res-title">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+      <h2 id="res-title" class="h3"><span data-i18n="text.5a6dc75e2b48">Innenwiderstand / Lastpulstest</span></h2>
+      <p class="text-body-secondary mb-0"><span data-i18n="text.dba0aa3b8ba5">DC-Widerstand aus Vierdrahtmessung mit gemessenem Laststrom. Temperatur: nicht erfasst.</span></p>
+    </div>
+    <span id="res-state" class="badge text-bg-secondary fs-6"><span data-i18n="text.8d4d4830b4da">Bereit</span></span>
+  </div>
+  <div id="res-message" class="alert d-none" role="status"></div>
+  <div class="alert alert-warning"><span data-i18n="text.82e14d2bb56b">
+    Parameter passend zur Batterie und zu den Grenzen des EBC einstellen. Automatische Vorbereitung l&auml;dt
+    vollst&auml;ndig und entnimmt anschlie&szlig;end die berechnete Kapazit&auml;t.
+    Ziel-SOC ist eine N&auml;herung anhand der eingegebenen nutzbaren Kapazit&auml;t, keine SOC-Messung.
+    Die Schutzabschaltung &uuml;ber UART ersetzt keine unabh&auml;ngige Batterieschutzschaltung.
+  </span></div>
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <div class="card shadow-sm"><div class="card-body">
+        <h3 class="h5"><span data-i18n="text.04a141f1eb5d">Messparameter</span></h3>
+        <form id="res-form" autocomplete="off">
+          <label for="res-method" class="form-label"><span data-i18n="text.c82d8ceed809">Vorbereitung</span></label>
+          <select id="res-method" class="form-select mb-3">
+            <option value="prepared" data-i18n="text.ee8ad1be29bf">Ladezustand bereits vorbereitet</option>
+            <option value="automatic" data-i18n="text.b6202f419398">Automatische Vorbereitung und Messung</option>
+          </select>
+          <div id="res-fields"></div>
+          <div class="form-check my-3">
+            <input id="res-confirm" class="form-check-input" type="checkbox">
+            <label for="res-confirm" class="form-check-label"><span data-i18n="text.1852c90619d6">Ladeparameter und Strom-/Spannungs-/Leistungsgrenzen f&uuml;r diese Batterie gepr&uuml;ft.</span></label>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <button id="res-start" type="submit" class="btn btn-success" disabled><span data-i18n="text.0b4d33389e9c">Messung starten</span></button>
+            <button id="res-save" type="button" class="btn btn-outline-primary"><span data-i18n="text.2fd5635cfa99">Parameter speichern</span></button>
+            <button id="res-abort" type="button" class="btn btn-danger" disabled><span data-i18n="text.cbcb1be75759">Abbrechen / Stopp</span></button>
+          </div>
+        </form>
+      </div></div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card shadow-sm mb-3"><div class="card-body">
+        <h3 class="h5"><span data-i18n="text.9fe440fa4dbe">Ablauf</span></h3>
+        <dl class="row small mb-0">
+          <dt class="col-5"><span data-i18n="text.43787dab5fe9">Batterie</span></dt><dd id="res-battery" class="col-7">-</dd>
+          <dt class="col-5">Phase</dt><dd id="res-phase" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.2933d4a76b9a">Phasendauer</span></dt><dd id="res-elapsed" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.95fd7553f80d">Entnommen / Ziel</span></dt><dd id="res-ah" class="col-7">-</dd>
+          <dt class="col-5">U&#8321; / I&#8321;</dt><dd id="res-baseline" class="col-7">-</dd>
+          <dt class="col-5">Live U / I</dt><dd id="res-live" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.d505d15b89b2">Start-Abtastl&uuml;cke</span></dt><dd id="res-onset" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.1b5c331c689d">Meldung</span></dt><dd id="res-detail" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.e6a47af0d12e">Testlauf</span></dt><dd id="res-run" class="col-7 text-break">-</dd>
+        </dl>
+      </div></div>
+      <div class="card shadow-sm"><div class="card-body">
+        <h3 class="h5"><span data-i18n="text.12ba6ae54b68">Ergebnisse</span></h3>
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead><tr><th><span data-i18n="text.ca7b9aec331f">Soll / Ist (s)</span></th><th>U&#8322; (V)</th><th>I&#8322; (A)</th><th>R (m&Omega;)</th><th><span data-i18n="text.17e0408814f8">Messzeitpunkt</span></th></tr></thead>
+            <tbody id="res-results"></tbody>
+          </table>
+        </div>
+        <p class="small text-body-secondary mb-0"><span data-i18n="text.7c71768a8207">
+          R = (U&#8321; &minus; U&#8322;) / I&#8322;. Rohwerte ohne 20-Frame-Mittelung.
+          Zeitnull: Startbefehl nach dem letzten Leerlaufframe. Der tats&auml;chliche Lastbeginn liegt zwischen diesem
+          Frame und dem ersten Lastframe. UART-Abtastrate und Aufl&ouml;sung begrenzen besonders das 1-s-Ergebnis.
+          Zu sp&auml;te oder unplausible Ergebnisse werden nicht als Widerstand ausgegeben.
+        </span></p>
+      </div></div>
+    </div>
+    <div class="col-12">
+      <div class="card shadow-sm"><div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
+          <h3 class="h5"><span data-i18n="text.33415c26dca4">Gespeicherte Messungen auf SD</span></h3>
+          <button id="res-history-refresh" type="button" class="btn btn-sm btn-outline-secondary"><span data-i18n="text.96bf0098166f">Aktualisieren</span></button>
+        </div>
+        <p class="small text-body-secondary"><span data-i18n="text.d10e2a4675be">Die letzten 20 Messungen. Rohkurven sind im Tab Messdaten als Testlauf abrufbar.
+          Ergebnisse und UTC-Messzeitpunkte werden strukturiert gespeichert und mit der MariaDB-Sicherung &uuml;bertragen.</span></p>
+        <div id="res-history"></div>
+      </div></div>
+    </div>
+  </div>
+</section>

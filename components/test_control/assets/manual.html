@@ -1,0 +1,108 @@
+<section class="container-fluid px-0" aria-labelledby="man-title">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+    <div>
+      <h2 id="man-title" class="h3 mb-1"><span data-i18n="text.52aac7568b0c">Manuelle Bedienung</span></h2>
+      <p class="small text-body-secondary mb-0"><span data-i18n="text.dd59d095071c">Direkte Steuerung des EBC-A20. Aktive Tests werden automatisch
+        aufgezeichnet.</span></p>
+    </div>
+    <span id="man-link-badge" class="badge text-bg-secondary fs-6"><span data-i18n="text.b0caf73f4640">Getrennt</span></span>
+  </div>
+
+  <div id="man-message" class="alert d-none" role="status"></div>
+
+  <div class="row g-3">
+    <div class="col-xl-6">
+      <div class="card shadow-sm h-100"><div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h3 class="h5 mb-0">Status</h3>
+          <button id="man-stop" class="btn btn-danger" type="button"><span data-i18n="text.268829685bf7">Stopp</span></button>
+        </div>
+        <div class="row g-2 text-center">
+          <div class="col-6 col-md-3"><div class="border rounded p-2">
+            <div class="small text-body-secondary"><span data-i18n="text.5fa34faee5f4">Spannung</span></div><div id="man-voltage" class="h5 mb-0">-</div></div></div>
+          <div class="col-6 col-md-3"><div class="border rounded p-2">
+            <div class="small text-body-secondary"><span data-i18n="text.7222c5506fcf">Strom</span></div><div id="man-current" class="h5 mb-0">-</div></div></div>
+          <div class="col-6 col-md-3"><div class="border rounded p-2">
+            <div class="small text-body-secondary"><span data-i18n="text.9e1dd51bd259">Leistung</span></div><div id="man-power" class="h5 mb-0">-</div></div></div>
+          <div class="col-6 col-md-3"><div class="border rounded p-2">
+            <div class="small text-body-secondary"><span data-i18n="text.97b15223593d">Kapazit&auml;t</span></div><div id="man-capacity" class="h5 mb-0">-</div></div></div>
+        </div>
+        <dl class="row small mt-3 mb-0">
+          <dt class="col-5"><span data-i18n="text.261881e0b491">Betriebsart</span></dt><dd id="man-mode" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.02a975e8c228">Sollwerte (EBC)</span></dt><dd id="man-setpoints" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.43787dab5fe9">Batterie</span></dt><dd id="man-battery" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.8de4880fe7dd">Aufzeichnung</span></dt><dd id="man-recorder" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.2260bc7abe98">Testplan</span></dt><dd id="man-plan" class="col-7">-</dd>
+        </dl>
+      </div></div>
+    </div>
+
+    <div class="col-xl-6">
+      <div class="card shadow-sm h-100"><div class="card-body">
+        <h3 class="h5"><span data-i18n="text.036781f17340">Verbindung</span></h3>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <button id="man-connect" class="btn btn-outline-primary" type="button"><span data-i18n="text.0eefbbbcecf6">Verbinden</span></button>
+          <button id="man-disconnect" class="btn btn-outline-secondary" type="button"><span data-i18n="text.9d2854306cc9">Trennen (Tastensperre l&ouml;sen)</span></button>
+        </div>
+        <div class="form-check form-switch mb-3">
+          <input id="man-auto" class="form-check-input" type="checkbox" role="switch">
+          <label for="man-auto" class="form-check-label"><span data-i18n="text.22a4f872f9d0">Automatisch verbinden (alle 3 s)</span></label>
+        </div>
+        <dl class="row small mb-0">
+          <dt class="col-5"><span data-i18n="text.54219d33b7f0">Modell-ID</span></dt><dd id="man-model" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.393a340a08be">Frames OK / fehlerhaft</span></dt><dd id="man-frames" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.04749b562b86">Letzter Frame</span></dt><dd id="man-age" class="col-7">-</dd>
+          <dt class="col-5"><span data-i18n="text.8a25681138ba">Befehl wartet</span></dt><dd id="man-pending" class="col-7">-</dd>
+        </dl>
+      </div></div>
+    </div>
+
+    <div class="col-xl-6">
+      <div class="card shadow-sm h-100"><div class="card-body">
+        <h3 class="h5"><span data-i18n="text.5e35d776c45d">Laden (C-CV)</span></h3>
+        <form id="man-charge-form" class="row g-3" autocomplete="off">
+          <div class="col-md-4">
+            <label for="man-charge-current" class="form-label"><span data-i18n="text.bb39ee18acd6">Strom (A)</span></label>
+            <input id="man-charge-current" class="form-control" type="number" min="0.01" max="20" step="0.01" required>
+          </div>
+          <div class="col-md-4">
+            <label for="man-charge-voltage" class="form-label"><span data-i18n="text.276ed7b6e344">Ladespannung (V)</span></label>
+            <input id="man-charge-voltage" class="form-control" type="number" min="0.01" max="30" step="0.01" required>
+          </div>
+          <div class="col-md-4">
+            <label for="man-charge-cutoff" class="form-label"><span data-i18n="text.b2c884412725">Abschaltstrom (A)</span></label>
+            <input id="man-charge-cutoff" class="form-control" type="number" min="0.01" max="20" step="0.01" required>
+          </div>
+          <div class="col-12"><button class="btn btn-success" type="submit"><span data-i18n="text.ee1da8d93e61">Laden starten</span></button></div>
+        </form>
+      </div></div>
+    </div>
+
+    <div class="col-xl-6">
+      <div class="card shadow-sm h-100"><div class="card-body">
+        <h3 class="h5"><span data-i18n="text.4979a60ac3d6">Entladen</span></h3>
+        <div class="btn-group mb-3" role="group" aria-label="Entlademodus" data-i18n-attrs="aria-label:text.39ea5423d7ab">
+          <input id="man-mode-cc" class="btn-check" type="radio" name="man-discharge-mode" value="cc" checked>
+          <label class="btn btn-outline-primary" for="man-mode-cc"><span data-i18n="text.8bd4d63fefb9">Konstantstrom (D-CC)</span></label>
+          <input id="man-mode-cp" class="btn-check" type="radio" name="man-discharge-mode" value="cp">
+          <label class="btn btn-outline-primary" for="man-mode-cp"><span data-i18n="text.3f194c37b1ae">Konstantleistung (D-CP)</span></label>
+        </div>
+        <form id="man-discharge-form" class="row g-3" autocomplete="off">
+          <div class="col-md-4">
+            <label id="man-discharge-value-label" for="man-discharge-value" class="form-label"><span data-i18n="text.bb39ee18acd6">Strom (A)</span></label>
+            <input id="man-discharge-value" class="form-control" type="number" min="0.01" max="20" step="0.01" required>
+          </div>
+          <div class="col-md-4">
+            <label for="man-discharge-cutoff" class="form-label"><span data-i18n="text.7cf603e56ff8">Abschaltspannung (V)</span></label>
+            <input id="man-discharge-cutoff" class="form-control" type="number" min="0.01" max="30" step="0.01" required>
+          </div>
+          <div class="col-md-4">
+            <label for="man-discharge-minutes" class="form-label"><span data-i18n="text.2cba9409833c">Max. Zeit (min, 0 = aus)</span></label>
+            <input id="man-discharge-minutes" class="form-control" type="number" min="0" max="239" step="1" required>
+          </div>
+          <div class="col-12"><button class="btn btn-warning" type="submit"><span data-i18n="text.d5e7d10350a4">Entladen starten</span></button></div>
+        </form>
+      </div></div>
+    </div>
+  </div>
+</section>

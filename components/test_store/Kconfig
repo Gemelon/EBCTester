@@ -1,0 +1,12 @@
+menu "Battery test store"
+
+    config TEST_STORE_DEVICE_ID
+        string "Device ID stored with plans and test runs"
+        default "EBC-A20"
+
+    config TEST_STORE_MAX_PENDING_SAMPLES
+        int "Maximum buffered measurements while the SD card is busy"
+        range 100 20000
+        default 3000
+
+endmenu
