@@ -3,9 +3,8 @@
 
 <section class="container-fluid px-0" aria-labelledby="bat-title">
   <div class="mb-3">
-    <h2 id="bat-title" class="h3 mb-1"><span data-i18n="text.43787dab5fe9">Batterie</span></h2>
-    <p class="small text-body-secondary mb-0"><span data-i18n="text.d5877c2f2c29">Daten der Batterie, die als n&auml;chstes getestet wird. Sie werden
-      mit jedem Testlauf in der SD-Datenbank gespeichert. Leere Felder &uuml;berschreiben keine vorhandenen Werte.</span></p>
+    <h2 id="bat-title" class="h3 mb-1"><span data-i18n="text.43787dab5fe9">Battery</span></h2>
+    <p class="small text-body-secondary mb-0"><span data-i18n="text.d5877c2f2c29">Details of the next battery to test. They are stored with each test run in the SD database. Empty fields do not overwrite existing values.</span></p>
   </div>
 
   <div id="bat-message" class="alert d-none" role="status"></div>
@@ -13,50 +12,50 @@
   <div class="row g-3">
     <div class="col-lg-8">
       <div class="card shadow-sm h-100"><div class="card-body">
-        <h3 class="h5"><span data-i18n="text.9b5af489463a">Aktuelle Batterie</span></h3>
+        <h3 class="h5"><span data-i18n="text.9b5af489463a">Current battery</span></h3>
         <form id="bat-form" class="row g-3" autocomplete="off">
           <div class="col-md-6">
-            <label for="bat-label" class="form-label"><span data-i18n="text.97d1e68526b8">Bezeichnung</span></label>
-            <input id="bat-label" class="form-control" maxlength="64" placeholder="z. B. LiFePO4 Zelle 07" data-i18n-attrs="placeholder:text.03c7ac9d56e7">
+            <label for="bat-label" class="form-label"><span data-i18n="text.97d1e68526b8">Label</span></label>
+            <input id="bat-label" class="form-control" maxlength="64" placeholder="e.g. LiFePO4 cell 07" data-i18n-attrs="placeholder:text.03c7ac9d56e7">
           </div>
           <div class="col-md-6">
-            <label for="bat-manufacturer" class="form-label"><span data-i18n="text.32da517562d9">Hersteller</span></label>
+            <label for="bat-manufacturer" class="form-label"><span data-i18n="text.32da517562d9">Manufacturer</span></label>
             <input id="bat-manufacturer" class="form-control" maxlength="64">
           </div>
           <div class="col-md-6">
-            <label for="bat-serial" class="form-label"><span data-i18n="text.760abc3dbbfa">Seriennummer</span></label>
+            <label for="bat-serial" class="form-label"><span data-i18n="text.760abc3dbbfa">Serial number</span></label>
             <input id="bat-serial" class="form-control" maxlength="64">
           </div>
           <div class="col-md-3">
-            <label for="bat-date" class="form-label"><span data-i18n="text.6468e2354b0f">Herstelldatum</span></label>
+            <label for="bat-date" class="form-label"><span data-i18n="text.6468e2354b0f">Manufacture date</span></label>
             <input id="bat-date" class="form-control" type="date" min="1990-01-01" max="2100-12-31">
           </div>
           <div class="col-md-3">
-            <label for="bat-capacity" class="form-label"><span data-i18n="text.d55f93d07417">Nennkapazit&auml;t (Ah)</span></label>
+            <label for="bat-capacity" class="form-label"><span data-i18n="text.d55f93d07417">Nominal capacity (Ah)</span></label>
             <input id="bat-capacity" class="form-control" type="number" min="0" max="10000" step="0.001">
           </div>
           <div class="col-12">
-            <label for="bat-notes" class="form-label"><span data-i18n="text.7800bd538c37">Notizen</span></label>
+            <label for="bat-notes" class="form-label"><span data-i18n="text.7800bd538c37">Notes</span></label>
             <textarea id="bat-notes" class="form-control" rows="3" maxlength="255"></textarea>
-            <div class="form-text"><span id="bat-notes-count">0</span><span data-i18n="text.a42d9aad8185">/255 Zeichen</span></div>
+            <div class="form-text"><span id="bat-notes-count">0</span><span data-i18n="text.a42d9aad8185">/255 characters</span></div>
           </div>
           <div class="col-12 d-flex flex-wrap gap-2">
-            <button id="bat-save" class="btn btn-primary" type="submit"><span data-i18n="text.936378b371b9">&Uuml;bernehmen</span></button>
-            <button id="bat-save-db" class="btn btn-success" type="button"><span data-i18n="text.c2de5a12b16f">&Uuml;bernehmen und in Datenbank speichern</span></button>
-            <button id="bat-new" class="btn btn-outline-secondary" type="button"><span data-i18n="text.7b436a4b2b07">Neue Batterie</span></button>
+            <button id="bat-save" class="btn btn-primary" type="submit"><span data-i18n="text.936378b371b9">Apply</span></button>
+            <button id="bat-save-db" class="btn btn-success" type="button"><span data-i18n="text.c2de5a12b16f">Apply and save to database</span></button>
+            <button id="bat-new" class="btn btn-outline-secondary" type="button"><span data-i18n="text.7b436a4b2b07">New battery</span></button>
           </div>
         </form>
       </div></div>
     </div>
     <div class="col-lg-4">
       <div class="card shadow-sm h-100"><div class="card-body">
-        <h3 class="h5"><span data-i18n="text.2741e47257b2">Gespeicherte Batterien</span></h3>
-        <p class="small text-body-secondary"><span data-i18n="text.26d3ab6f4928">Batterien aus der SQLite-Datenbank auf der SD-Karte.</span></p>
-        <label for="bat-list" class="form-label"><span data-i18n="text.99e572ee1a14">Batterie ausw&auml;hlen</span></label>
+        <h3 class="h5"><span data-i18n="text.2741e47257b2">Saved batteries</span></h3>
+        <p class="small text-body-secondary"><span data-i18n="text.26d3ab6f4928">Batteries from the SQLite database on the SD card.</span></p>
+        <label for="bat-list" class="form-label"><span data-i18n="text.99e572ee1a14">Select battery</span></label>
         <select id="bat-list" class="form-select mb-3" size="8"></select>
         <div class="d-flex flex-wrap gap-2">
-          <button id="bat-load" class="btn btn-outline-primary" type="button"><span data-i18n="text.00d5d22d958b">Laden</span></button>
-          <button id="bat-refresh" class="btn btn-outline-secondary" type="button"><span data-i18n="text.46cab1548f3e">Liste aktualisieren</span></button>
+          <button id="bat-load" class="btn btn-outline-primary" type="button"><span data-i18n="text.00d5d22d958b">Charge</span></button>
+          <button id="bat-refresh" class="btn btn-outline-secondary" type="button"><span data-i18n="text.46cab1548f3e">Refresh list</span></button>
         </div>
       </div></div>
     </div>

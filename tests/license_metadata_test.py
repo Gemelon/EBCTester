@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import fnmatch
+from html.parser import HTMLParser
+import json
 import os
 from pathlib import Path
 import re
@@ -39,6 +41,52 @@ def original_files(root):
 
 
 class LicenseMetadataTests(unittest.TestCase):
+    def test_english_development_policy_is_persistent(self):
+        for root in PACKAGES:
+            policy = (root / "AGENTS.md").read_text(encoding="utf-8")
+            self.assertIn("must be in English", policy)
+            self.assertIn("explicit approval", policy)
+            readme = (root / "README.md").read_text(encoding="utf-8")
+            self.assertNotRegex(readme, r"\b(?:Drittanbieter|Funktionen|Lizenz|Urheber|Voraussetzungen)\b")
+
+    def test_html_base_text_matches_english_catalog(self):
+        catalog = json.loads(
+            (PACKAGES[1] / "components/web_interface/assets/en.json").read_text(encoding="utf-8")
+        )["strings"]
+        case = self
+
+        class CatalogParser(HTMLParser):
+            def __init__(self):
+                super().__init__(convert_charrefs=True)
+                self.stack = []
+
+            def handle_starttag(self, tag, attrs):
+                attributes = dict(attrs)
+                for binding in attributes.get("data-i18n-attrs", "").split(";"):
+                    if binding:
+                        attribute, key = binding.split(":", 1)
+                        case.assertEqual(attributes[attribute], catalog[key])
+                if tag not in {"area", "base", "br", "col", "embed", "hr", "img",
+                               "input", "link", "meta", "param", "source", "track", "wbr"}:
+                    self.stack.append([tag, attributes.get("data-i18n"), ""])
+
+            def handle_data(self, data):
+                if self.stack:
+                    self.stack[-1][2] += data
+
+            def handle_endtag(self, tag):
+                opened, key, text = self.stack.pop()
+                case.assertEqual(opened, tag)
+                if key:
+                    case.assertEqual(text, catalog[key])
+
+        for root in PACKAGES:
+            for path in (root / "components").rglob("*.html"):
+                with self.subTest(file=path):
+                    parser = CatalogParser()
+                    parser.feed(path.read_text(encoding="utf-8"))
+                    self.assertFalse(parser.stack)
+
     def test_same_apache_license_and_author_in_all_packages(self):
         license_text = (ROOT / "LICENSE").read_bytes()
         self.assertIn(b"Apache License", license_text)
@@ -82,7 +130,7 @@ class LicenseMetadataTests(unittest.TestCase):
                         self.assertTrue(resolved.exists())
             readme = (root / "README.md").read_text(encoding="utf-8")
             headings = re.findall(r"^## (.+)$", readme, re.M)
-            self.assertEqual(headings[-1], "Drittanbieter und ihre Lizenzen")
+            self.assertEqual(headings[-1], "Third-party components and licenses")
             self.assertIn("Thomas Stoll", readme)
             self.assertNotIn("No license has yet", readme)
 

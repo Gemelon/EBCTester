@@ -10,7 +10,7 @@
 extern "C" {
 #endif
 
-/* Starts the EBC link, the test recorder and the Batterie/Manuell/Automatik web tabs. */
+/* Starts the EBC link, the test recorder and the Battery/Manual/Automatic web tabs. */
 esp_err_t test_control_init(void);
 
 #ifdef __cplusplus

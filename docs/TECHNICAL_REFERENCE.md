@@ -3,7 +3,7 @@
 
 # EBCTester technical reference
 
-Implementation details for firmware 1.3.35. Commands and file paths below
+Implementation details for firmware 1.3.36. Commands and file paths below
 are relative to the project root. For purpose, setup, safety and licensing,
 see [README](../README.md) and [third-party notices](../THIRD_PARTY_NOTICES.md).
 
@@ -138,7 +138,7 @@ external pull-ups on the SD signal lines (3.3 V only).
 Format cards as FAT32. The ESP-IDF 6.0.1 bundled FatFs configuration disables
 exFAT, which this component therefore does not support. FatFs API UTF-8 encoding
 is enabled for international file names. An unavailable or unformatted card is
-reported in the SD-Karte tab and is never automatically formatted; it does not
+reported in the SD card tab and is never automatically formatted; it does not
 block OTA or normal device startup. The tab supports folder listing, upload,
 download, empty-file/folder creation, rename/move and deletion of files or
 empty folders.
@@ -175,7 +175,7 @@ tester"); MariaDB backup is described below.
 
 ## Measurement dashboard (offline)
 
-The `battery_dashboard` component adds the **Messdaten** tab to the web UI. All
+The `battery_dashboard` component adds the **Measurements** tab to the web UI. All
 data comes from the SQLite database on the SD card and Chart.js 4.4.9 is served
 from flash (`/ui/dashboard/chart.js`, MIT license in
 `components/battery_dashboard/assets/CHARTJS-LICENSE.md`), so the page works
@@ -197,9 +197,9 @@ The tab order is set with `CONFIG_OTA_SUITE_WEB_TAB_ORDER` in
 the first tab opens on page load.
 
 The header and browser title use the firmware project name **EBCTester**.
-The top menu splits tabs into **Batterietester** (Messdaten, Batterie, Manuell,
-Automatik, Innenwiderstand) and **Verwaltung** (Geraeteinformation, SD Karte, Updates,
-Einstellungen); switching sections remembers the last selected tab within each
+The top menu splits tabs into **Battery tester** (Measurements, Battery, Manual,
+Automatic, Internal resistance) and **Administration** (Device information, SD card, Updates,
+Settings); switching sections remembers the last selected tab within each
 section. Green headers and bundled SVG icons work without an internet connection.
 The RX LED in the header toggles for newly counted valid UART frames.
 The browser polls `/api/tester/status` every 500 ms while visible; received
@@ -215,7 +215,7 @@ Each request opens the database under the shared SD lock and closes it again;
 
 The `mariadb_sync` component copies local test runs (plan, steps, battery, run,
 segments, measurements) to the existing `ebc_a20` MariaDB schema. Configure it
-in **Einstellungen → MariaDB-Sicherung** (host, port, database, user, password,
+in **Settings → MariaDB backup** (host, port, database, user, password,
 automatic interval in minutes; 0 = manual only). Settings are stored in NVS
 namespace `mariadb_sync`; the password is never returned to the browser.
 There is no default server address and sync is disabled on fresh installations.
@@ -226,7 +226,7 @@ not a replacement for that existing schema.
 
 - Progress per run is tracked locally in `ebc_sync_state`; only new segments
   and measurements are sent (batches of 200, `INSERT IGNORE`), so repeated or
-  interrupted syncs never duplicate data. "Alles erneut übertragen" resets it.
+  interrupted syncs never duplicate data. "Resend all" resets it.
 - Automatic sync runs only with WLAN, a ready SD database and a stored password.
 - Runs deleted locally stay in MariaDB.
 - Requires a `mysql_native_password` account with SELECT/INSERT/UPDATE on
@@ -252,18 +252,18 @@ The EBC-A20 uses 5 V TTL levels: connect it through a level shifter, the
 ESP32-S3 GPIOs are not 5 V tolerant. The dongle↔tester bridge is not
 implemented yet; UART2 is initialized and its input discarded.
 
-- **Batterie**: label, manufacturer, serial, manufacturing date, nominal
+- **Battery**: label, manufacturer, serial, manufacturing date, nominal
   capacity, notes; stored in NVS and optionally in the SQLite database.
-- **Manuell**: live values, connect/disconnect, auto-connect, Stop, charging
+- **Manual**: live values, connect/disconnect, auto-connect, Stop, charging
   C-CV, discharging D-CC/D-CP.
   Connect/disconnect and all start buttons are blocked while a command is
   pending, a manual test is starting/active, or a plan is running (including
   wait steps). The firmware enforces this too; Stop and Abort remain available.
   A manual start awaits an active mode for up to 10 seconds before logging
   an error and requesting Stop.
-- **Automatik**: test plan with up to 10 steps (D-CC, D-CP, C-CV, wait, cycle),
+- **Automatic**: test plan with up to 10 steps (D-CC, D-CP, C-CV, wait, cycle),
   stored in NVS and the database. The plan runs on the ESP32; after a reboot
-  a running plan is marked "Unterbrochen" and must be reset.
+  a running plan is marked "Interrupted" and must be reset.
 
 Active tests are recorded as test runs with segments; each measurement is the
 average of `CONFIG_TEST_CONTROL_AVERAGING_LENGTH` frames (default 20 ≈ 20 s).
@@ -275,9 +275,9 @@ API (login required, POST with CSRF token): `GET /api/tester/status`,
 
 ## DC resistance / last-pulse test
 
-The **Innenwiderstand** tab uses the separate `resistance_test` component.
-Choose **Ladezustand bereits vorbereitet** for rest followed by a load pulse,
-or **Automatische Vorbereitung und Messung** to fully charge in C-CV mode,
+The **Internal resistance** tab uses the separate `resistance_test` component.
+Choose **State of charge already prepared** for rest followed by a load pulse,
+or **Automatic preparation and measurement** to fully charge in C-CV mode,
 then remove `usableCapacityAh * (100 - targetSOC) / 100` Ah before resting.
 Capacity removal integrates the **measured current** with monotonic frame
 timestamps (trapezoidal integration); target SOC is a calculated estimate, not
@@ -314,7 +314,7 @@ so check the tester locally. The EBC discharge command also carries a rounded-up
 whole-minute runtime limit; UART protection is not a replacement for an
 independent battery protection circuit. Tests never resume after reboot.
 
-Raw data is stored as a normal SD test run, visible in **Messdaten**.
+Raw data is stored as a normal SD test run, visible in **Measurements**.
 `DCIR v1;` run notes preserve parameters, results, actual sample times, U1/I1,
 onset uncertainty, capacity removal and error information; initial metadata is
 stored with the run so interrupted tests remain identifiable after reboot.
@@ -395,13 +395,13 @@ and battery safety must still be verified.
   checked. HTTPS waits for synchronized time. Reconnect checks are rate-limited
   to at most once per minute; overdue checks run on reconnection.
   **No automatic binary download, installation or OTA retry occurs.**
-- Browser status polling is read-only. **Updates pruefen** sends authenticated,
+- Browser status polling is read-only. **Check updates** sends authenticated,
   CSRF-protected **POST `/api/updates/check`** with an empty body.
 - Status exposes check progress/errors, available version, notes, and last
   successful check (Unix seconds, or uptime seconds without a synchronized clock).
   These values reset on reboot. Failed checks invalidate the candidate but
   preserve the last successful check details.
-- **Update starten**, followed by confirmation of the displayed version, sends
+- **Start update**, followed by confirmation of the displayed version, sends
   authenticated, CSRF-protected **POST `/api/ota`** with empty body and
   `X-Update-Version`. It must match the validated candidate. Boot confirmation,
   connected WLAN, idle network configuration, and a candidate younger than six
@@ -450,7 +450,7 @@ URL in menuconfig; that URL is independent of the publisher settings.
 
 When enabled, each successful ESP-IDF build:
 
-1. Copies/verifies the actual generated image to immutable **`EBCTester-1.3.35.bin`**.
+1. Copies/verifies the actual generated image to immutable **`EBCTester-1.3.36.bin`**.
    A same-version release with different bytes fails: bump the version, never
    overwrite a published release.
 2. Atomically replaces **`EBCTester.bin`** for older firmware.
@@ -472,8 +472,8 @@ Manifest schema (all seven fields mandatory; no extra or duplicate fields):
 {
   "project": "EBCTester",
   "target": "esp32s3",
-  "version": "1.3.35",
-  "url": "https://updates.example.org/BatteryTester/EBCTester-1.3.35.bin",
+  "version": "1.3.36",
+  "url": "https://updates.example.org/BatteryTester/EBCTester-1.3.36.bin",
   "size": 123456,
   "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "notes": "Release notes"

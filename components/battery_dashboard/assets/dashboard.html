@@ -4,14 +4,13 @@
 <section class="container-fluid px-0" aria-labelledby="dash-title">
   <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
     <div>
-      <h2 id="dash-title" class="h3 mb-1"><span data-i18n="text.b4a5c7f95bde">Akkutester Dashboard</span></h2>
-      <p class="small text-body-secondary mb-0"><span data-i18n="text.f999fff816db">Messdaten aus der SQLite-Datenbank auf der SD-Karte &ndash;
-        funktioniert auch ohne WLAN-Internetverbindung.</span></p>
+      <h2 id="dash-title" class="h3 mb-1"><span data-i18n="text.b4a5c7f95bde">Battery tester dashboard</span></h2>
+      <p class="small text-body-secondary mb-0"><span data-i18n="text.f999fff816db">Measurements from the SQLite database on the SD card — works without an Internet connection.</span></p>
     </div>
     <div class="d-flex flex-wrap gap-2">
-      <button id="dash-refresh" class="btn btn-outline-secondary btn-sm" type="button"><span data-i18n="text.46cab1548f3e">Liste aktualisieren</span></button>
-      <button id="dash-demo" class="btn btn-outline-primary btn-sm" type="button"><span data-i18n="text.b2356eac656f">Testdaten erzeugen</span></button>
-      <button id="dash-delete" class="btn btn-outline-danger btn-sm" type="button" disabled><span data-i18n="text.1c714c101c46">Testlauf l&ouml;schen</span></button>
+      <button id="dash-refresh" class="btn btn-outline-secondary btn-sm" type="button"><span data-i18n="text.46cab1548f3e">Refresh list</span></button>
+      <button id="dash-demo" class="btn btn-outline-primary btn-sm" type="button"><span data-i18n="text.b2356eac656f">Generate demo data</span></button>
+      <button id="dash-delete" class="btn btn-outline-danger btn-sm" type="button" disabled><span data-i18n="text.1c714c101c46">Delete test run</span></button>
     </div>
   </div>
 
@@ -19,22 +18,22 @@
 
   <div class="row g-2 align-items-end mb-3">
     <div class="col-md-4 col-lg-3">
-      <label for="dash-battery" class="form-label small fw-semibold mb-1"><span data-i18n="text.43787dab5fe9">Batterie</span></label>
+      <label for="dash-battery" class="form-label small fw-semibold mb-1"><span data-i18n="text.43787dab5fe9">Battery</span></label>
       <select id="dash-battery" class="form-select form-select-sm"></select>
     </div>
     <div class="col-md-8 col-lg-6">
-      <label for="dash-run" class="form-label small fw-semibold mb-1"><span data-i18n="text.e6a47af0d12e">Testlauf</span></label>
+      <label for="dash-run" class="form-label small fw-semibold mb-1"><span data-i18n="text.e6a47af0d12e">Test run</span></label>
       <select id="dash-run" class="form-select form-select-sm"></select>
     </div>
     <div class="col-lg-3 d-grid">
-      <button id="dash-load" class="btn btn-success btn-sm" type="button" disabled><span data-i18n="text.1647c942f312">Daten laden</span></button>
+      <button id="dash-load" class="btn btn-success btn-sm" type="button" disabled><span data-i18n="text.1647c942f312">Load data</span></button>
     </div>
   </div>
 
   <div class="row g-3 mb-3">
     <div class="col-lg-4">
       <div class="card h-100 shadow-sm"><div class="card-body py-2">
-        <div class="small text-body-secondary"><span data-i18n="text.43787dab5fe9">Batterie</span></div>
+        <div class="small text-body-secondary"><span data-i18n="text.43787dab5fe9">Battery</span></div>
         <div id="dash-battery-label" class="h5 fw-bold mb-0">-</div>
         <div id="dash-battery-detail" class="small text-body-secondary">-</div>
         <div id="dash-battery-nominal" class="small">-</div>
@@ -42,21 +41,21 @@
     </div>
     <div class="col-6 col-lg-2">
       <div class="card h-100 shadow-sm text-center"><div class="card-body py-2">
-        <div class="small text-body-secondary"><span data-i18n="text.7222c5506fcf">Strom</span></div>
+        <div class="small text-body-secondary"><span data-i18n="text.7222c5506fcf">Current</span></div>
         <div id="dash-current" class="h3 fw-bold text-primary mb-0">-</div>
         <div class="small text-body-secondary">A</div>
       </div></div>
     </div>
     <div class="col-6 col-lg-2">
       <div class="card h-100 shadow-sm text-center"><div class="card-body py-2">
-        <div class="small text-body-secondary"><span data-i18n="text.5fa34faee5f4">Spannung</span></div>
+        <div class="small text-body-secondary"><span data-i18n="text.5fa34faee5f4">Voltage</span></div>
         <div id="dash-voltage" class="h3 fw-bold text-warning mb-0">-</div>
         <div class="small text-body-secondary">V</div>
       </div></div>
     </div>
     <div class="col-6 col-lg-2">
       <div class="card h-100 shadow-sm text-center"><div class="card-body py-2">
-        <div class="small text-body-secondary"><span data-i18n="text.97b15223593d">Kapazit&auml;t</span></div>
+        <div class="small text-body-secondary"><span data-i18n="text.97b15223593d">Capacity</span></div>
         <div id="dash-capacity" class="h3 fw-bold text-success mb-0">-</div>
         <div class="small text-body-secondary">Ah</div>
       </div></div>
@@ -72,46 +71,46 @@
 
   <div class="card shadow-sm mb-3">
     <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-      <span class="fw-semibold"><span data-i18n="text.4a5a6a65792d">Spannung &amp; Strom &uuml;ber Zeit</span></span>
+      <span class="fw-semibold"><span data-i18n="text.4a5a6a65792d">Voltage &amp; current over time</span></span>
       <span id="dash-run-title" class="small text-body-secondary"></span>
     </div>
     <div class="card-body"><div id="dash-box-vi" class="position-relative"><canvas id="dash-chart-vi"
-      aria-label="Spannung und Strom" data-i18n-attrs="aria-label:text.52da2d3b0fb3"></canvas></div></div>
+      aria-label="Voltage and current" data-i18n-attrs="aria-label:text.52da2d3b0fb3"></canvas></div></div>
   </div>
 
   <div class="row g-3 mb-3">
     <div class="col-lg-6">
       <div class="card h-100 shadow-sm">
-        <div class="card-header fw-semibold"><span data-i18n="text.95f0012246cd">Kapazit&auml;t &uuml;ber Zeit</span></div>
+        <div class="card-header fw-semibold"><span data-i18n="text.95f0012246cd">Capacity over time</span></div>
         <div class="card-body"><div id="dash-box-cap" class="position-relative"><canvas id="dash-chart-cap"
-          aria-label="Kapazitaet ueber Zeit" data-i18n-attrs="aria-label:text.f115d36ebc44"></canvas></div></div>
+          aria-label="Capacity over time" data-i18n-attrs="aria-label:text.f115d36ebc44"></canvas></div></div>
       </div>
     </div>
     <div class="col-lg-6">
       <div class="card h-100 shadow-sm">
-        <div class="card-header fw-semibold"><span data-i18n="text.e380e80a9ce3">Kapazit&auml;t je Segment</span></div>
+        <div class="card-header fw-semibold"><span data-i18n="text.e380e80a9ce3">Capacity per segment</span></div>
         <div class="card-body"><div id="dash-box-bar" class="position-relative"><canvas id="dash-chart-bar"
-          aria-label="Kapazitaet je Segment" data-i18n-attrs="aria-label:text.49e5ceb94def"></canvas></div></div>
+          aria-label="Capacity per segment" data-i18n-attrs="aria-label:text.49e5ceb94def"></canvas></div></div>
       </div>
     </div>
   </div>
 
   <div class="card shadow-sm">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <span class="fw-semibold"><span data-i18n="text.2ecc7f506215">Segment-Timeline</span></span>
+      <span class="fw-semibold"><span data-i18n="text.2ecc7f506215">Segment timeline</span></span>
       <span id="dash-sample-info" class="small text-body-secondary"></span>
     </div>
     <div class="table-responsive">
       <table class="table table-sm table-hover align-middle mb-0">
         <thead><tr>
-          <th scope="col">#</th><th scope="col"><span data-i18n="text.45517c77e57e">Modus</span></th><th scope="col"><span data-i18n="text.41b8e19043ca">Schritt</span></th><th scope="col"><span data-i18n="text.dfd72aef2879">Zyklus</span></th>
+          <th scope="col">#</th><th scope="col"><span data-i18n="text.45517c77e57e">Mode</span></th><th scope="col"><span data-i18n="text.41b8e19043ca">Step</span></th><th scope="col"><span data-i18n="text.dfd72aef2879">Cycle</span></th>
           <th scope="col" class="text-end">SP1</th><th scope="col" class="text-end">SP2</th>
-          <th scope="col" class="text-end">SP3</th><th scope="col" class="text-end"><span data-i18n="text.162be2994946">Messpunkte</span></th>
-          <th scope="col" class="text-end"><span data-i18n="text.c656a6c17054">Kapazit&auml;t (Ah)</span></th><th scope="col">Start</th>
-          <th scope="col" class="text-end"><span data-i18n="text.668cbe316167">Dauer</span></th>
+          <th scope="col" class="text-end">SP3</th><th scope="col" class="text-end"><span data-i18n="text.162be2994946">Samples</span></th>
+          <th scope="col" class="text-end"><span data-i18n="text.c656a6c17054">Capacity (Ah)</span></th><th scope="col">Start</th>
+          <th scope="col" class="text-end"><span data-i18n="text.668cbe316167">Duration</span></th>
         </tr></thead>
         <tbody id="dash-segments">
-          <tr><td colspan="11" class="text-body-secondary"><span data-i18n="text.d81ca554ffeb">Kein Testlauf geladen.</span></td></tr>
+          <tr><td colspan="11" class="text-body-secondary"><span data-i18n="text.d81ca554ffeb">No test run loaded.</span></td></tr>
         </tbody>
       </table>
     </div>
