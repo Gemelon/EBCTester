@@ -238,6 +238,13 @@ state transitions, and detailed parameters. Development content is always
 English; explicitly requested UI translations remain available. See
 [AGENTS.md](AGENTS.md).
 
+## Quick start
+
+No build environment needed: download `EBCTester-<version>-full-install.bin`
+from the [latest release](https://github.com/Gemelon/EBCTester/releases/latest)
+and flash it at address `0x0`. Instructions are in the release notes.
+To build from source, see below.
+
 ## Using and compiling the project
 
 ### Requirements
