@@ -108,6 +108,49 @@ Stop and Abort take priority over queued commands.
 Use a dedicated broker account with permissions restricted to the device's
 command and state topics. MQTT uses unencrypted TCP by default.
 
+## Debug log over Wi-Fi
+
+The `debug_log` component mirrors the ESP-IDF log output into a ring buffer
+of **500 lines** (159 characters each) and exposes it in a **Debug** tab of
+the web interface, so a running device can be observed without a USB cable.
+
+- The hook is installed as the first statement of `app_main()`, forwards every
+  message to the console unchanged, and then copies it into the buffer. Because
+  the log framework emits a message in several chunks, lines are assembled and
+  committed on each newline; ANSI colour codes are removed.
+- The buffer lives in PSRAM and is protected by a spinlock. The hook never
+  allocates, never waits and never calls back into the logging system, so it
+  cannot delay recording, test plans, the web UI or SD access. Capturing holds
+  the lowest priority of all buffer users: the hook tries the spinlock once and
+  discards the chunk when a reader or a clear request holds it instead of
+  spinning. Discarded chunks are counted and published as `dropped` by the
+  status and log endpoints, and the Debug tab shows the count. When a line is
+  longer than the limit it is truncated, and the oldest line is overwritten
+  once the buffer is full.
+- Capturing is **disabled by default**. The setting lives in NVS namespace
+  `debug_log`, key `enabled`, and is applied right after `device_app_start()`.
+  Until then capturing is active, so start-up messages are available when the
+  feature is enabled. Disabling releases the buffer (about 80 KB).
+- Bootloader output and anything logged before `app_main()` — as well as plain
+  `printf()` output — is only visible on the USB console.
+
+| Endpoint | Method | Purpose |
+| --- | --- | --- |
+| `/api/debug/status` | GET | Buffer cursor and the persisted enable flag |
+| `/api/debug/settings` | POST | `{"enabled":true\|false}`, saves and applies |
+| `/api/debug/log?after=<seq>&max=<n>` | GET | Up to 120 lines newer than `seq` |
+| `/api/debug/clear` | POST | Drops buffered lines, returns the new `nextSeq` |
+
+All endpoints require an authenticated session; the POST routes additionally
+require the CSRF token. The browser polls once per second and detects buffer
+overruns from the reported `firstSeq`. The Debug tab is hidden while the
+feature is disabled: `web_interface_extension_t` gained an optional `visible`
+callback that removes an extension from `/api/status`, and `app.js` removes
+tabs that are no longer reported.
+
+Log lines can contain network names, file names and settings, but never
+passwords. Only logged-in users can read them.
+
 ## Setup and migration
 
 Use the ESP-IDF VS Code extension, target **esp32s3**. The starter package's

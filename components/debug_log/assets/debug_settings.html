@@ -1,0 +1,29 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+
+<div class="card">
+  <div class="card-body">
+    <h2 class="h4">Debug log</h2>
+    <p>
+      Keeps the last 500 log lines in memory and shows them in a Debug tab, so the device can be
+      diagnosed over Wi-Fi without a USB connection. Disabled by default; disabling releases the
+      buffer. Log capture never delays recording, test plans or SD card access.
+    </p>
+    <div id="debug-settings-message" class="alert d-none" role="status"></div>
+    <form id="debug-settings-form" class="row g-3">
+      <div class="col-12">
+        <div class="form-check form-switch">
+          <input id="debug-settings-enabled" class="form-check-input" type="checkbox" role="switch">
+          <label for="debug-settings-enabled" class="form-check-label">Enable debug log and Debug tab</label>
+        </div>
+      </div>
+      <div class="col-12">
+        <button id="debug-settings-save" class="btn btn-primary" type="submit">Save setting</button>
+      </div>
+    </form>
+    <p class="small text-body-secondary mt-3 mb-0">
+      Log lines may contain network and file names. Only logged-in users can read them.
+      Bootloader and early start-up output still requires the USB console.
+    </p>
+  </div>
+</div>

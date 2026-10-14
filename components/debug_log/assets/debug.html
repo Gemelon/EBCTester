@@ -1,0 +1,26 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+
+<div class="card">
+  <div class="card-body">
+    <h2 class="h4">Debug</h2>
+    <p>
+      Live log of the running firmware. The device keeps the last 500 log lines in memory.
+      Bootloader output and messages logged before the web interface starts are only visible
+      over the USB console.
+    </p>
+    <div id="debug-message" class="alert d-none" role="status"></div>
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+      <button id="debug-pause" class="btn btn-outline-secondary btn-sm" type="button">Pause</button>
+      <button id="debug-clear" class="btn btn-outline-secondary btn-sm" type="button">Clear buffer</button>
+      <button id="debug-download" class="btn btn-outline-secondary btn-sm" type="button">Download</button>
+      <div class="form-check form-switch ms-2">
+        <input id="debug-follow" class="form-check-input" type="checkbox" role="switch" checked>
+        <label for="debug-follow" class="form-check-label">Follow output</label>
+      </div>
+      <span id="debug-info" class="small text-body-secondary ms-auto"></span>
+    </div>
+    <pre id="debug-output" class="border rounded p-2 mb-0"
+         style="height: 60vh; overflow: auto; white-space: pre-wrap; word-break: break-word;"></pre>
+  </div>
+</div>

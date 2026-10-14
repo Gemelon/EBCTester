@@ -207,7 +207,7 @@ esp_err_t ui_localization_init(void)
     };
     static const web_interface_extension_t extension = {
         "languages", "Language", html_start, static_cast<size_t>(html_end-html_start),
-        js_start, static_cast<size_t>(js_end-js_start), routes, 2, "settings"
+        js_start, static_cast<size_t>(js_end-js_start), routes, 2, "settings", nullptr
     };
     return web_interface_register_extension(&extension);
 }

@@ -57,10 +57,13 @@ can still be operated from a phone through its own Wi-Fi access point.
   connection details are entered after installation in the device web UI.
 - **UI languages:** English and German, with English fallback; additional
   translation files can be loaded from SD.
+- **Optional live log over Wi-Fi:** A **Debug** tab shows the last 500 log
+  lines in the browser, so the device can be diagnosed without a USB cable.
+  Disabled by default and switched on in **Settings → Debug log**.
 - **Manual updates:** New firmware is offered, but installation requires a
   button click and confirmation.
 
-**Current version:** 1.3.36, developed with ESP-IDF 6.0.1 for ESP32-S3.
+**Current version:** 1.3.44, developed with ESP-IDF 6.0.1 for ESP32-S3.
 The EBC-A20 is the currently supported tester; support for all ZKE models
 is not claimed. Additional export formats and cross-battery analysis are
 possible extensions, not completed features.
@@ -91,6 +94,7 @@ uses OTA Suite's web interface. OTA Suite itself needs neither EBCTester nor SD.
 | `battery_dashboard` | Measurements and local charts |
 | `mariadb_sync` | Incremental external backup |
 | `ui_localization` | Additional SD language files |
+| `debug_log` | In-memory log ring buffer and the Debug tab |
 
 See the [technical reference](docs/TECHNICAL_REFERENCE.md) for endpoints,
 state transitions, and detailed parameters. Development content is always

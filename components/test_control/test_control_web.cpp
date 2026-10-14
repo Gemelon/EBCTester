@@ -279,11 +279,11 @@ esp_err_t command_handler(httpd_req_t *req)
         return send_result(req, start_charge(current, voltage, cutoff), "Starting charge (C-CV).");
     }
     if (action == "discharge_cc") {
-        return send_result(req, minutes_ok ? start_discharge_cc(current, cutoff, whole_minutes) : "Time 0–239 min.",
+        return send_result(req, minutes_ok ? start_discharge_cc(current, cutoff, whole_minutes) : "Time 0â€“239 min.",
                            "Starting discharge (D-CC).");
     }
     if (action == "discharge_cp") {
-        return send_result(req, minutes_ok ? start_discharge_cp(power, cutoff, whole_minutes) : "Time 0–239 min.",
+        return send_result(req, minutes_ok ? start_discharge_cp(power, cutoff, whole_minutes) : "Time 0â€“239 min.",
                            "Starting discharge (D-CP).");
     }
     return send_text(req, "400 Bad Request", "Unknown action.");
@@ -625,17 +625,17 @@ esp_err_t register_web_extensions()
     extensions[0] = {"battery", "Battery", battery_html_start,
                      static_cast<size_t>(battery_html_end - battery_html_start), battery_js_start,
                      static_cast<size_t>(battery_js_end - battery_js_start), battery_routes,
-                     sizeof(battery_routes) / sizeof(battery_routes[0]), "tab"};
+                     sizeof(battery_routes) / sizeof(battery_routes[0]), "tab", nullptr};
     extensions[1] = {"manual", "Manual", manual_html_start, static_cast<size_t>(manual_html_end - manual_html_start),
                      manual_js_start, static_cast<size_t>(manual_js_end - manual_js_start), manual_routes,
-                     sizeof(manual_routes) / sizeof(manual_routes[0]), "tab"};
+                     sizeof(manual_routes) / sizeof(manual_routes[0]), "tab", nullptr};
     extensions[2] = {"auto", "Automatic", auto_html_start, static_cast<size_t>(auto_html_end - auto_html_start),
                      auto_js_start, static_cast<size_t>(auto_js_end - auto_js_start), auto_routes,
-                     sizeof(auto_routes) / sizeof(auto_routes[0]), "tab"};
+                     sizeof(auto_routes) / sizeof(auto_routes[0]), "tab", nullptr};
     extensions[3] = {"resistance", "Internal resistance", resistance_html_start,
                      static_cast<size_t>(resistance_html_end - resistance_html_start), resistance_js_start,
                      static_cast<size_t>(resistance_js_end - resistance_js_start), resistance_routes,
-                     sizeof(resistance_routes) / sizeof(resistance_routes[0]), "tab"};
+                     sizeof(resistance_routes) / sizeof(resistance_routes[0]), "tab", nullptr};
     for (const web_interface_extension_t &extension : extensions) {
         const esp_err_t err = web_interface_register_extension(&extension);
         if (err != ESP_OK) {

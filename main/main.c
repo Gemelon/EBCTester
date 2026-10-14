@@ -4,6 +4,8 @@
 
 #include "battery_dashboard.h"
 #include "battery_database.h"
+#include "debug_log.h"
+#include "debug_log_web.h"
 #include "device_app.h"
 #include "esp_err.h"
 #include "esp_log.h"
@@ -36,6 +38,11 @@ static void publish_persisted_sample(float voltage_v, float current_a, float cap
 
 void app_main(void)
 {
+    /* Installed first so that start-up messages reach the web live log. */
+    const esp_err_t log_err = debug_log_init();
+    if (log_err != ESP_OK) {
+        ESP_LOGW(TAG, "Debug log buffer unavailable: %s", esp_err_to_name(log_err));
+    }
     ESP_LOGI(TAG, "Initializing SD card manager");
     ESP_ERROR_CHECK(sd_card_manager_init());
     ESP_LOGI(TAG, "Scheduling database initialization");
@@ -43,6 +50,7 @@ void app_main(void)
     /* UI extensions must be registered before the web server starts. */
     ESP_ERROR_CHECK(battery_dashboard_init());
     ESP_ERROR_CHECK(mariadb_sync_init());
+    ESP_ERROR_CHECK(debug_log_web_init());
 #if defined(CONFIG_EBCTESTER_HA_MQTT_ENABLE) && CONFIG_EBCTESTER_HA_MQTT_ENABLE
     ESP_ERROR_CHECK(ha_mqtt_web_init());
     test_control_set_persisted_sample_callback(publish_persisted_sample);
@@ -51,6 +59,10 @@ void app_main(void)
     ESP_ERROR_CHECK(ui_localization_init());
     ESP_LOGI(TAG, "Starting device services");
     ESP_ERROR_CHECK(device_app_start());
+    const esp_err_t debug_err = debug_log_web_start();
+    if (debug_err != ESP_OK) {
+        ESP_LOGW(TAG, "Cannot apply debug log setting: %s", esp_err_to_name(debug_err));
+    }
 #if defined(CONFIG_EBCTESTER_HA_MQTT_ENABLE) && CONFIG_EBCTESTER_HA_MQTT_ENABLE
     const esp_err_t mqtt_err = ha_mqtt_web_start();
     if (mqtt_err != ESP_OK) {
