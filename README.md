@@ -200,7 +200,7 @@ can still be operated from a phone through its own Wi-Fi access point.
 - **Manual updates:** New firmware is offered, but installation requires a
   button click and confirmation.
 
-**Current version:** 1.3.44, developed with ESP-IDF 6.0.1 for ESP32-S3.
+**Current version:** [![Release](https://img.shields.io/github/v/release/Gemelon/EBCTester)](https://github.com/Gemelon/EBCTester/releases/latest), developed with ESP-IDF 6.0.1 for ESP32-S3.
 The EBC-A20 is the currently supported tester; support for all ZKE models
 is not claimed. Additional export formats and cross-battery analysis are
 possible extensions, not completed features.
