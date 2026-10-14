@@ -1,95 +1,123 @@
 # SPDX-FileCopyrightText: 2026 Thomas Stoll
 # SPDX-License-Identifier: Apache-2.0
 
-menu "BatteryTester legacy settings"
-    config BATTERY_AP_PASSWORD
-        string "Legacy access point / web admin password"
-        default ""
-        help
-            Kept so existing sdkconfig values can migrate to OTA Suite settings.
-            New configurations should use OTA Suite network settings.
+menu "EBCTester"
 
-    config BATTERY_SNTP_SERVER
-        string "Legacy time server"
-        default "pool.ntp.org"
+    menu "EBC tester UARTs"
+        comment "UART1: ESP32 <-> EBC battery tester (5 V TTL: use a level shifter)"
 
-    config BATTERY_UPDATE_MANIFEST_URL
-        string "Legacy firmware manifest URL"
-        default "https://updates.example.org/BatteryTester/firmware.json"
+        config EBC_TESTER_UART_TX_GPIO
+            int "Tester UART1 TX GPIO"
+            range 0 48
+            default 17
 
-    config BATTERY_OTA_ALLOW_HTTP
-        bool "Legacy HTTP OTA opt-in"
-        default n
+        config EBC_TESTER_UART_RX_GPIO
+            int "Tester UART1 RX GPIO"
+            range 0 48
+            default 18
 
-    config BATTERY_OTA_URL
-        string "Legacy fixed firmware URL (unused by the manifest updater)"
-        default ""
+        config EBC_TESTER_UART_BAUD
+            int "Tester UART1 baud rate"
+            range 1200 115200
+            default 9600
+            help
+                The EBC protocol uses 8 data bits, odd parity and 1 stop bit.
 
-    config BATTERY_LED_GPIO
-        int "Legacy status LED GPIO"
-        range 0 48
-        default 48
+        comment "UART2: PC dongle <-> ESP32 (bridge to UART1 is not implemented yet)"
+
+        config EBC_DONGLE_UART_TX_GPIO
+            int "Dongle UART2 TX GPIO"
+            range 0 48
+            default 8
+
+        config EBC_DONGLE_UART_RX_GPIO
+            int "Dongle UART2 RX GPIO"
+            range 0 48
+            default 9
+
+        config EBC_DONGLE_UART_BAUD
+            int "Dongle UART2 baud rate"
+            range 1200 115200
+            default 9600
+    endmenu
+
+    menu "Battery test control"
+        config TEST_CONTROL_AVERAGING_LENGTH
+            int "EBC frames averaged into one stored measurement"
+            range 1 120
+            default 20
+            help
+                The EBC sends about one status frame per second. Current, voltage and
+                capacity of this many frames are averaged before a measurement is stored.
+                A mode, step, cycle or setpoint change always starts a new average.
+    endmenu
+
+    menu "Battery test store"
+        config TEST_STORE_DEVICE_ID
+            string "Device ID stored with plans and test runs"
+            default "EBC-A20"
+
+        config TEST_STORE_MAX_PENDING_SAMPLES
+            int "Maximum buffered measurements while the SD card is busy"
+            range 100 20000
+            default 3000
+    endmenu
+
+    menu "Home Assistant MQTT"
+        config EBCTESTER_HA_MQTT_ENABLE
+            bool "Enable MQTT component"
+            default n
+
+        comment "Broker connection details are configured in the device web interface."
+    endmenu
+
+    menu "Legacy settings"
+        config BATTERY_AP_PASSWORD
+            string "Legacy access point / web admin password"
+            default ""
+            help
+                Kept so existing sdkconfig values can migrate to OTA Suite settings.
+                New configurations should use OTA Suite network settings.
+
+        config BATTERY_SNTP_SERVER
+            string "Legacy time server"
+            default "pool.ntp.org"
+
+        config BATTERY_UPDATE_MANIFEST_URL
+            string "Legacy firmware manifest URL"
+            default "https://updates.example.org/BatteryTester/firmware.json"
+
+        config BATTERY_OTA_ALLOW_HTTP
+            bool "Legacy HTTP OTA opt-in"
+            default n
+
+        config BATTERY_OTA_URL
+            string "Legacy fixed firmware URL (unused by the manifest updater)"
+            default ""
+
+        config BATTERY_LED_GPIO
+            int "Legacy status LED GPIO"
+            range 0 48
+            default 48
+    endmenu
+
+    config OTA_SUITE_AP_PASSWORD
+        string
+        default BATTERY_AP_PASSWORD
+
+    config OTA_SUITE_SNTP_SERVER
+        string
+        default BATTERY_SNTP_SERVER
+
+    config OTA_SUITE_UPDATE_MANIFEST_URL
+        string
+        default BATTERY_UPDATE_MANIFEST_URL
+
+    config OTA_SUITE_OTA_ALLOW_HTTP
+        bool
+        default BATTERY_OTA_ALLOW_HTTP
+
+    config OTA_SUITE_LED_GPIO
+        int
+        default BATTERY_LED_GPIO
 endmenu
-
-menu "BatteryTester Home Assistant MQTT"
-    config EBCTESTER_HA_MQTT_ENABLE
-        bool "Enable MQTT component"
-        default n
-
-    config EBCTESTER_HA_MQTT_HOST
-        string "MQTT broker host"
-        depends on EBCTESTER_HA_MQTT_ENABLE
-        default ""
-
-    config EBCTESTER_HA_MQTT_PORT
-        int "MQTT broker port"
-        depends on EBCTESTER_HA_MQTT_ENABLE
-        range 1 65535
-        default 1883
-
-    config EBCTESTER_HA_MQTT_USERNAME
-        string "MQTT username"
-        depends on EBCTESTER_HA_MQTT_ENABLE
-        default ""
-
-    config EBCTESTER_HA_MQTT_PASSWORD
-        string "MQTT password"
-        depends on EBCTESTER_HA_MQTT_ENABLE
-        default ""
-
-    config EBCTESTER_HA_MQTT_TOPIC_PREFIX
-        string "MQTT topic prefix"
-        depends on EBCTESTER_HA_MQTT_ENABLE
-        default "ebctester"
-
-    config EBCTESTER_HA_MQTT_INTERVAL_SECONDS
-        int "Measurement interval in seconds"
-        depends on EBCTESTER_HA_MQTT_ENABLE
-        range 1 3600
-        default 20
-
-    config EBCTESTER_HA_MQTT_ALLOW_REMOTE_START
-        bool "Allow remote start commands"
-        depends on EBCTESTER_HA_MQTT_ENABLE
-        default n
-endmenu
-
-config OTA_SUITE_AP_PASSWORD
-    string
-    default BATTERY_AP_PASSWORD
-
-config OTA_SUITE_SNTP_SERVER
-    string
-    default BATTERY_SNTP_SERVER
-
-config OTA_SUITE_UPDATE_MANIFEST_URL
-    string
-    default BATTERY_UPDATE_MANIFEST_URL
-
-config OTA_SUITE_OTA_ALLOW_HTTP
-    bool
-    default BATTERY_OTA_ALLOW_HTTP
-
-config OTA_SUITE_LED_GPIO
-    int
-    default BATTERY_LED_GPIO

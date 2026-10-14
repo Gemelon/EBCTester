@@ -97,7 +97,8 @@ JSON object using one of these forms:
 Plan and battery selection loads an existing entry from the SD database and
 applies it through the same test-control functions used by the web interface.
 Starting the selected plan is ignored unless **Allow remote start commands**
-is enabled in menuconfig; the option defaults to off. Stop and Abort are not
+is enabled in **Settings → Home Assistant MQTT** in the device web interface;
+the option defaults to off. Stop and Abort are not
 gated by that option. MQTT cannot write free setpoints or create database
 entries. Invalid, unknown, fragmented or oversized command messages are
 ignored. Commands are dispatched on a separate worker task so database
@@ -119,6 +120,11 @@ same `network` NVS namespace and are not erased. New builds keep the
 
 In menuconfig:
 
+- **EBCTester → Home Assistant MQTT → Enable MQTT component** enables MQTT.
+  Broker settings and remote-start permission are configured on the device
+  under **Settings → Home Assistant MQTT** after the firmware is installed.
+- UART pins and baud rates, measurement averaging, and SD recording-buffer
+  settings are grouped under their corresponding **EBCTester** submenus.
 - **OTA Suite update checks → Fixed firmware manifest URL**:
   your deployment URL, e.g. `https://updates.example.org/BatteryTester/firmware.json`.
 - HTTP requires **OTA Suite firmware updates → Allow unencrypted HTTP OTA**.
@@ -150,6 +156,16 @@ changes can briefly interrupt AP access. The UI also displays the station IP.
 The project remains compatible with the existing manifest and immutable release
 layout. Firmware **1.3.35** removes machine-specific defaults for new
 installations; existing local `sdkconfig` and saved NVS settings are preserved.
+
+When the optional MQTT component is compiled in, configure the broker from
+**Settings → Home Assistant MQTT** in the device web interface. Host, port,
+username, password, topic prefix, measurement expiry interval and remote-start
+permission are stored on the device in NVS, so release builds do not contain
+the end user's broker credentials. The password is not returned by the settings
+API. Saving applies settings and starts or stops the client; **Test connection**
+retries the saved settings and the page reports connection status. Broker
+traffic is unencrypted TCP by default; restrict the broker account's topic
+permissions.
 
 ## SD card
 

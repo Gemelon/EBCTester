@@ -3,16 +3,20 @@
 
 # Optional Home Assistant MQTT component
 
-This ESP-IDF component is disabled by default. Enable **BatteryTester Home
-Assistant MQTT → Enable MQTT component** in `menuconfig`, then enter the broker
-host, port, optional username/password, topic prefix, and measurement interval.
-The application starts the MQTT client after starting device services. It is
-independent of EBCTester's recording and test-control internals.
+This ESP-IDF component is disabled by default. Enable **EBCTester → Home
+Assistant MQTT → Enable MQTT component** in `menuconfig` to include the
+optional feature in the firmware. The end user enters the broker host, port,
+username, password, topic prefix and measurement interval in the device web
+interface's **Settings → Home Assistant MQTT** page. These user-specific
+values are stored in device NVS, not in source control or `sdkconfig`.
+Saving applies the settings immediately. The page shows connection state and
+the latest connection message, and its **Test connection** button retries
+using the saved configuration.
 
 Call `ha_mqtt_settings_defaults()` and provide the broker `host`, `port`,
 optional `username` and `password`, and `topic_prefix` before calling
 `ha_mqtt_start()`. Remote start permission defaults to off and can be enabled
-with **Allow remote start commands**. On connection, the component publishes
+in the MQTT settings page. On connection, the component publishes
 one retained Home Assistant device-discovery document to
 `homeassistant/device/ebctester_<wifi-station-mac>/config`. Every entity's
 `unique_id` includes that same stable MAC-derived device ID. Discovery is
@@ -54,9 +58,11 @@ queued commands.
 The component does not yet publish event-state changes such as mode, plan
 status or assigned battery.
 
-The MQTT client uses TCP without TLS by default. Store broker credentials only
-in local, untracked configuration. Use a dedicated broker account with
-restricted topic permissions. Credentials are never logged.
+The MQTT client uses TCP without TLS by default. The broker password is stored
+in device NVS, never returned by the settings API, and never logged. Use a
+dedicated broker account with restricted topic permissions. The MQTT client
+API remains decoupled from test-control internals; the EBCTester web adapter
+owns settings persistence and bridges commands through a callback.
 
 The component publishes retained `online` availability after a successful
 connection and configures a retained `offline` Last Will at

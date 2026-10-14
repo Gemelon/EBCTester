@@ -14,6 +14,20 @@
 #define HA_MQTT_PASSWORD_MAX 128
 #define HA_MQTT_TOPIC_PREFIX_MAX 64
 
+typedef enum {
+    HA_MQTT_STATE_DISABLED,
+    HA_MQTT_STATE_NOT_CONFIGURED,
+    HA_MQTT_STATE_CONNECTING,
+    HA_MQTT_STATE_CONNECTED,
+    HA_MQTT_STATE_DISCONNECTED,
+    HA_MQTT_STATE_ERROR,
+} ha_mqtt_state_t;
+
+typedef struct {
+    ha_mqtt_state_t state;
+    char message[128];
+} ha_mqtt_status_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -41,6 +55,7 @@ typedef struct {
 void ha_mqtt_settings_defaults(ha_mqtt_settings_t *settings);
 esp_err_t ha_mqtt_start(const ha_mqtt_settings_t *settings);
 esp_err_t ha_mqtt_stop(void);
+esp_err_t ha_mqtt_get_status(ha_mqtt_status_t *status);
 esp_err_t ha_mqtt_publish_measurement(const ha_mqtt_measurement_t *measurement);
 
 #ifdef __cplusplus

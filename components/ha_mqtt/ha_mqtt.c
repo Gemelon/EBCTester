@@ -17,7 +17,9 @@
 #include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_timer.h"
+#include "esp_wifi.h"
 #include "mqtt_client.h"
+#include "network_manager.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
@@ -45,7 +47,14 @@ static esp_mqtt_client_handle_t mqtt_client;
 static esp_timer_handle_t reconnect_timer;
 static int64_t next_retry_us = INITIAL_RETRY_US;
 static bool started;
+static atomic_bool mqtt_client_started;
 static atomic_bool mqtt_connected;
+static atomic_bool station_connected;
+static atomic_int mqtt_state;
+static esp_event_handler_instance_t got_ip_handler;
+static esp_event_handler_instance_t wifi_disconnected_handler;
+static portMUX_TYPE status_mux = portMUX_INITIALIZER_UNLOCKED;
+static char status_message[128] = "MQTT has not been configured";
 static char availability_topic[HA_MQTT_TOPIC_PREFIX_MAX + sizeof("/availability")];
 static char state_topic[HA_STATE_TOPIC_MAX];
 static char command_topic[HA_COMMAND_TOPIC_MAX];
@@ -77,6 +86,14 @@ static const char *const command_names[] = {
     "select_battery",
 };
 static ha_mqtt_command_callback_t command_callback;
+
+static void set_status(ha_mqtt_state_t state, const char *message)
+{
+    atomic_store(&mqtt_state, state);
+    portENTER_CRITICAL(&status_mux);
+    snprintf(status_message, sizeof(status_message), "%s", message);
+    portEXIT_CRITICAL(&status_mux);
+}
 
 typedef struct {
     const char *key;
@@ -395,6 +412,10 @@ static void schedule_reconnect(void)
     if (!started || reconnect_timer == NULL) {
         return;
     }
+    if (!atomic_load(&station_connected)) {
+        set_status(HA_MQTT_STATE_DISCONNECTED, "Waiting for Wi-Fi");
+        return;
+    }
 
     esp_timer_stop(reconnect_timer);
     esp_err_t err = esp_timer_start_once(reconnect_timer, next_retry_us);
@@ -416,9 +437,45 @@ static void reconnect_timer_callback(void *arg)
     if (!started || mqtt_client == NULL) {
         return;
     }
+    if (!atomic_load(&station_connected)) {
+        set_status(HA_MQTT_STATE_DISCONNECTED, "Waiting for Wi-Fi");
+        return;
+    }
 
-    if (esp_mqtt_client_reconnect(mqtt_client) != ESP_OK) {
+    esp_err_t err;
+    if (!atomic_load(&mqtt_client_started)) {
+        atomic_store(&mqtt_client_started, true);
+        err = esp_mqtt_client_start(mqtt_client);
+        if (err != ESP_OK) {
+            atomic_store(&mqtt_client_started, false);
+        }
+    } else {
+        err = esp_mqtt_client_reconnect(mqtt_client);
+    }
+    if (err != ESP_OK) {
         schedule_reconnect();
+    }
+}
+
+static void network_event_handler(void *handler_args, esp_event_base_t base,
+                                  int32_t event_id, void *event_data)
+{
+    (void)handler_args;
+    (void)event_data;
+    if (!started) {
+        return;
+    }
+
+    if (base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        atomic_store(&station_connected, true);
+        next_retry_us = INITIAL_RETRY_US;
+        set_status(HA_MQTT_STATE_CONNECTING, "Connecting to the MQTT broker");
+        schedule_reconnect();
+    } else if (base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        atomic_store(&station_connected, false);
+        atomic_store(&mqtt_connected, false);
+        esp_timer_stop(reconnect_timer);
+        set_status(HA_MQTT_STATE_DISCONNECTED, "Waiting for Wi-Fi");
     }
 }
 
@@ -433,6 +490,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
 
     if (event_id == MQTT_EVENT_CONNECTED) {
         atomic_store(&mqtt_connected, true);
+        set_status(HA_MQTT_STATE_CONNECTED, "Connected to the MQTT broker");
         next_retry_us = INITIAL_RETRY_US;
         esp_timer_stop(reconnect_timer);
         if (esp_mqtt_client_subscribe(mqtt_client, HA_STATUS_TOPIC, 1) < 0) {
@@ -451,7 +509,16 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
         }
     } else if (event_id == MQTT_EVENT_DISCONNECTED) {
         atomic_store(&mqtt_connected, false);
+        set_status(HA_MQTT_STATE_DISCONNECTED,
+                   atomic_load(&station_connected)
+                       ? "Disconnected; retry scheduled"
+                       : "Waiting for Wi-Fi");
         schedule_reconnect();
+    } else if (event_id == MQTT_EVENT_ERROR) {
+        const bool online = atomic_load(&station_connected);
+        set_status(online ? HA_MQTT_STATE_ERROR : HA_MQTT_STATE_DISCONNECTED,
+                   online ? "Broker connection failed; retry scheduled"
+                          : "Waiting for Wi-Fi");
     } else if (event_id == MQTT_EVENT_DATA) {
         const esp_mqtt_event_handle_t event = event_data;
         if (event == NULL || event->current_data_offset != 0 ||
@@ -494,10 +561,6 @@ void ha_mqtt_settings_defaults(ha_mqtt_settings_t *settings)
     settings->enabled = CONFIG_EBCTESTER_HA_MQTT_ENABLE;
     settings->port = 1883;
     settings->measurement_interval_seconds = 20;
-#if defined(CONFIG_EBCTESTER_HA_MQTT_ALLOW_REMOTE_START) && \
-    CONFIG_EBCTESTER_HA_MQTT_ALLOW_REMOTE_START
-    settings->allow_remote_start = CONFIG_EBCTESTER_HA_MQTT_ALLOW_REMOTE_START;
-#endif
     snprintf(settings->topic_prefix, sizeof(settings->topic_prefix), "ebctester");
 }
 
@@ -610,20 +673,51 @@ esp_err_t ha_mqtt_start(const ha_mqtt_settings_t *settings)
     }
 
     started = true;
+    atomic_store(&mqtt_client_started, false);
     atomic_store(&mqtt_connected, false);
+    atomic_store(&station_connected, false);
     next_retry_us = INITIAL_RETRY_US;
-    err = esp_mqtt_client_start(mqtt_client);
+    err = esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
+                                              network_event_handler, NULL,
+                                              &got_ip_handler);
     if (err != ESP_OK) {
         started = false;
-        atomic_store(&mqtt_connected, false);
+        esp_mqtt_client_unregister_event(mqtt_client, ESP_EVENT_ANY_ID,
+                                         mqtt_event_handler);
         esp_mqtt_client_destroy(mqtt_client);
         mqtt_client = NULL;
         esp_timer_delete(reconnect_timer);
         reconnect_timer = NULL;
         stop_command_task();
         command_callback = NULL;
-        ESP_LOGE(TAG, "Failed to start MQTT client: %s", esp_err_to_name(err));
         return err;
+    }
+    err = esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED,
+                                              network_event_handler, NULL,
+                                              &wifi_disconnected_handler);
+    if (err != ESP_OK) {
+        started = false;
+        esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP,
+                                              got_ip_handler);
+        esp_mqtt_client_unregister_event(mqtt_client, ESP_EVENT_ANY_ID,
+                                         mqtt_event_handler);
+        esp_mqtt_client_destroy(mqtt_client);
+        mqtt_client = NULL;
+        esp_timer_delete(reconnect_timer);
+        reconnect_timer = NULL;
+        stop_command_task();
+        command_callback = NULL;
+        return err;
+    }
+
+    network_status_t network;
+    network_manager_get_status(&network);
+    atomic_store(&station_connected, network.connected);
+    if (network.connected) {
+        set_status(HA_MQTT_STATE_CONNECTING, "Connecting to the MQTT broker");
+        schedule_reconnect();
+    } else {
+        set_status(HA_MQTT_STATE_DISCONNECTED, "Waiting for Wi-Fi");
     }
     return ESP_OK;
 }
@@ -635,8 +729,19 @@ esp_err_t ha_mqtt_stop(void)
     }
 
     started = false;
+    atomic_store(&mqtt_connected, false);
+    atomic_store(&station_connected, false);
+    set_status(HA_MQTT_STATE_DISABLED, "MQTT is disabled");
     esp_timer_stop(reconnect_timer);
-    esp_err_t err = esp_mqtt_client_stop(mqtt_client);
+    esp_err_t wifi_handler_err = esp_event_handler_instance_unregister(
+        WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, wifi_disconnected_handler);
+    esp_err_t ip_handler_err = esp_event_handler_instance_unregister(
+        IP_EVENT, IP_EVENT_STA_GOT_IP, got_ip_handler);
+    esp_err_t err = ESP_OK;
+    if (atomic_load(&mqtt_client_started)) {
+        err = esp_mqtt_client_stop(mqtt_client);
+    }
+    atomic_store(&mqtt_client_started, false);
     esp_err_t unregister_err = esp_mqtt_client_unregister_event(
         mqtt_client, ESP_EVENT_ANY_ID, mqtt_event_handler);
     esp_err_t destroy_err = esp_mqtt_client_destroy(mqtt_client);
@@ -649,6 +754,12 @@ esp_err_t ha_mqtt_stop(void)
     if (err != ESP_OK) {
         return err;
     }
+    if (wifi_handler_err != ESP_OK) {
+        return wifi_handler_err;
+    }
+    if (ip_handler_err != ESP_OK) {
+        return ip_handler_err;
+    }
     if (unregister_err != ESP_OK) {
         return unregister_err;
     }
@@ -656,6 +767,18 @@ esp_err_t ha_mqtt_stop(void)
         return destroy_err;
     }
     return timer_err;
+}
+
+esp_err_t ha_mqtt_get_status(ha_mqtt_status_t *status)
+{
+    if (status == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    status->state = (ha_mqtt_state_t)atomic_load(&mqtt_state);
+    portENTER_CRITICAL(&status_mux);
+    snprintf(status->message, sizeof(status->message), "%s", status_message);
+    portEXIT_CRITICAL(&status_mux);
+    return ESP_OK;
 }
 
 esp_err_t ha_mqtt_publish_measurement(const ha_mqtt_measurement_t *measurement)
@@ -715,6 +838,16 @@ esp_err_t ha_mqtt_start(const ha_mqtt_settings_t *settings)
 
 esp_err_t ha_mqtt_stop(void)
 {
+    return ESP_OK;
+}
+
+esp_err_t ha_mqtt_get_status(ha_mqtt_status_t *status)
+{
+    if (status == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    status->state = HA_MQTT_STATE_DISABLED;
+    snprintf(status->message, sizeof(status->message), "MQTT support is not included in this firmware");
     return ESP_OK;
 }
 

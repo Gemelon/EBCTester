@@ -1,0 +1,65 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+
+<div class="card">
+  <div class="card-body">
+    <h2 class="h4">Home Assistant MQTT</h2>
+    <p>Enter the broker connection details provided by your Home Assistant MQTT broker.</p>
+    <div id="mqtt-message" class="alert d-none" role="status"></div>
+    <form id="mqtt-form" class="row g-3" autocomplete="off">
+      <div class="col-12">
+        <div class="form-check form-switch">
+          <input id="mqtt-enabled" class="form-check-input" type="checkbox" role="switch">
+          <label for="mqtt-enabled" class="form-check-label">Enable MQTT</label>
+        </div>
+      </div>
+      <div class="col-md-8">
+        <label for="mqtt-host" class="form-label">MQTT broker host</label>
+        <input id="mqtt-host" class="form-control" maxlength="127" autocomplete="off">
+        <div class="form-text">IP address or hostname only; do not include a URL scheme or path.</div>
+      </div>
+      <div class="col-md-4">
+        <label for="mqtt-port" class="form-label">MQTT broker port</label>
+        <input id="mqtt-port" class="form-control" type="number" min="1" max="65535" required>
+      </div>
+      <div class="col-md-6">
+        <label for="mqtt-username" class="form-label">MQTT username</label>
+        <input id="mqtt-username" class="form-control" maxlength="63" autocomplete="username">
+      </div>
+      <div class="col-md-6">
+        <label for="mqtt-password" class="form-label">MQTT password</label>
+        <input id="mqtt-password" class="form-control" type="password" maxlength="127"
+               autocomplete="new-password">
+        <div class="form-text">Leave blank to keep the saved password.</div>
+      </div>
+      <div class="col-md-6">
+        <label for="mqtt-topic-prefix" class="form-label">Topic prefix</label>
+        <input id="mqtt-topic-prefix" class="form-control" maxlength="63" required>
+      </div>
+      <div class="col-md-6">
+        <label for="mqtt-interval" class="form-label">Measurement expiry interval (seconds)</label>
+        <input id="mqtt-interval" class="form-control" type="number" min="1" max="3600" required>
+      </div>
+      <div class="col-12">
+        <div class="form-check form-switch">
+          <input id="mqtt-remote-start" class="form-check-input" type="checkbox" role="switch">
+          <label for="mqtt-remote-start" class="form-check-label">Allow remote plan start commands</label>
+        </div>
+        <div class="form-text">Disabled by default. Stop and abort commands remain available.</div>
+      </div>
+      <div class="col-12 d-flex flex-wrap gap-2">
+        <button id="mqtt-save" class="btn btn-primary" type="submit">Save settings</button>
+        <button id="mqtt-test" class="btn btn-outline-secondary" type="button">Test connection</button>
+      </div>
+    </form>
+    <hr>
+    <dl class="row mb-0">
+      <dt class="col-sm-3">Connection</dt>
+      <dd class="col-sm-9"><span id="mqtt-state" class="badge text-bg-secondary">-</span>
+        <span id="mqtt-status-text" class="ms-2"></span></dd>
+    </dl>
+    <p class="small text-body-secondary mt-3 mb-0">
+      MQTT uses unencrypted TCP by default. Use a dedicated broker user with restricted topic permissions.
+    </p>
+  </div>
+</div>
