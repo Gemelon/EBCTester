@@ -17,6 +17,7 @@ typedef void (*test_control_persisted_sample_callback_t)(float voltage_v, float 
 esp_err_t test_control_init(void);
 void test_control_set_persisted_sample_callback(
     test_control_persisted_sample_callback_t callback);
+void test_control_handle_mqtt_command(const char *command, const char *value);
 
 #ifdef __cplusplus
 }

@@ -44,6 +44,7 @@ static void start_mqtt(void)
     settings.enabled = true;
     settings.port = CONFIG_EBCTESTER_HA_MQTT_PORT;
     settings.measurement_interval_seconds = CONFIG_EBCTESTER_HA_MQTT_INTERVAL_SECONDS;
+    settings.command_callback = test_control_handle_mqtt_command;
 #if defined(CONFIG_EBCTESTER_HA_MQTT_ALLOW_REMOTE_START) && \
     CONFIG_EBCTESTER_HA_MQTT_ALLOW_REMOTE_START
     settings.allow_remote_start = CONFIG_EBCTESTER_HA_MQTT_ALLOW_REMOTE_START;

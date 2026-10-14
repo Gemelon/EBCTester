@@ -28,8 +28,31 @@ the MQTT API. It queues a non-retained QoS 0
 JSON update to `<topic_prefix>/state` containing the voltage, current, and
 capacity from that exact averaged database sample, with matching database
 precision. When disconnected, measurements are skipped rather than buffered.
-The recorder and database writer do not wait for MQTT. This component does
-not yet publish event-state changes or accept commands.
+The recorder and database writer do not wait for MQTT.
+
+When the application supplies a command callback, the component subscribes to
+`<topic_prefix>/command` and accepts one JSON object per message:
+
+| Command | Payload |
+| --- | --- |
+| Start the selected plan | `{"command":"start_plan"}` |
+| Stop the current operation | `{"command":"stop"}` |
+| Abort the running plan | `{"command":"abort"}` |
+| Select a saved plan | `{"command":"select_plan","name":"Plan name"}` |
+| Select a saved battery | `{"command":"select_battery","name":"Battery label"}` |
+
+Commands are validated and handled by a separate worker task, then passed to
+the same test-control functions used by the web interface. Plan start is
+ignored unless **Allow remote start commands** is enabled (default off).
+Stop, abort and selection commands do not require that opt-in. Plan and
+battery selections load existing entries from the SD database; MQTT cannot
+write arbitrary setpoints or create database entries. Malformed, unknown,
+fragmented or overlong commands are ignored and logged only at debug level.
+The command queue is bounded; if it is full, Stop and Abort take priority over
+queued commands.
+
+The component does not yet publish event-state changes such as mode, plan
+status or assigned battery.
 
 The MQTT client uses TCP without TLS by default. Store broker credentials only
 in local, untracked configuration. Use a dedicated broker account with

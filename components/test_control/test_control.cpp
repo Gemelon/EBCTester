@@ -808,3 +808,58 @@ extern "C" void test_control_set_persisted_sample_callback(
 {
     test_control::persisted_sample_callback.store(callback);
 }
+
+extern "C" void test_control_handle_mqtt_command(const char *command, const char *value)
+{
+    if (command == nullptr) {
+        return;
+    }
+
+    std::string error;
+    if (std::strcmp(command, "start_plan") == 0) {
+        error = test_control::start_plan();
+    } else if (std::strcmp(command, "stop") == 0) {
+        error = test_control::stop();
+    } else if (std::strcmp(command, "abort") == 0) {
+        if (test_control::get_plan_status().state == test_control::RunState::Running) {
+            error = test_control::abort_plan();
+        } else {
+            error = test_control::abort_resistance();
+        }
+    } else if (std::strcmp(command, "select_plan") == 0 ||
+               std::strcmp(command, "select_battery") == 0) {
+        if (value == nullptr || value[0] == '\0' || std::strlen(value) > 64) {
+            error = "Invalid selection name.";
+        } else {
+            for (const unsigned char ch : std::string(value)) {
+                if (ch < 0x20 || ch == 0x7f) {
+                    error = "Invalid selection name.";
+                    break;
+                }
+            }
+        }
+        if (error.empty() && std::strcmp(command, "select_plan") == 0) {
+            test_store::Plan plan;
+            const esp_err_t err = test_store::load_plan(value, plan);
+            if (err == ESP_OK) {
+                error = test_control::set_plan(plan);
+            } else {
+                error = err == ESP_ERR_NOT_FOUND ? "Plan not found." : "Plan database unavailable.";
+            }
+        } else if (error.empty()) {
+            test_store::Battery battery;
+            const esp_err_t err = test_store::load_battery(value, battery);
+            if (err == ESP_OK) {
+                error = test_control::set_battery(battery);
+            } else {
+                error = err == ESP_ERR_NOT_FOUND ? "Battery not found." : "Battery database unavailable.";
+            }
+        }
+    } else {
+        return;
+    }
+
+    if (!error.empty()) {
+        ESP_LOGD("test_control", "MQTT command rejected: %s", error.c_str());
+    }
+}

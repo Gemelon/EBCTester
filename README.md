@@ -51,6 +51,9 @@ can still be operated from a phone through its own Wi-Fi access point.
   already prepared state of charge or automatic preparation.
 - **Optional MariaDB backup:** Transfers test runs and structured resistance
   results to an external database.
+- **Optional Home Assistant MQTT:** Publishes committed measurements and
+  accepts validated plan/battery selection and control commands. Remote plan
+  start requires an explicit opt-in and is disabled by default.
 - **UI languages:** English and German, with English fallback; additional
   translation files can be loaded from SD.
 - **Manual updates:** New firmware is offered, but installation requires a

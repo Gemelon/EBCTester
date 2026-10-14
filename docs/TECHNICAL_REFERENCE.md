@@ -80,6 +80,33 @@ persistence and the standalone shared UI. The optional local browser fixture
 `python tests\ui_language_fixture.py` serves only `127.0.0.1:8766` and never
 connects to the tester, SD card or MariaDB.
 
+## Home Assistant MQTT commands
+
+The optional MQTT integration subscribes to `<topic_prefix>/command` only
+when an application command callback is registered. It accepts exactly one
+JSON object using one of these forms:
+
+```json
+{"command":"start_plan"}
+{"command":"stop"}
+{"command":"abort"}
+{"command":"select_plan","name":"Plan name"}
+{"command":"select_battery","name":"Battery label"}
+```
+
+Plan and battery selection loads an existing entry from the SD database and
+applies it through the same test-control functions used by the web interface.
+Starting the selected plan is ignored unless **Allow remote start commands**
+is enabled in menuconfig; the option defaults to off. Stop and Abort are not
+gated by that option. MQTT cannot write free setpoints or create database
+entries. Invalid, unknown, fragmented or oversized command messages are
+ignored. Commands are dispatched on a separate worker task so database
+selection does not block the MQTT event task. If its bounded queue fills,
+Stop and Abort take priority over queued commands.
+
+Use a dedicated broker account with permissions restricted to the device's
+command and state topics. MQTT uses unencrypted TCP by default.
+
 ## Setup and migration
 
 Use the ESP-IDF VS Code extension, target **esp32s3**. The starter package's

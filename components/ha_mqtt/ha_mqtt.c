@@ -18,6 +18,10 @@
 #include "esp_netif.h"
 #include "esp_timer.h"
 #include "mqtt_client.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
 #endif
 
 static const char *TAG = "ha_mqtt";
@@ -29,6 +33,10 @@ static const char *TAG = "ha_mqtt";
 #define HA_STATUS_TOPIC "homeassistant/status"
 #define HA_DISCOVERY_TOPIC_MAX 64
 #define HA_STATE_TOPIC_MAX (HA_MQTT_TOPIC_PREFIX_MAX + sizeof("/state"))
+#define HA_COMMAND_TOPIC_MAX (HA_MQTT_TOPIC_PREFIX_MAX + sizeof("/command"))
+#define HA_COMMAND_PAYLOAD_MAX 256
+#define HA_COMMAND_NAME_MAX 64
+#define HA_COMMAND_QUEUE_LENGTH 8
 #define HA_DEVICE_ID_MAX 23
 #define HA_MEASUREMENT_EXPIRE_MULTIPLIER 3
 
@@ -40,8 +48,35 @@ static bool started;
 static atomic_bool mqtt_connected;
 static char availability_topic[HA_MQTT_TOPIC_PREFIX_MAX + sizeof("/availability")];
 static char state_topic[HA_STATE_TOPIC_MAX];
+static char command_topic[HA_COMMAND_TOPIC_MAX];
 static char discovery_topic[HA_DISCOVERY_TOPIC_MAX];
 static char device_id[HA_DEVICE_ID_MAX];
+static QueueHandle_t command_queue;
+static SemaphoreHandle_t command_task_done;
+static TaskHandle_t command_task_handle;
+
+typedef enum {
+    HA_COMMAND_START_PLAN,
+    HA_COMMAND_STOP,
+    HA_COMMAND_ABORT,
+    HA_COMMAND_SELECT_PLAN,
+    HA_COMMAND_SELECT_BATTERY,
+    HA_COMMAND_SHUTDOWN,
+} ha_command_type_t;
+
+typedef struct {
+    ha_command_type_t type;
+    char value[HA_COMMAND_NAME_MAX + 1];
+} ha_command_t;
+
+static const char *const command_names[] = {
+    "start_plan",
+    "stop",
+    "abort",
+    "select_plan",
+    "select_battery",
+};
+static ha_mqtt_command_callback_t command_callback;
 
 typedef struct {
     const char *key;
@@ -69,6 +104,144 @@ static const discovery_entity_t discovery_entities[] = {
     {"resistance_10s", "Internal resistance at 10 s", "{{ value_json.resistance_10s }}", "Ω", "resistance", "measurement", false, false},
     {"test_timestamp", "Test timestamp", "{{ value_json.test_timestamp }}", NULL, "timestamp", NULL, false, false},
 };
+
+static bool command_name_valid(const char *name)
+{
+    if (name == NULL || name[0] == '\0') {
+        return false;
+    }
+    size_t length = 0;
+    while (name[length] != '\0') {
+        const unsigned char ch = (unsigned char)name[length];
+        if (ch < 0x20 || ch == 0x7f) {
+            return false;
+        }
+        if (++length > HA_COMMAND_NAME_MAX) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool contains_escaped_null(const char *payload, size_t length)
+{
+    for (size_t i = 0; i + 5 < length; ++i) {
+        if (payload[i] == '\\' && (payload[i + 1] == 'u' || payload[i + 1] == 'U') &&
+            payload[i + 2] == '0' && payload[i + 3] == '0' &&
+            payload[i + 4] == '0' && payload[i + 5] == '0') {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool parse_command(const char *payload, size_t length, ha_command_t *command)
+{
+    if (payload == NULL || command == NULL || length == 0 ||
+        length > HA_COMMAND_PAYLOAD_MAX || memchr(payload, '\0', length) != NULL ||
+        contains_escaped_null(payload, length)) {
+        return false;
+    }
+
+    char json[HA_COMMAND_PAYLOAD_MAX + 1];
+    memcpy(json, payload, length);
+    json[length] = '\0';
+    const char *parse_end = NULL;
+    cJSON *root = cJSON_ParseWithLengthOpts(json, length + 1, &parse_end, false);
+    if (root == NULL) {
+        return false;
+    }
+    while (parse_end != NULL && *parse_end != '\0' &&
+           (*parse_end == ' ' || *parse_end == '\t' || *parse_end == '\r' ||
+            *parse_end == '\n')) {
+        ++parse_end;
+    }
+    if (!cJSON_IsObject(root) || parse_end == NULL || *parse_end != '\0') {
+        cJSON_Delete(root);
+        return false;
+    }
+
+    const cJSON *command_item = cJSON_GetObjectItemCaseSensitive(root, "command");
+    bool valid = cJSON_IsString(command_item) && command_item->valuestring != NULL;
+    ha_command_type_t type = HA_COMMAND_SHUTDOWN;
+    if (valid) {
+        valid = false;
+        for (size_t i = 0; i < sizeof(command_names) / sizeof(command_names[0]); ++i) {
+            if (strcmp(command_item->valuestring, command_names[i]) == 0) {
+                type = (ha_command_type_t)i;
+                valid = true;
+                break;
+            }
+        }
+    }
+
+    const cJSON *value_item = cJSON_GetObjectItemCaseSensitive(root, "name");
+    const bool selection = type == HA_COMMAND_SELECT_PLAN ||
+                           type == HA_COMMAND_SELECT_BATTERY;
+    if (valid && selection) {
+        valid = cJSON_GetArraySize(root) == 2 && cJSON_IsString(value_item) &&
+                command_name_valid(value_item->valuestring);
+    } else if (valid) {
+        valid = cJSON_GetArraySize(root) == 1 && value_item == NULL;
+    }
+
+    if (valid) {
+        command->type = type;
+        command->value[0] = '\0';
+        if (selection) {
+            snprintf(command->value, sizeof(command->value), "%s", value_item->valuestring);
+        }
+    }
+    cJSON_Delete(root);
+    return valid;
+}
+
+static void command_task(void *arg)
+{
+    (void)arg;
+    ha_command_t command;
+    while (xQueueReceive(command_queue, &command, portMAX_DELAY) == pdTRUE) {
+        if (command.type == HA_COMMAND_SHUTDOWN) {
+            break;
+        }
+        command_callback(command_names[command.type],
+                         command.value[0] != '\0' ? command.value : NULL);
+    }
+    xSemaphoreGive(command_task_done);
+    vTaskDelete(NULL);
+}
+
+static void stop_command_task(void)
+{
+    if (command_task_handle == NULL) {
+        return;
+    }
+    xQueueReset(command_queue);
+    const ha_command_t shutdown = {.type = HA_COMMAND_SHUTDOWN};
+    if (xQueueSend(command_queue, &shutdown, portMAX_DELAY) == pdTRUE) {
+        xSemaphoreTake(command_task_done, portMAX_DELAY);
+    }
+    command_task_handle = NULL;
+    vQueueDelete(command_queue);
+    command_queue = NULL;
+    vSemaphoreDelete(command_task_done);
+    command_task_done = NULL;
+}
+
+static bool queue_command(const ha_command_t *command)
+{
+    if (command_queue == NULL) {
+        return false;
+    }
+    if (xQueueSend(command_queue, command, 0) == pdTRUE) {
+        return true;
+    }
+    if (command->type == HA_COMMAND_STOP || command->type == HA_COMMAND_ABORT) {
+        xQueueReset(command_queue);
+        return xQueueSendToFront(command_queue, command, 0) == pdTRUE;
+    }
+    return false;
+}
 
 static bool add_discovery_entity(cJSON *components, const discovery_entity_t *entity,
                                  uint32_t expire_after)
@@ -265,6 +438,10 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
         if (esp_mqtt_client_subscribe(mqtt_client, HA_STATUS_TOPIC, 1) < 0) {
             ESP_LOGW(TAG, "Failed to subscribe to Home Assistant status");
         }
+        if (command_callback != NULL &&
+            esp_mqtt_client_subscribe(mqtt_client, command_topic, 1) < 0) {
+            ESP_LOGW(TAG, "Failed to subscribe to MQTT command topic");
+        }
         if (esp_mqtt_client_enqueue(mqtt_client, availability_topic, "online", 0, 1, 1,
                                     false) < 0) {
             ESP_LOGW(TAG, "Failed to queue MQTT availability");
@@ -277,14 +454,32 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
         schedule_reconnect();
     } else if (event_id == MQTT_EVENT_DATA) {
         const esp_mqtt_event_handle_t event = event_data;
-        if (event != NULL && event->current_data_offset == 0 &&
-            event->data_len == event->total_data_len &&
-            event->topic_len == (int)(sizeof(HA_STATUS_TOPIC) - 1) &&
+        if (event == NULL || event->current_data_offset != 0 ||
+            event->data_len != event->total_data_len || event->topic_len < 0 ||
+            event->data_len < 0 ||
+            (event->topic_len > 0 && event->topic == NULL) ||
+            (event->data_len > 0 && event->data == NULL)) {
+            return;
+        }
+        if (event->topic_len == (int)(sizeof(HA_STATUS_TOPIC) - 1) &&
             memcmp(event->topic, HA_STATUS_TOPIC, sizeof(HA_STATUS_TOPIC) - 1) == 0 &&
             event->data_len == (int)(sizeof("online") - 1) &&
-            memcmp(event->data, "online", sizeof("online") - 1) == 0 &&
-            publish_discovery() != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to republish Home Assistant discovery");
+            memcmp(event->data, "online", sizeof("online") - 1) == 0) {
+            if (publish_discovery() != ESP_OK) {
+                ESP_LOGW(TAG, "Failed to republish Home Assistant discovery");
+            }
+        } else if (command_callback != NULL &&
+                   event->topic_len == (int)strlen(command_topic) &&
+                   memcmp(event->topic, command_topic, strlen(command_topic)) == 0) {
+            ha_command_t command;
+            if (!parse_command(event->data, (size_t)event->data_len, &command)) {
+                ESP_LOGD(TAG, "Ignored malformed or unsupported MQTT command");
+            } else if (command.type == HA_COMMAND_START_PLAN &&
+                       !active_settings.allow_remote_start) {
+                ESP_LOGD(TAG, "Ignored MQTT plan start because remote start is disabled");
+            } else if (!queue_command(&command)) {
+                ESP_LOGD(TAG, "Dropped MQTT command because the command queue is full");
+            }
         }
     }
 }
@@ -334,12 +529,35 @@ esp_err_t ha_mqtt_start(const ha_mqtt_settings_t *settings)
                                 "%s/availability", active_settings.topic_prefix);
     int state_length = snprintf(state_topic, sizeof(state_topic), "%s/state",
                                 active_settings.topic_prefix);
+    int command_length = snprintf(command_topic, sizeof(command_topic), "%s/command",
+                                  active_settings.topic_prefix);
     int discovery_length = snprintf(discovery_topic, sizeof(discovery_topic),
                                     "homeassistant/device/%s/config", device_id);
     if (topic_length < 0 || (size_t)topic_length >= sizeof(availability_topic) ||
         state_length < 0 || (size_t)state_length >= sizeof(state_topic) ||
+        command_length < 0 || (size_t)command_length >= sizeof(command_topic) ||
         discovery_length < 0 || (size_t)discovery_length >= sizeof(discovery_topic)) {
         return ESP_ERR_INVALID_ARG;
+    }
+
+    command_callback = active_settings.command_callback;
+    if (command_callback != NULL) {
+        command_queue = xQueueCreate(HA_COMMAND_QUEUE_LENGTH, sizeof(ha_command_t));
+        command_task_done = xSemaphoreCreateBinary();
+        if (command_queue == NULL || command_task_done == NULL ||
+            xTaskCreate(command_task, "ha_mqtt_cmd", 6144, NULL, 4,
+                        &command_task_handle) != pdPASS) {
+            if (command_queue != NULL) {
+                vQueueDelete(command_queue);
+                command_queue = NULL;
+            }
+            if (command_task_done != NULL) {
+                vSemaphoreDelete(command_task_done);
+                command_task_done = NULL;
+            }
+            command_callback = NULL;
+            return ESP_ERR_NO_MEM;
+        }
     }
 
     esp_timer_create_args_t timer_args = {
@@ -348,6 +566,8 @@ esp_err_t ha_mqtt_start(const ha_mqtt_settings_t *settings)
     };
     err = esp_timer_create(&timer_args, &reconnect_timer);
     if (err != ESP_OK) {
+        stop_command_task();
+        command_callback = NULL;
         return err;
     }
 
@@ -372,6 +592,8 @@ esp_err_t ha_mqtt_start(const ha_mqtt_settings_t *settings)
     if (mqtt_client == NULL) {
         esp_timer_delete(reconnect_timer);
         reconnect_timer = NULL;
+        stop_command_task();
+        command_callback = NULL;
         return ESP_ERR_NO_MEM;
     }
 
@@ -382,6 +604,8 @@ esp_err_t ha_mqtt_start(const ha_mqtt_settings_t *settings)
         mqtt_client = NULL;
         esp_timer_delete(reconnect_timer);
         reconnect_timer = NULL;
+        stop_command_task();
+        command_callback = NULL;
         return err;
     }
 
@@ -396,6 +620,8 @@ esp_err_t ha_mqtt_start(const ha_mqtt_settings_t *settings)
         mqtt_client = NULL;
         esp_timer_delete(reconnect_timer);
         reconnect_timer = NULL;
+        stop_command_task();
+        command_callback = NULL;
         ESP_LOGE(TAG, "Failed to start MQTT client: %s", esp_err_to_name(err));
         return err;
     }
@@ -417,6 +643,8 @@ esp_err_t ha_mqtt_stop(void)
     mqtt_client = NULL;
     esp_err_t timer_err = esp_timer_delete(reconnect_timer);
     reconnect_timer = NULL;
+    stop_command_task();
+    command_callback = NULL;
 
     if (err != ESP_OK) {
         return err;

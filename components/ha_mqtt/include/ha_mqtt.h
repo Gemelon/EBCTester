@@ -18,6 +18,8 @@
 extern "C" {
 #endif
 
+typedef void (*ha_mqtt_command_callback_t)(const char *command, const char *value);
+
 typedef struct {
     bool enabled;
     char host[HA_MQTT_HOST_MAX];
@@ -27,6 +29,7 @@ typedef struct {
     char topic_prefix[HA_MQTT_TOPIC_PREFIX_MAX];
     uint32_t measurement_interval_seconds;
     bool allow_remote_start;
+    ha_mqtt_command_callback_t command_callback;
 } ha_mqtt_settings_t;
 
 typedef struct {
