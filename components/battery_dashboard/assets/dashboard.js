@@ -4,6 +4,32 @@
 "use strict";
 
 (() => {
+  const brand = document.getElementById("app-brand");
+  if (brand) {
+    const installLogo = () => {
+      if (brand.querySelector("img")) return;
+      const logo = document.createElement("img");
+      logo.src = "/ui/dashboard/brand-logo.png";
+      logo.alt = "EBCTester";
+      logo.height = 48;
+      logo.className = "bg-white rounded px-2 py-1";
+      brand.replaceChildren(logo);
+      brand.setAttribute("aria-label", "EBCTester home");
+      brand.title = "EBCTester";
+    };
+    installLogo();
+    new MutationObserver(installLogo).observe(brand, { childList: true });
+  }
+
+  let favicon = document.querySelector('link[rel~="icon"]');
+  if (!favicon) {
+    favicon = document.createElement("link");
+    favicon.rel = "icon";
+    document.head.append(favicon);
+  }
+  favicon.type = "image/png";
+  favicon.href = "/ui/dashboard/brand-icon.png";
+
   const $ = (id) => document.getElementById(id);
   const MAX_POINTS = 1500;
   const REFRESH_MS = 15000;

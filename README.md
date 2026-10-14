@@ -3,6 +3,10 @@
 
 # EBCTester
 
+<p align="center">
+  <img src="components/battery_dashboard/assets/brand_logo.png" alt="EBCTester logo" width="720">
+</p>
+
 **Test batteries and keep their measurements without running a PC for weeks.**
 
 EBCTester connects a ZKE EBC-A20 to a small ESP32-S3. The microcontroller
