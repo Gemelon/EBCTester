@@ -14,6 +14,139 @@ operates the tester, executes test plans, and records measurements on an SD
 card. Its local web interface lets you manage batteries, follow measurements,
 and view charts from a phone, even outside your home Wi-Fi network.
 
+## A look at the web interface
+
+**Set up a test, close the browser, and come back to the results.** The ESP32
+handles test execution and SD recording; the browser is your control panel,
+not a requirement for keeping a test running.
+
+### Measurements at a glance
+
+Follow voltage, current, and accumulated capacity, then revisit saved runs.
+The dashboard combines time-series charts, capacity per segment, and a
+segment timeline so you can see how a battery behaved throughout a test.
+
+<p align="center">
+  <a href="docs/images/dashboard.png">
+    <img src="docs/images/dashboard.png" alt="Measurement dashboard with voltage, current, capacity charts, and a segment timeline" width="640">
+  </a>
+</p>
+
+Click any screenshot to open the full-size image. Expand the sections below
+for a tour of the other pages. Screenshots show example settings and test
+states, not recommended battery parameters; private identifiers have been
+redacted.
+
+<details>
+<summary><strong>Explore battery management and test controls</strong></summary>
+
+### Keep your batteries organized
+
+Save battery labels, manufacturer details, nominal capacity, and notes on
+the SD card. Battery details are stored with each test run, helping you
+identify the cell or pack behind a set of measurements.
+
+<p align="center">
+  <a href="docs/images/battery-details.png">
+    <img src="docs/images/battery-details.png" alt="Battery details form and selection of saved batteries" width="640">
+  </a>
+</p>
+
+### Take direct control
+
+Start constant-voltage charging or constant-current / constant-power
+discharging from the browser. See live measurements, tester connection
+status, and recording progress together; active tests are recorded
+automatically.
+
+<p align="center">
+  <a href="docs/images/manual-control.png">
+    <img src="docs/images/manual-control.png" alt="Manual charging and discharging controls with live tester measurements" width="640">
+  </a>
+</p>
+
+### Let a plan do the repetitive work
+
+Build and save test plans with up to ten steps, combining charge, discharge,
+and rest periods. The sequence runs on the ESP32 without an open browser
+or a continuous Wi-Fi connection, as long as the device remains powered.
+
+<p align="center">
+  <a href="docs/images/automatic-plans.png">
+    <img src="docs/images/automatic-plans.png" alt="Automatic test plan with charge, rest, and discharge steps and a step editor" width="640">
+  </a>
+</p>
+
+### Look beyond capacity
+
+Configure a load-pulse test to measure DC internal resistance, with separate
+results at 1, 5, and 10 seconds by default. Use a battery with a prepared
+state of charge or configure automatic preparation, and keep the results
+on SD alongside your other tests.
+
+<p align="center">
+  <a href="docs/images/internal-resistance.png">
+    <img src="docs/images/internal-resistance.png" alt="Internal resistance test parameters, protection limits, sequence status, and results" width="640">
+  </a>
+</p>
+
+</details>
+
+<details>
+<summary><strong>Explore storage, updates, and optional integrations</strong></summary>
+
+### Check the device at a glance
+
+View the installed firmware version, Wi-Fi status, access point details,
+and clock synchronization from the administration section.
+
+<p align="center">
+  <a href="docs/images/device-information.png">
+    <img src="docs/images/device-information.png" alt="Device information and system status in the administration section" width="640">
+  </a>
+</p>
+
+### Access your files without removing the card
+
+Browse SD folders, upload language files, and download files through the
+web interface. Measurements stay in the local SQLite database on the SD
+card, without requiring a cloud service.
+
+<p align="center">
+  <a href="docs/images/sd-card.png">
+    <img src="docs/images/sd-card.png" alt="SD card file manager showing folders, the SQLite database, and file actions" width="640">
+  </a>
+</p>
+
+### Update when you choose
+
+Check for firmware updates and follow download progress in the browser.
+Installation requires an explicit action and confirmation; updates are
+never installed automatically. The screenshot shows HTTP test mode;
+use HTTPS for normal firmware distribution.
+
+<p align="center">
+  <a href="docs/images/firmware-updates.png">
+    <img src="docs/images/firmware-updates.png" alt="Manual OTA update page with availability, transport warnings, and download progress" width="640">
+  </a>
+</p>
+
+### Add conveniences without making them dependencies
+
+Configure Wi-Fi, optional MariaDB backups, the live debug log, and optional
+Home Assistant MQTT integration in one place. MQTT provides live values
+and control, not a copy of the SD database; remote plan start is disabled
+by default. English and German are built in, with additional languages
+loadable from SD.
+
+<p align="center">
+  <a href="docs/images/settings.png">
+    <img src="docs/images/settings.png" alt="Settings for Wi-Fi, MariaDB backup, debug logging, Home Assistant MQTT, and languages" width="640">
+  </a>
+</p>
+
+</details>
+
 ## Why this project?
 
 ZKE devices are useful and affordable for hobbyists, but their hardware and PC
