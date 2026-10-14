@@ -31,6 +31,49 @@ menu "BatteryTester legacy settings"
         default 48
 endmenu
 
+menu "BatteryTester Home Assistant MQTT"
+    config EBCTESTER_HA_MQTT_ENABLE
+        bool "Enable MQTT component"
+        default n
+
+    config EBCTESTER_HA_MQTT_HOST
+        string "MQTT broker host"
+        depends on EBCTESTER_HA_MQTT_ENABLE
+        default ""
+
+    config EBCTESTER_HA_MQTT_PORT
+        int "MQTT broker port"
+        depends on EBCTESTER_HA_MQTT_ENABLE
+        range 1 65535
+        default 1883
+
+    config EBCTESTER_HA_MQTT_USERNAME
+        string "MQTT username"
+        depends on EBCTESTER_HA_MQTT_ENABLE
+        default ""
+
+    config EBCTESTER_HA_MQTT_PASSWORD
+        string "MQTT password"
+        depends on EBCTESTER_HA_MQTT_ENABLE
+        default ""
+
+    config EBCTESTER_HA_MQTT_TOPIC_PREFIX
+        string "MQTT topic prefix"
+        depends on EBCTESTER_HA_MQTT_ENABLE
+        default "ebctester"
+
+    config EBCTESTER_HA_MQTT_INTERVAL_SECONDS
+        int "Measurement interval in seconds"
+        depends on EBCTESTER_HA_MQTT_ENABLE
+        range 1 3600
+        default 20
+
+    config EBCTESTER_HA_MQTT_ALLOW_REMOTE_START
+        bool "Allow remote start commands"
+        depends on EBCTESTER_HA_MQTT_ENABLE
+        default n
+endmenu
+
 config OTA_SUITE_AP_PASSWORD
     string
     default BATTERY_AP_PASSWORD

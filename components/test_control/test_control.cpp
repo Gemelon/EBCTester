@@ -7,6 +7,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <atomic>
 #include <mutex>
 
 #include "cJSON.h"
@@ -58,6 +59,7 @@ int64_t manual_start_deadline_us;
 bool capturing;
 bool plan_capture;
 Averager averager;
+std::atomic<test_control_persisted_sample_callback_t> persisted_sample_callback{nullptr};
 
 bool is_complete(uint8_t mode)
 {
@@ -234,6 +236,14 @@ void flush_average()
     sample.capacity_ah = static_cast<float>(averager.capacity / averager.count);
     test_store::add_sample(sample);
     averager = {};
+}
+
+void dispatch_persisted_sample(const test_store::Sample &sample)
+{
+    const test_control_persisted_sample_callback_t callback = persisted_sample_callback.load();
+    if (callback != nullptr) {
+        callback(sample.voltage_v, sample.current_a, sample.capacity_ah);
+    }
 }
 
 void add_to_average(const ebc_frame_t &frame)
@@ -773,6 +783,9 @@ extern "C" esp_err_t test_control_init(void)
     using namespace test_control;
     esp_err_t err = test_store_init();
     if (err == ESP_OK) {
+        test_store::set_sample_written_callback(dispatch_persisted_sample);
+    }
+    if (err == ESP_OK) {
         const ebc_link_listener_t listener = {
             .on_frame = on_frame,
             .on_connection_lost = on_connection_lost,
@@ -788,4 +801,10 @@ extern "C" esp_err_t test_control_init(void)
         ESP_LOGE(TAG, "Tester control start failed: %s", esp_err_to_name(err));
     }
     return err;
+}
+
+extern "C" void test_control_set_persisted_sample_callback(
+    test_control_persisted_sample_callback_t callback)
+{
+    test_control::persisted_sample_callback.store(callback);
 }

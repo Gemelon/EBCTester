@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <atomic>
 #include <memory>
 #include <mutex>
 
@@ -55,6 +56,7 @@ std::mutex queue_mutex;
 std::vector<Event> queue;
 RecorderStatus recorder;
 TaskHandle_t writer_task_handle;
+std::atomic<SampleWrittenCallback> sample_written_callback{nullptr};
 
 /* Owned by the writer task. */
 struct WriterState {
@@ -604,6 +606,7 @@ int write_resistance(sqlite3 *database, const RunInfo &info)
 struct BatchResult {
     bool executed = false;
     uint32_t written = 0;
+    std::vector<Sample> written_samples;
     std::string error;
 };
 
@@ -631,7 +634,10 @@ esp_err_t write_batch(sqlite3 *database, std::vector<Event> &events, BatchResult
             case EventType::Sample:
                 if (writer.run_open) {
                     status = write_sample(database, statements, event.sample);
-                    batch.written += status == SQLITE_OK ? 1 : 0;
+                    if (status == SQLITE_OK) {
+                        batch.written++;
+                        batch.written_samples.push_back(event.sample);
+                    }
                 }
                 break;
             case EventType::Finish:
@@ -651,6 +657,7 @@ esp_err_t write_batch(sqlite3 *database, std::vector<Event> &events, BatchResult
     if (result != SQLITE_OK) {
         batch.error = sqlite3_errmsg(database);
         batch.written = 0;
+        batch.written_samples.clear();
         log_sql(database, result, "Writing test run data");
         writer = saved;
         writer.run_open = false;
@@ -677,6 +684,14 @@ void writer_task(void *)
         BatchResult batch;
         const esp_err_t err = execute(
             [&](sqlite3 *database) { return write_batch(database, events, batch); }, WRITER_TIMEOUT);
+        if (err == ESP_OK) {
+            const SampleWrittenCallback callback = sample_written_callback.load();
+            if (callback != nullptr) {
+                for (const Sample &sample : batch.written_samples) {
+                    callback(sample);
+                }
+            }
+        }
         std::lock_guard<std::mutex> guard(queue_mutex);
         if (!batch.executed) {
             /* Database busy or not available: keep the events for the next attempt. */
@@ -979,6 +994,11 @@ void add_sample(const Sample &sample)
         }
     }
     enqueue({EventType::Sample, sample, nullptr});
+}
+
+void set_sample_written_callback(SampleWrittenCallback callback)
+{
+    sample_written_callback.store(callback);
 }
 
 void finish_run(const char *status, const char *notes)

@@ -1,0 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Thomas Stoll
+# SPDX-License-Identifier: Apache-2.0
+
+dependencies:
+  espressif/mqtt: "^1.1.0"

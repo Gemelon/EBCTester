@@ -52,6 +52,8 @@ struct Sample {
     float setpoint_3 = 0;
 };
 
+using SampleWrittenCallback = void (*)(const Sample &sample);
+
 struct RecorderStatus {
     bool active = false;
     bool failed = false;
@@ -94,6 +96,7 @@ esp_err_t save_plan(const Plan &plan);
 /* Recording is asynchronous: database writes run in a background task. */
 esp_err_t begin_run(const Battery &battery, const Plan *plan, std::string &run_id, const char *notes = nullptr);
 void add_sample(const Sample &sample);
+void set_sample_written_callback(SampleWrittenCallback callback);
 /* status: COMPLETED, STOPPED, INTERRUPTED or ERROR. */
 void finish_run(const char *status, const char *notes);
 void finish_resistance_run(const char *status, const char *notes, const std::vector<ResistanceResult> &results);
