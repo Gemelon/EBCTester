@@ -276,6 +276,10 @@ git submodule update --init --recursive
 Do not use `git submodule update --remote` without reviewing the changes.
 The parent repository records the tested package commits.
 
+Command-line setup on Linux, local device settings (`sdkconfig.local`),
+branches, flashing and host tests are described in
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
 ### Configure hardware and build
 
 1. Open the project in VS Code and select the ESP-IDF environment.

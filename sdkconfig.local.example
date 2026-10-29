@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Thomas Stoll
+# SPDX-License-Identifier: Apache-2.0
+#
+# Local, device-specific build settings. Copy to sdkconfig.local (ignored by
+# Git) and create sdkconfig with it on the first build:
+#   idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.local" reconfigure
+#   idf.py reconfigure build
+# See docs/DEVELOPMENT.md.
+
+# SD card connected over SPI instead of the default 4-bit SDMMC.
+CONFIG_SD_CARD_MANAGER_BUS_SPI=y
+
+# Include the optional Home Assistant MQTT integration.
+CONFIG_EBCTESTER_HA_MQTT_ENABLE=y
+
+# Optional fixed admin/AP password for your own devices (8-63 characters).
+# Never commit it. Without it, each device generates a random password.
+# CONFIG_BATTERY_AP_PASSWORD="change-me"

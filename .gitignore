@@ -82,6 +82,7 @@ Desktop.ini
 
 # Private deployment, credentials, measurements and editor configuration
 CMakeUserConfig.cmake
+sdkconfig.local
 .vscode/
 .idea/
 .env
