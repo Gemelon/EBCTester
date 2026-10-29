@@ -206,8 +206,19 @@
       void refresh();
     }
   }
+  /* The selected tester model (EBC-A20/A40L) sets the current limit. */
+  const currentFields = ["chargeCurrent", "chargeCutoff", "prepCurrent", "pulseCurrent"];
+  function applyCurrentLimit(value) {
+    if (!Number.isFinite(value)) return;
+    for (const field of fields) {
+      if (!currentFields.includes(field[0]) || field[3] === value) continue;
+      field[3] = value;
+      $(`res-${field[0]}`).max = String(value);
+    }
+  }
   document.addEventListener("tester-status", event => {
     tester = event.detail;
+    applyCurrentLimit(tester.maxCurrent);
     $("res-battery").textContent = tester.battery || I18n.t("text.e2a71bcb34a6");
     $("res-live").textContent = tester.link?.connected ?
       `${fmt(tester.link.voltage)} V / ${fmt(tester.link.current)} A` : I18n.t("text.b0caf73f4640");

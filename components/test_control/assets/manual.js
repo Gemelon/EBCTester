@@ -7,6 +7,7 @@
   const $ = (id) => document.getElementById(id);
   const fmt = (value, digits, unit) => (Number.isFinite(value) ? `${value.toFixed(digits)} ${unit}` : "-");
   let manual = {};
+  let maxCurrent = 20;
   let timer = 0;
   let submitting = false;
   let latestStatus = null;
@@ -51,16 +52,26 @@
     const input = $("man-discharge-value");
     $("man-discharge-value-label").textContent = cp ? I18n.t("text.c9d1515a58db") : I18n.t("text.bb39ee18acd6");
     input.min = cp ? "1" : "0.01";
-    input.max = cp ? "2000" : "40";
+    input.max = cp ? "2000" : String(maxCurrent);
     input.step = cp ? "1" : "0.01";
     input.value = cp ? manual.power ?? 5 : manual.dischargeCurrent ?? 0.5;
     $("man-discharge-cutoff").value = cp ? manual.powerCutoff ?? 2.5 : manual.dischargeCutoff ?? 2.5;
     $("man-discharge-minutes").value = cp ? manual.powerMinutes ?? 239 : manual.dischargeMinutes ?? 239;
   }
 
+  /* The selected tester model (EBC-A20/A40L) sets the current limit. */
+  function applyCurrentLimit(value) {
+    if (!Number.isFinite(value) || value === maxCurrent) return;
+    maxCurrent = value;
+    $("man-charge-current").max = String(maxCurrent);
+    $("man-charge-cutoff").max = String(maxCurrent);
+    if (discharge() !== "cp") $("man-discharge-value").max = String(maxCurrent);
+  }
+
   async function loadSettings() {
     try {
       const settings = JSON.parse(await api("/api/tester/settings"));
+      applyCurrentLimit(settings.maxCurrent);
       manual = settings.manual || {};
       $("man-charge-current").value = manual.chargeCurrent ?? 0.5;
       $("man-charge-voltage").value = manual.chargeVoltage ?? 3.45;
@@ -73,6 +84,7 @@
 
   function render(status) {
     latestStatus = status;
+    applyCurrentLimit(status.maxCurrent);
     const link = status.link || {};
     const badge = $("man-link-badge");
     if (link.connected && link.active) {

@@ -213,13 +213,20 @@ permissions.
 ## SD card
 
 The SD-card component defaults to 4-bit SDMMC with CLK=GPIO14, CMD=GPIO15,
-D0=GPIO2, D1=GPIO4, D2=GPIO5 and D3=GPIO6. In **menuconfig → SD Card Manager
-→ SD card bus mode**, select either **4-bit SDMMC** or **SPI**. SPI defaults to
+D0=GPIO2, D1=GPIO4, D2=GPIO5 and D3=GPIO6. **menuconfig → SD Card Manager
+→ Default SD card bus mode** selects **4-bit SDMMC** or **SPI** as the default.
+The **SD card bus** card under Settings overrides it at runtime: the selection
+is stored in NVS (namespace `sd_card`, key `bus`) and applies after a restart
+("Save and restart" restarts only while no operation or recording is active).
+Both pin sets are always compiled in. SPI defaults to
 MISO=GPIO2, MOSI=GPIO15, CS=GPIO6 and CLK=GPIO14; GPIO 7 remains the separate,
 active-high card-detect input in either mode. SPI and SDMMC clock rates and
 their pin assignments can be configured in the same menu. Both clocks default
 to 10 MHz. Ensure the chosen pins are available on the board and use suitable
-external pull-ups on the SD signal lines (3.3 V only).
+external pull-ups on the SD signal lines (3.3 V only). `GET /api/sd/status`
+reports `busMode`, `configuredBusMode` and `restartRequired`;
+`POST /api/sd/bus` (`{"mode":"spi"|"sdmmc","restart":bool}`, CSRF required)
+stores the mode and returns 202 when a restart was scheduled.
 
 Format cards as FAT32. The ESP-IDF 6.0.1 bundled FatFs configuration disables
 exFAT, which this component therefore does not support. FatFs API UTF-8 encoding
@@ -338,6 +345,15 @@ The EBC-A20/A40L use 5 V TTL levels: connect it through a level shifter, the
 ESP32-S3 GPIOs are not 5 V tolerant. The dongle↔tester bridge is not
 implemented yet; UART2 is initialized and its input discarded.
 
+Select the connected model in the **EBC tester** card under Settings
+(stored in NVS namespace `tester`, key `model`; default EBC-A20). It sets the
+maximum charge and discharge current: **20 A** for the EBC-A20 and **40 A** for
+the EBC-A40L. Manual starts, test plans (when loaded and started) and the
+internal resistance measurement are checked against it; the web forms adopt
+the limit. The model cannot be changed during an operation or recording.
+`GET /api/tester/status` and `/api/tester/settings` report `testerModel` and
+`maxCurrent`; `POST /api/tester/model` (`{"model":"A20"|"A40L"}`) changes it.
+
 - **Battery**: label, manufacturer, serial, manufacturing date, nominal
   capacity, notes; stored in NVS and optionally in the SQLite database.
 - **Manual**: live values, connect/disconnect, auto-connect, Stop, charging
@@ -357,7 +373,8 @@ The device id is `CONFIG_TEST_STORE_DEVICE_ID`.
 
 API (login required, POST with CSRF token): `GET /api/tester/status`,
 `/api/tester/settings`, `/api/tester/catalog`; `POST /api/tester/battery`,
-`/api/tester/command`, `/api/tester/plan`, `/api/tester/plan/action`.
+`/api/tester/command`, `/api/tester/plan`, `/api/tester/plan/action`,
+`/api/tester/model`.
 
 ## DC resistance / last-pulse test
 

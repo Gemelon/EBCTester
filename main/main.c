@@ -45,6 +45,8 @@ void app_main(void)
     }
     ESP_LOGI(TAG, "Initializing SD card manager");
     ESP_ERROR_CHECK(sd_card_manager_init());
+    /* A bus mode change from the web interface must not restart the device during a test. */
+    sd_card_manager_set_busy_callback(test_control_is_busy);
     ESP_LOGI(TAG, "Scheduling database initialization");
     ESP_ERROR_CHECK(battery_database_init());
     /* UI extensions must be registered before the web server starts. */

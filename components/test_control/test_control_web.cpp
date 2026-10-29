@@ -31,6 +31,10 @@ extern const unsigned char resistance_html_start[] asm("_binary_resistance_html_
 extern const unsigned char resistance_html_end[] asm("_binary_resistance_html_end");
 extern const unsigned char resistance_js_start[] asm("_binary_resistance_js_start");
 extern const unsigned char resistance_js_end[] asm("_binary_resistance_js_end");
+extern const unsigned char tester_settings_html_start[] asm("_binary_tester_settings_html_start");
+extern const unsigned char tester_settings_html_end[] asm("_binary_tester_settings_html_end");
+extern const unsigned char tester_settings_js_start[] asm("_binary_tester_settings_js_start");
+extern const unsigned char tester_settings_js_end[] asm("_binary_tester_settings_js_end");
 
 namespace test_control {
 namespace {
@@ -214,6 +218,8 @@ esp_err_t status_handler(httpd_req_t *req)
 
     cJSON_AddStringToObject(root, "battery", settings.battery.label.c_str());
     cJSON_AddBoolToObject(root, "databaseReady", battery_database_is_ready());
+    cJSON_AddStringToObject(root, "testerModel", tester_model_name(settings.model));
+    cJSON_AddNumberToObject(root, "maxCurrent", max_current_a(settings.model));
     return send_json(req, root);
 }
 
@@ -235,6 +241,8 @@ esp_err_t settings_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(manual, "powerCutoff", settings.manual.power_cutoff_v);
     cJSON_AddNumberToObject(manual, "powerMinutes", settings.manual.power_minutes);
     cJSON_AddBoolToObject(root, "autoConnect", settings.auto_connect);
+    cJSON_AddStringToObject(root, "testerModel", tester_model_name(settings.model));
+    cJSON_AddNumberToObject(root, "maxCurrent", max_current_a(settings.model));
     cJSON_AddItemToObject(root, "battery", battery_json(settings.battery));
     cJSON *plan = cJSON_AddObjectToObject(root, "plan");
     cJSON_AddStringToObject(plan, "name", settings.plan.name.c_str());
@@ -596,6 +604,29 @@ esp_err_t resistance_history_handler(httpd_req_t *req)
     return send_json(req, root);
 }
 
+esp_err_t tester_model_handler(httpd_req_t *req)
+{
+    if (!web_interface_authorize_request(req, true)) {
+        return ESP_OK;
+    }
+    cJSON *root = read_json(req);
+    if (root == nullptr) {
+        return ESP_OK;
+    }
+    const std::string name = get_string(root, "model");
+    cJSON_Delete(root);
+    TesterModel model;
+    if (!tester_model_from_name(name.c_str(), model)) {
+        return send_text(req, "400 Bad Request", "Unknown tester model.");
+    }
+    const std::string error = set_tester_model(model);
+    if (!error.empty()) {
+        return send_text(req, "409 Conflict", error);
+    }
+    return send_text(req, "200 OK", model == TesterModel::A40L ? "Tester model saved: EBC-A40L (max. 40 A)."
+                                                               : "Tester model saved: EBC-A20 (max. 20 A).");
+}
+
 const httpd_uri_t resistance_routes[] = {
     {.uri = "/api/tester/resistance", .method = HTTP_GET, .handler = resistance_status_handler, .user_ctx = nullptr},
     {.uri = "/api/tester/resistance", .method = HTTP_POST, .handler = resistance_action_handler, .user_ctx = nullptr},
@@ -616,7 +647,11 @@ const httpd_uri_t auto_routes[] = {
     {.uri = "/api/tester/plan/action", .method = HTTP_POST, .handler = plan_action_handler, .user_ctx = nullptr},
 };
 
-web_interface_extension_t extensions[4] = {};
+const httpd_uri_t tester_settings_routes[] = {
+    {.uri = "/api/tester/model", .method = HTTP_POST, .handler = tester_model_handler, .user_ctx = nullptr},
+};
+
+web_interface_extension_t extensions[5] = {};
 
 } // namespace
 
@@ -636,6 +671,11 @@ esp_err_t register_web_extensions()
                      static_cast<size_t>(resistance_html_end - resistance_html_start), resistance_js_start,
                      static_cast<size_t>(resistance_js_end - resistance_js_start), resistance_routes,
                      sizeof(resistance_routes) / sizeof(resistance_routes[0]), "tab", nullptr};
+    extensions[4] = {"tester-settings", "EBC tester", tester_settings_html_start,
+                     static_cast<size_t>(tester_settings_html_end - tester_settings_html_start),
+                     tester_settings_js_start,
+                     static_cast<size_t>(tester_settings_js_end - tester_settings_js_start), tester_settings_routes,
+                     sizeof(tester_settings_routes) / sizeof(tester_settings_routes[0]), "settings", nullptr};
     for (const web_interface_extension_t &extension : extensions) {
         const esp_err_t err = web_interface_register_extension(&extension);
         if (err != ESP_OK) {

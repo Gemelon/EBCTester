@@ -14,6 +14,9 @@ namespace test_control {
 
 enum class RunState : uint8_t { Idle = 0, Running = 1, Complete = 2, Interrupted = 3, Failed = 4 };
 
+/* Selected EBC hardware; it only determines the current limit (charge and discharge). */
+enum class TesterModel : uint8_t { A20 = 0, A40L = 1 };
+
 struct ManualSettings {
     float charge_current_a = 0.5f;
     float charge_voltage_v = 3.45f;
@@ -37,11 +40,15 @@ struct PlanStatus {
 struct Settings {
     ManualSettings manual;
     bool auto_connect = false;
+    TesterModel model = TesterModel::A20;
     test_store::Battery battery;
     test_store::Plan plan;
 };
 
 const char *run_state_name(RunState state);
+const char *tester_model_name(TesterModel model);
+bool tester_model_from_name(const char *name, TesterModel &model);
+float max_current_a(TesterModel model);
 Settings get_settings();
 PlanStatus get_plan_status();
 bool controls_busy();
@@ -50,6 +57,7 @@ std::string abort_resistance();
 
 /* All functions return an empty string on success or a German error message. */
 std::string set_auto_connect(bool enabled);
+std::string set_tester_model(TesterModel model);
 std::string connect();
 std::string disconnect();
 std::string stop();

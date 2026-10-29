@@ -329,6 +329,10 @@ The **Battery tester** section contains Measurements, Battery, Manual,
 Automatic, and Internal resistance. **Administration** contains Device
 information, SD card, Updates, and Settings.
 
+Under Settings, select the connected tester (**EBC-A20**: max. 20 A,
+**EBC-A40L**: max. 40 A charge and discharge current) and the SD card bus
+(**SPI** or **4-bit SDMMC**; applies after a restart).
+
 Plans support D-CC, D-CP, C-CV, waits, and repetitions. After a restart, an
 interrupted plan is not resumed blindly. Stop and Abort remain available;
 conflicting start actions are blocked.

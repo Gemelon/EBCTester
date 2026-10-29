@@ -1,0 +1,29 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+
+<div class="card">
+  <div class="card-body">
+    <h2 class="h4">EBC tester</h2>
+    <p>
+      Select the connected ZKE tester. The model sets the maximum charge and discharge current
+      that manual control, test plans and the internal resistance measurement accept.
+    </p>
+    <div id="tester-settings-message" class="alert d-none" role="status"></div>
+    <form id="tester-settings-form" class="row g-3">
+      <div class="col-sm-6">
+        <label for="tester-settings-model" class="form-label">Tester model</label>
+        <select id="tester-settings-model" class="form-select">
+          <option value="A20">EBC-A20 (max. 20 A)</option>
+          <option value="A40L">EBC-A40L (max. 40 A)</option>
+        </select>
+      </div>
+      <div class="col-12">
+        <button id="tester-settings-save" class="btn btn-primary" type="submit">Save setting</button>
+      </div>
+    </form>
+    <p class="small text-body-secondary mt-3 mb-0">
+      The model can only be changed while no operation, test plan or recording is active.
+      Select only the model that is actually connected.
+    </p>
+  </div>
+</div>

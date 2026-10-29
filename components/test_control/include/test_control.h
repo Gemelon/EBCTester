@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -18,6 +19,8 @@ esp_err_t test_control_init(void);
 void test_control_set_persisted_sample_callback(
     test_control_persisted_sample_callback_t callback);
 void test_control_handle_mqtt_command(const char *command, const char *value);
+/* True while an operation, test plan, resistance measurement or recording is active. */
+bool test_control_is_busy(void);
 
 #ifdef __cplusplus
 }

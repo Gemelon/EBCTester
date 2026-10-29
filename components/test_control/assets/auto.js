@@ -7,11 +7,11 @@
   const $ = (id) => document.getElementById(id);
   // scale converts UI units to the integer encoding stored in the plan.
   const MODES = {
-    1: { name: "D-CC", fields: [[I18n.t("text.bb39ee18acd6"), 100, 0.01, 40], [I18n.t("text.7cf603e56ff8"), 100, 0.01, 30], [I18n.t("text.2cba9409833c"), 1, 0, 239]],
+    1: { name: "D-CC", fields: [[I18n.t("text.bb39ee18acd6"), 100, 0.01, 20], [I18n.t("text.7cf603e56ff8"), 100, 0.01, 30], [I18n.t("text.2cba9409833c"), 1, 0, 239]],
       hint: I18n.t("text.9bb42763fbad") },
     2: { name: "D-CP", fields: [[I18n.t("text.c9d1515a58db"), 1, 1, 2000], [I18n.t("text.7cf603e56ff8"), 100, 0.01, 30], [I18n.t("text.2cba9409833c"), 1, 0, 239]],
       hint: I18n.t("text.e97e2f42401b") },
-    3: { name: "C-CV", fields: [[I18n.t("text.bb39ee18acd6"), 100, 0.01, 40], [I18n.t("text.276ed7b6e344"), 100, 0.01, 30], [I18n.t("text.b2c884412725"), 100, 0.01, 40]],
+    3: { name: "C-CV", fields: [[I18n.t("text.bb39ee18acd6"), 100, 0.01, 20], [I18n.t("text.276ed7b6e344"), 100, 0.01, 30], [I18n.t("text.b2c884412725"), 100, 0.01, 20]],
       hint: I18n.t("text.db5db847724b") },
     4: { name: I18n.t("text.233631694afc"), fields: [null, null, ["Dauer (min)", 1, 1, 239]],
       hint: I18n.t("text.380be0c6ecf0") },
@@ -169,6 +169,7 @@
   async function loadSettings() {
     try {
       const settings = JSON.parse(await api("/api/tester/settings"));
+      applyCurrentLimit(settings.maxCurrent);
       plan = { name: settings.plan?.name || "", steps: settings.plan?.steps || [] };
       selected = -1;
       renderSteps();
@@ -190,8 +191,16 @@
     }
   }
 
+  /* The selected tester model (EBC-A20/A40L) sets the current limit of D-CC and C-CV steps. */
+  function applyCurrentLimit(value) {
+    if (!Number.isFinite(value) || value === MODES[1].fields[0][3]) return;
+    for (const field of [MODES[1].fields[0], MODES[3].fields[0], MODES[3].fields[2]]) field[3] = value;
+    applyMode();
+  }
+
   function render(status) {
     latestStatus = status;
+    applyCurrentLimit(status.maxCurrent);
     const run = status.plan || {};
     const link = status.link || {};
     const [label, color] = STATES[run.state] || STATES.idle;

@@ -6,6 +6,7 @@
 #include "test_control_internal.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <atomic>
 #include <mutex>
@@ -189,6 +190,10 @@ void ensure_settings_loaded()
         if (nvs_get_u8(handle, "auto", &auto_connect) == ESP_OK) {
             settings.auto_connect = auto_connect != 0;
         }
+        uint8_t model = 0;
+        if (nvs_get_u8(handle, "model", &model) == ESP_OK && model <= static_cast<uint8_t>(TesterModel::A40L)) {
+            settings.model = static_cast<TesterModel>(model);
+        }
         const std::string battery = read_nvs_string(handle, "battery");
         if (!battery.empty()) {
             battery_from_json(battery.c_str(), settings.battery);
@@ -213,7 +218,8 @@ void ensure_settings_loaded()
         save_run_state();
     }
     ebc_link_set_auto_connect(settings.auto_connect);
-    ESP_LOGI(TAG, "Tester settings loaded (plan '%s', %u steps, auto-connect %s)", settings.plan.name.c_str(),
+    ESP_LOGI(TAG, "Tester settings loaded (%s, plan '%s', %u steps, auto-connect %s)",
+             tester_model_name(settings.model), settings.plan.name.c_str(),
              static_cast<unsigned>(settings.plan.steps.size()), settings.auto_connect ? "on" : "off");
 }
 
@@ -509,6 +515,36 @@ bool in_range(float value, float minimum, float maximum)
     return std::isfinite(value) && value >= minimum && value <= maximum;
 }
 
+int current_limit(TesterModel model)
+{
+    return static_cast<int>(max_current_a(model));
+}
+
+/* Model-specific current check on top of test_store::validate_plan, which only enforces the
+ * absolute range of the plan format. */
+std::string check_plan_current(const std::vector<test_store::PlanStep> &steps, TesterModel model)
+{
+    const int limit = current_limit(model);
+    const int limit_hundredths = limit * 100;
+    char text[128];
+    for (size_t index = 0; index < steps.size(); ++index) {
+        const test_store::PlanStep &step = steps[index];
+        if (step.mode == 1 && step.p1 > limit_hundredths) {
+            std::snprintf(text, sizeof(text),
+                          "Step %u: Current 0.01–%d A, cutoff voltage 0.01–30 V, time 0–239 min.",
+                          static_cast<unsigned>(index + 1), limit);
+            return text;
+        }
+        if (step.mode == 3 && (step.p1 > limit_hundredths || step.p3 > limit_hundredths)) {
+            std::snprintf(text, sizeof(text),
+                          "Step %u: Current 0.01–%d A, charge voltage 0.01–30 V, cutoff current 0.01–%d A.",
+                          static_cast<unsigned>(index + 1), limit, limit);
+            return text;
+        }
+    }
+    return "";
+}
+
 } // namespace
 
 const char *run_state_name(RunState state)
@@ -525,6 +561,32 @@ const char *run_state_name(RunState state)
     default:
         return "idle";
     }
+}
+
+const char *tester_model_name(TesterModel model)
+{
+    return model == TesterModel::A40L ? "A40L" : "A20";
+}
+
+bool tester_model_from_name(const char *name, TesterModel &model)
+{
+    if (name == nullptr) {
+        return false;
+    }
+    if (std::strcmp(name, "A20") == 0) {
+        model = TesterModel::A20;
+        return true;
+    }
+    if (std::strcmp(name, "A40L") == 0) {
+        model = TesterModel::A40L;
+        return true;
+    }
+    return false;
+}
+
+float max_current_a(TesterModel model)
+{
+    return model == TesterModel::A40L ? 40.0f : 20.0f;
 }
 
 Settings get_settings()
@@ -561,6 +623,14 @@ std::string start_resistance(const resistance_test::Config &config)
     ensure_settings_loaded();
     if (controls_busy() || capturing || test_store::recorder_status().active)
         return "Another operation or recording is still active.";
+    const double limit = max_current_a(settings.model);
+    if (config.pulseCurrent > limit ||
+        (config.automatic && std::fmax(config.chargeCurrent, config.prepCurrent) > limit)) {
+        char text[96];
+        std::snprintf(text, sizeof(text), "Current exceeds the %s limit of %d A.",
+                      tester_model_name(settings.model), current_limit(settings.model));
+        return text;
+    }
     return resistance_test::start(config, settings.battery);
 }
 
@@ -577,6 +647,19 @@ std::string set_auto_connect(bool enabled)
     settings.auto_connect = enabled;
     ebc_link_set_auto_connect(enabled);
     save_setting([&](nvs_handle_t handle) { return nvs_set_u8(handle, "auto", enabled ? 1 : 0); });
+    return "";
+}
+
+std::string set_tester_model(TesterModel model)
+{
+    std::lock_guard<std::recursive_mutex> guard(state_mutex);
+    ensure_settings_loaded();
+    if (controls_busy() || capturing || test_store::recorder_status().active) {
+        return "The tester model cannot be changed during an operation or recording.";
+    }
+    settings.model = model;
+    save_setting([&](nvs_handle_t handle) { return nvs_set_u8(handle, "model", static_cast<uint8_t>(model)); });
+    ESP_LOGI(TAG, "Tester model set to %s (max. %d A)", tester_model_name(model), current_limit(model));
     return "";
 }
 
@@ -616,12 +699,16 @@ std::string stop()
 
 std::string start_charge(float current_a, float voltage_v, float cutoff_a)
 {
-    if (!in_range(current_a, 0.01f, 40.0f) || !in_range(voltage_v, 0.01f, 30.0f) ||
-        !in_range(cutoff_a, 0.01f, 40.0f)) {
-        return "Current 0.01–40 A, charge voltage 0.01–30 V, cutoff current 0.01–40 A.";
-    }
     std::lock_guard<std::recursive_mutex> guard(state_mutex);
     ensure_settings_loaded();
+    const float limit = max_current_a(settings.model);
+    if (!in_range(current_a, 0.01f, limit) || !in_range(voltage_v, 0.01f, 30.0f) ||
+        !in_range(cutoff_a, 0.01f, limit)) {
+        char text[96];
+        std::snprintf(text, sizeof(text), "Current 0.01–%d A, charge voltage 0.01–30 V, cutoff current 0.01–%d A.",
+                      current_limit(settings.model), current_limit(settings.model));
+        return text;
+    }
     std::string error = check_manual_allowed();
     if (error.empty()) {
         error = queue(EBC_CMD_CHARGE_CV, hundredths(current_a), hundredths(voltage_v), hundredths(cutoff_a));
@@ -638,11 +725,15 @@ std::string start_charge(float current_a, float voltage_v, float cutoff_a)
 
 std::string start_discharge_cc(float current_a, float cutoff_v, uint16_t minutes)
 {
-    if (!in_range(current_a, 0.01f, 40.0f) || !in_range(cutoff_v, 0.01f, 30.0f) || minutes > 239) {
-        return "Current 0.01–40 A, cutoff voltage 0.01–30 V, time 0–239 min.";
-    }
     std::lock_guard<std::recursive_mutex> guard(state_mutex);
     ensure_settings_loaded();
+    if (!in_range(current_a, 0.01f, max_current_a(settings.model)) || !in_range(cutoff_v, 0.01f, 30.0f) ||
+        minutes > 239) {
+        char text[80];
+        std::snprintf(text, sizeof(text), "Current 0.01–%d A, cutoff voltage 0.01–30 V, time 0–239 min.",
+                      current_limit(settings.model));
+        return text;
+    }
     std::string error = check_manual_allowed();
     if (error.empty()) {
         error = queue(EBC_CMD_DISCHARGE_CC, hundredths(current_a), hundredths(cutoff_v), minutes);
@@ -701,6 +792,10 @@ std::string set_plan(const test_store::Plan &plan)
     }
     std::lock_guard<std::recursive_mutex> guard(state_mutex);
     ensure_settings_loaded();
+    const std::string current_error = check_plan_current(plan.steps, settings.model);
+    if (!current_error.empty()) {
+        return current_error;
+    }
     if (plan_status.state == RunState::Running) {
         return "The plan cannot be changed while it is running.";
     }
@@ -726,7 +821,10 @@ std::string start_plan()
     if (controls_busy()) {
         return "An operation is active or a command is pending. Please stop it first.";
     }
-    const std::string error = test_store::validate_plan(settings.plan.steps);
+    std::string error = test_store::validate_plan(settings.plan.steps);
+    if (error.empty()) {
+        error = check_plan_current(settings.plan.steps, settings.model);
+    }
     if (!error.empty()) {
         return error;
     }
@@ -807,6 +905,13 @@ extern "C" void test_control_set_persisted_sample_callback(
     test_control_persisted_sample_callback_t callback)
 {
     test_control::persisted_sample_callback.store(callback);
+}
+
+extern "C" bool test_control_is_busy(void)
+{
+    using namespace test_control;
+    std::lock_guard<std::recursive_mutex> guard(state_mutex);
+    return controls_busy() || capturing || test_store::recorder_status().active;
 }
 
 extern "C" void test_control_handle_mqtt_command(const char *command, const char *value)
