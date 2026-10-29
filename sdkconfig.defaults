@@ -23,3 +23,4 @@ CONFIG_OTA_SUITE_WEB_TAB_ORDER="dashboard,battery,manual,auto,resistance,overvie
 CONFIG_OTA_SUITE_WEB_PRIMARY_TABS="dashboard,battery,manual,auto,resistance"
 CONFIG_OTA_SUITE_WEB_ACTIVITY_URL="/api/tester/status"
 CONFIG_OTA_SUITE_WEB_SD_LANGUAGES=y
+CONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD=y

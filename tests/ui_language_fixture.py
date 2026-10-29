@@ -54,10 +54,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/i18n.js":
             body = ("window.EBCLanguages={en:" + (WEB / "en.json").read_text(encoding="utf-8")
                     + ",de:" + (WEB / "de.json").read_text(encoding="utf-8")
-                    + ",sdEnabled:true};\n" + (WEB / "i18n.js").read_text(encoding="utf-8"))
+                    + (",loginPage:true,sdEnabled:false};\n" if url.query == "login=1" else ",sdEnabled:true};\n")
+                    + (WEB / "i18n.js").read_text(encoding="utf-8"))
             return self.respond(body, "application/javascript; charset=utf-8")
         base_assets = {"/": "index.html", "/app.js": "app.js", "/app.css": "app.css",
-                       "/bootstrap.min.css": "bootstrap.min.css"}
+                       "/bootstrap.min.css": "bootstrap.min.css", "/login": "login.html", "/login.js": "login.js"}
         if path in base_assets:
             file = WEB / base_assets[path]
             mime = {".html": "text/html", ".js": "application/javascript", ".css": "text/css"}[file.suffix]
@@ -77,6 +78,7 @@ class Handler(BaseHTTPRequestHandler):
                          placement="settings" if id in ("mariadb", "languages") else "tab")
                     for id, item in EXTENSIONS.items()]
             return self.respond(dict(project="EBCTester", version="fixture", csrfToken="test",
+                                     sessionDays=1, settingsPasswordRequired=True,
                                      connected=True, ssid="User WLAN", ip="127.0.0.1", apSsid="Fixture",
                                      timeReady=True, networkMessage="Wi-Fi connected.", updateMessage="No newer firmware available.",
                                      updateAvailable=False, updateStale=False, updateNotes="", otaMessage="Ready. OTA starts only after clicking Start update.",

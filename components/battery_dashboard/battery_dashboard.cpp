@@ -403,68 +403,6 @@ esp_err_t measurement_operation(sqlite3 *database, void *context)
     return ok && stream.send_error == ESP_OK ? ESP_OK : ESP_FAIL;
 }
 
-esp_err_t delete_operation(sqlite3 *database, void *context)
-{
-    const char *run_id = static_cast<const char *>(context);
-    int result = sqlite3_exec(database, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
-    sqlite3_stmt *statement = NULL;
-    sqlite3_int64 battery_id = 0;
-    bool found = false;
-    if (result == SQLITE_OK) {
-        result = sqlite3_prepare_v2(database,
-                                    "SELECT battery_id FROM ebc_test_run WHERE run_id = ?1;", -1,
-                                    &statement, NULL);
-    }
-    if (result == SQLITE_OK) {
-        sqlite3_bind_text(statement, 1, run_id, -1, SQLITE_STATIC);
-        result = sqlite3_step(statement);
-        found = result == SQLITE_ROW;
-        if (found) {
-            battery_id = sqlite3_column_int64(statement, 0);
-        }
-        result = result == SQLITE_ROW || result == SQLITE_DONE ? SQLITE_OK : result;
-    }
-    sqlite3_finalize(statement);
-    statement = NULL;
-    /* Explicit child deletes keep the cascade cheap and independent of FK settings. */
-    static const char *const deletes[] = {
-        "DELETE FROM ebc_measurement WHERE run_id = ?1;",
-        "DELETE FROM ebc_run_segment WHERE run_id = ?1;",
-        "DELETE FROM ebc_test_run WHERE run_id = ?1;",
-    };
-    for (size_t i = 0; found && result == SQLITE_OK && i < sizeof(deletes) / sizeof(deletes[0]);
-         ++i) {
-        result = sqlite3_prepare_v2(database, deletes[i], -1, &statement, NULL);
-        if (result == SQLITE_OK) {
-            sqlite3_bind_text(statement, 1, run_id, -1, SQLITE_STATIC);
-            result = sqlite3_step(statement) == SQLITE_DONE ? SQLITE_OK : sqlite3_errcode(database);
-        }
-        sqlite3_finalize(statement);
-        statement = NULL;
-    }
-    if (found && result == SQLITE_OK && battery_id != 0) {
-        result = sqlite3_prepare_v2(
-            database,
-            "DELETE FROM ebc_battery WHERE battery_id = ?1 AND manufacturer = 'Demo' AND NOT "
-            "EXISTS (SELECT 1 FROM ebc_test_run WHERE battery_id = ?1);",
-            -1, &statement, NULL);
-        if (result == SQLITE_OK) {
-            sqlite3_bind_int64(statement, 1, battery_id);
-            result = sqlite3_step(statement) == SQLITE_DONE ? SQLITE_OK : sqlite3_errcode(database);
-        }
-        sqlite3_finalize(statement);
-    }
-    if (result == SQLITE_OK) {
-        result = sqlite3_exec(database, found ? "COMMIT;" : "ROLLBACK;", NULL, NULL, NULL);
-    }
-    if (result != SQLITE_OK) {
-        esp_err_t err = sqlite_to_esp(database, result, "Run deletion");
-        sqlite3_exec(database, "ROLLBACK;", NULL, NULL, NULL);
-        return err;
-    }
-    return found ? ESP_OK : ESP_ERR_NOT_FOUND;
-}
-
 esp_err_t chart_library_handler(httpd_req_t *req)
 {
     if (!web_interface_authorize_request(req, false)) {
@@ -574,46 +512,6 @@ esp_err_t measurements_handler(httpd_req_t *req)
     return err == ESP_OK ? ESP_OK : send_database_error(req, err);
 }
 
-esp_err_t demo_handler(httpd_req_t *req)
-{
-    if (!web_interface_authorize_request(req, true)) {
-        return ESP_OK;
-    }
-    if (req->content_len != 0) {
-        return send_error(req, "400 Bad Request", "Request must have an empty body.");
-    }
-    char run_id[RUN_ID_MAX];
-    esp_err_t err = battery_database_create_demo_run(run_id, sizeof(run_id));
-    if (err != ESP_OK) {
-        return send_database_error(req, err);
-    }
-    cJSON *root = cJSON_CreateObject();
-    if (root == NULL || cJSON_AddStringToObject(root, "runId", run_id) == NULL) {
-        cJSON_Delete(root);
-        return send_database_error(req, ESP_ERR_NO_MEM);
-    }
-    return send_json(req, root, "201 Created");
-}
-
-esp_err_t delete_handler(httpd_req_t *req)
-{
-    if (!web_interface_authorize_request(req, true)) {
-        return ESP_OK;
-    }
-    char run_id[RUN_ID_MAX];
-    if (!read_run_id(req, run_id)) {
-        return ESP_OK;
-    }
-    esp_err_t err = battery_database_execute(delete_operation, run_id, DATABASE_TIMEOUT);
-    if (err != ESP_OK) {
-        return send_database_error(req, err);
-    }
-    ESP_LOGI(TAG, "Deleted test run %s", run_id);
-    common_headers(req);
-    httpd_resp_set_type(req, "text/plain; charset=utf-8");
-    return httpd_resp_sendstr(req, "Test run deleted.");
-}
-
 const httpd_uri_t routes[] = {
     {.uri = "/ui/dashboard/chart.js", .method = HTTP_GET, .handler = chart_library_handler, .user_ctx = NULL},
     {.uri = "/ui/dashboard/brand-logo.png", .method = HTTP_GET, .handler = brand_logo_handler, .user_ctx = NULL},
@@ -621,8 +519,6 @@ const httpd_uri_t routes[] = {
     {.uri = "/api/db/runs", .method = HTTP_GET, .handler = runs_handler, .user_ctx = NULL},
     {.uri = "/api/db/run", .method = HTTP_GET, .handler = run_handler, .user_ctx = NULL},
     {.uri = "/api/db/measurements", .method = HTTP_GET, .handler = measurements_handler, .user_ctx = NULL},
-    {.uri = "/api/db/demo", .method = HTTP_POST, .handler = demo_handler, .user_ctx = NULL},
-    {.uri = "/api/db/run/delete", .method = HTTP_POST, .handler = delete_handler, .user_ctx = NULL},
 };
 
 web_interface_extension_t extension = {};

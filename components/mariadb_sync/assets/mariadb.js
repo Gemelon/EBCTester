@@ -87,11 +87,19 @@
     showMessage("");
     try {
       const options = { method: "POST" };
+      if (url === "/api/mariadb/settings") {
+        options.headers = await WebAuth.settingsHeaders();
+        if (options.headers === null) return;
+      }
       if (body) {
-        options.headers = { "Content-Type": "application/json" };
+        options.headers = { ...options.headers, "Content-Type": "application/json" };
         options.body = JSON.stringify(body);
       }
       showMessage(await api(url, options), "success");
+      if (url === "/api/mariadb/settings") {
+        formLoaded = false;
+        $("mdb-password").value = "";
+      }
     } catch (error) {
       showMessage(error.message, "danger");
     }
@@ -100,7 +108,6 @@
 
   $("mdb-form").addEventListener("submit", (event) => {
     event.preventDefault();
-    formLoaded = false;
     void post("/api/mariadb/settings", {
       enabled: $("mdb-enabled").checked,
       host: $("mdb-host").value.trim(),

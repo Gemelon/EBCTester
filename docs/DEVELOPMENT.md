@@ -225,17 +225,21 @@ None of these tests flash hardware or send tester commands.
 | Tester model limits | see `docs/TECHNICAL_REFERENCE.md` (g++ command for `tests/tester_model_host`) | gcc-c++ |
 | DCIR host test | see `docs/TECHNICAL_REFERENCE.md` | gcc-c++ |
 | Web UI mock and browser checks | `python3 tests/ui_mock/ui_mock_test.py` | Python; Chrome/Chromium for the browser part |
-| Upstream JavaScript tests | `node --test tests/web_interface.test.js tests/publication.test.js tests/ui_languages_test.js` | Node.js |
+| Login sessions (upstream) | `CC=gcc python3 tests/web_auth_test.py` | gcc |
+| MQTT discovery (upstream) | `python3 tests/mqtt_discovery_test.py` | MSVC `cl` (Windows) |
+| Upstream JavaScript tests | `node --test tests/web_interface.test.js tests/web_auth_ui.test.js tests/dashboard.test.js tests/publication.test.js tests/ui_languages_test.js` | Node.js |
 
 Interactive mock of the complete web UI with a simulated device (all tabs
-and settings cards, demo measurements, English/German):
+and settings cards, a stored example run, English/German):
 
 ```text
 python3 tests/ui_mock/mock_server.py --model A40L --tab settings
 ```
 
-Then open http://127.0.0.1:8080. The mock mirrors the firmware's messages and
-limits; keep `tests/ui_mock/mock_server.py` in sync when changing the API.
+Then open http://127.0.0.1:8080 and log in as `admin` / `mock` (the same
+password confirms settings; `--no-login` and `--no-settings-password` skip
+both). The mock mirrors the firmware's login sessions, messages and limits;
+keep `tests/ui_mock/mock_server.py` in sync when changing the API.
 
 Still to be verified on hardware: SD mounting in SPI and SDMMC mode, the bus
 switch with restart, NVS persistence of tester model and bus mode, and

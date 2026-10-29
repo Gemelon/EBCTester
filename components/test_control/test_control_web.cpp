@@ -606,7 +606,7 @@ esp_err_t resistance_history_handler(httpd_req_t *req)
 
 esp_err_t tester_model_handler(httpd_req_t *req)
 {
-    if (!web_interface_authorize_request(req, true)) {
+    if (!web_interface_authorize_settings_request(req)) {
         return ESP_OK;
     }
     cJSON *root = read_json(req);

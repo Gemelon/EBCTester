@@ -144,7 +144,7 @@ bool printable(const std::string &value)
 
 esp_err_t settings_handler(httpd_req_t *req)
 {
-    if (!web_interface_authorize_request(req, true)) {
+    if (!web_interface_authorize_settings_request(req)) {
         return ESP_OK;
     }
     std::string body;

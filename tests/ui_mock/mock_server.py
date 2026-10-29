@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Serves the real web UI assets with a simulated device API for testing without hardware.
 
-Run `python3 tests/ui_mock/mock_server.py` and open http://127.0.0.1:8080. The API keeps its
+Run `python3 tests/ui_mock/mock_server.py` and open http://127.0.0.1:8080 (login: admin / mock;
+the same password confirms settings). The API keeps its
 state in memory; nothing is sent to a device. The tester limits mirror
 `components/test_control/tester_model.cpp`; keep both in sync.
 """
@@ -26,6 +27,13 @@ DASHBOARD = COMPONENTS / "battery_dashboard" / "assets"
 SD_ASSETS = SD_MANAGER / "components" / "sd_card_manager" / "assets"
 LANGUAGES = ROOT / "sd_card" / "languages"
 CSRF_TOKEN = "mock-csrf-token"
+SESSION_COOKIE = "ota_session"
+MOCK_PASSWORD = "mock"
+# POST endpoints that use web_interface_authorize_settings_request() in the firmware.
+SETTINGS_ENDPOINTS = {"/api/tester/model", "/api/sd/bus", "/api/debug/settings", "/api/mqtt/settings",
+                      "/api/mariadb/settings", "/api/auth/settings", "/api/network"}
+# Served without a login session, like the firmware's login page and its assets.
+PUBLIC_PATHS = {"/login", "/login.js", "/i18n.js", "/app.css", "/bootstrap.min.css", "/favicon.ico"}
 
 # Same extensions, labels, placements and registration order as the firmware (main.c).
 # id, label, placement, html, script
@@ -122,6 +130,10 @@ def initial_state():
                     "intervalMinutes": 60, "passwordSet": False},
         "debug": True,
         "logSeq": 0,
+        "loginRequired": True,
+        "settingsPasswordRequired": True,
+        "sessionDays": 1,
+        "sessions": set(),
         "requests": [],
     }
 
@@ -191,6 +203,18 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         with self.device.lock:
             self.device.state["requests"].append(("GET", url.path))
+        if url.path not in PUBLIC_PATHS and not self.logged_in():
+            if url.path == "/":
+                self.send_response(303)
+                self.send_header("Location", "/login")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return None
+            return self.send(401, "Login required.")
+        if url.path == "/login":
+            return self.send_file(SHARED / "login.html", "text/html; charset=utf-8")
+        if url.path == "/login.js":
+            return self.send_file(SHARED / "login.js", "text/javascript")
         if url.path == "/":
             html = (SHARED / "index.html").read_text(encoding="utf-8")
             return self.send(200, html.replace("<title>Firmware</title>", "<title>EBCTester (mock)</title>"),
@@ -209,7 +233,8 @@ class Handler(BaseHTTPRequestHandler):
             en = (SHARED / "en.json").read_text(encoding="utf-8")
             de = (SHARED / "de.json").read_text(encoding="utf-8")
             script = (SHARED / "i18n.js").read_text(encoding="utf-8")
-            return self.send(200, f"window.EBCLanguages={{en:{en},de:{de},sdEnabled:true}};\n{script}",
+            flags = "loginPage:true,sdEnabled:false" if "login=1" in url.query else "sdEnabled:true"
+            return self.send(200, f"window.EBCLanguages={{en:{en},de:{de},{flags}}};\n{script}",
                              "text/javascript")
         for ext_id, _, _, html, script in EXTENSIONS:
             if url.path == f"/ui/{ext_id}/content":
@@ -256,6 +281,7 @@ class Handler(BaseHTTPRequestHandler):
             "ssid": "mock", "apSsid": "BatteryTester-MOCK", "ip": "127.0.0.1", "networkMessage": "Wi-Fi connected.",
             "connected": True, "configuring": False, "timeReady": True, "otaConfigured": False,
             "otaInsecureHttp": False, "bootConfirmed": True, "otaReady": False, "otaBusy": False,
+            "sessionDays": state["sessionDays"], "settingsPasswordRequired": state["settingsPasswordRequired"],
             "otaState": "idle", "otaMessage": "", "bytesRead": 0, "totalBytes": 0, "updateConfigured": False,
             "updateChecking": False, "updateAvailable": False, "updateStale": False, "availableVersion": "",
             "updateNotes": "", "updateMessage": "", "updateLastSuccess": 0, "updateLastSuccessUptime": 0,
@@ -352,14 +378,60 @@ class Handler(BaseHTTPRequestHandler):
             return {}
         return json.loads((LANGUAGES / "fil.json").read_text(encoding="utf-8"))
 
+    # ---------- login sessions ----------
+
+    def session_token(self):
+        for part in self.headers.get("Cookie", "").split(";"):
+            name, _, value = part.strip().partition("=")
+            if name == SESSION_COOKIE:
+                return value
+        return ""
+
+    def logged_in(self):
+        state = self.device.state
+        return not state["loginRequired"] or self.session_token() in state["sessions"]
+
+    def post_login(self, body):
+        if self.headers.get("X-Web-Login") != "1":
+            return self.send(403, "Invalid login request.")
+        if body.get("username") != "admin" or body.get("password") != MOCK_PASSWORD:
+            return self.send(403, "Incorrect username or password. Wait a moment and try again.")
+        token = os.urandom(32).hex()
+        with self.device.lock:
+            self.device.state["sessions"].add(token)
+        data = b"Logged in."
+        self.send_response(200)
+        self.send_header("Set-Cookie", f"{SESSION_COOKIE}={token}; Path=/; Max-Age="
+                                       f"{self.device.state['sessionDays'] * 86400}; HttpOnly; SameSite=Lax")
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+        return None
+
+    def post_logout(self, body):
+        self.device.state["sessions"].discard(self.session_token())
+        data = b"Logged out."
+        self.send_response(200)
+        self.send_header("Set-Cookie", f"{SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax")
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+        return None
+
+    def post_auth_settings(self, body):
+        if body.get("sessionDays") not in (1, 7):
+            return self.send(400, "Select a daily or weekly login.")
+        self.device.state["sessionDays"] = body["sessionDays"]
+        return self.send(200, "Login duration saved. It applies to new logins.")
+
     # ---------- POST ----------
 
     def do_POST(self):
         url = urlparse(self.path)
         with self.device.lock:
             self.device.state["requests"].append(("POST", url.path))
-        if self.headers.get("X-CSRF-Token") != CSRF_TOKEN:
-            return self.send(403, "Invalid session token. Reload the page.")
         try:
             length = int(self.headers.get("Content-Length", "0"))
             body = json.loads(self.rfile.read(length) or b"{}")
@@ -367,7 +439,20 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(400, "JSON request missing, too large or invalid.")
         if not isinstance(body, dict):
             return self.send(400, "JSON request missing, too large or invalid.")
+        if url.path == "/api/auth/login":
+            return self.post_login(body)
+        if not self.logged_in():
+            return self.send(401, "Login required.")
+        if self.headers.get("X-CSRF-Token") != CSRF_TOKEN:
+            return self.send(403, "Invalid session token. Reload the page.")
+        if (url.path in SETTINGS_ENDPOINTS and self.device.state["settingsPasswordRequired"]
+                and self.headers.get("X-Admin-Password") != MOCK_PASSWORD):
+            return self.send(403, "Incorrect admin password. Settings were not saved.")
         routes = {
+            "/api/auth/logout": self.post_logout,
+            "/api/auth/settings": self.post_auth_settings,
+            "/api/network": lambda body: self.send(
+                200, "Wi-Fi configuration accepted; check save and connection status."),
             "/api/tester/model": self.post_model,
             "/api/tester/command": self.post_command,
             "/api/tester/plan": self.post_plan,
@@ -383,8 +468,6 @@ class Handler(BaseHTTPRequestHandler):
             "/api/mariadb/full-sync": lambda body: self.send(200, "Full transfer started."),
             "/api/debug/settings": self.post_debug_settings,
             "/api/debug/clear": lambda body: self.send_json({"nextSeq": self.device.state["logSeq"] + 1}),
-            "/api/db/demo": self.post_demo,
-            "/api/db/run/delete": lambda body: self.post_delete_run(parse_qs(url.query).get("id", [""])[0]),
         }
         if url.path not in routes:
             return self.send(404, "Not found.")
@@ -519,17 +602,6 @@ class Handler(BaseHTTPRequestHandler):
         return self.send(200, "Debug log enabled; the Debug tab is now available." if enabled
                          else "Debug log disabled and buffer released.")
 
-    def post_demo(self, body):
-        runs = self.device.state["runs"]
-        run_id = f"demo-{len(runs) + 1}"
-        runs[run_id] = demo_run(run_id, 1793000000000 + len(runs) * 86400000)
-        return self.send_json({"runId": run_id})
-
-    def post_delete_run(self, run_id):
-        if self.device.state["runs"].pop(run_id, None) is None:
-            return self.send(404, "Test run not found.")
-        return self.send(200, "Test run deleted.")
-
 
 def make_server(host="127.0.0.1", port=8080, device=None, quiet=True):
     handler = type("BoundHandler", (Handler,), {"device": device or MockDevice(), "quiet": quiet})
@@ -541,12 +613,16 @@ def main():
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--model", choices=sorted(MAX_CURRENT), default="A20")
     parser.add_argument("--tab", default="dashboard", help="tab opened first, e.g. settings, manual, auto")
+    parser.add_argument("--no-login", action="store_true", help="skip the login page")
+    parser.add_argument("--no-settings-password", action="store_true",
+                        help="do not ask for the admin password when saving settings")
     args = parser.parse_args()
     device = MockDevice()
     order = [args.tab] + [tab for tab in TAB_ORDER.split(",") if tab != args.tab]
-    device.reset(model=args.model, tabOrder=",".join(order))
+    device.reset(model=args.model, tabOrder=",".join(order), loginRequired=not args.no_login,
+                 settingsPasswordRequired=not args.no_settings_password)
     server = make_server(port=args.port, device=device, quiet=False)
-    print(f"Mock device UI: http://127.0.0.1:{args.port}  (Ctrl+C to stop)")
+    print(f"Mock device UI: http://127.0.0.1:{args.port}  login: admin / {MOCK_PASSWORD}  (Ctrl+C to stop)")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

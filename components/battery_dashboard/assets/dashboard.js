@@ -92,17 +92,8 @@
     box.textContent = text || "";
   }
 
-  async function csrfToken() {
-    const response = await fetch("/api/status", { cache: "no-store", credentials: "same-origin" });
-    if (!response.ok) throw new Error(`Status HTTP ${response.status}`);
-    const status = await response.json();
-    return status.csrfToken || "";
-  }
-
-  async function api(url, options = {}) {
-    const init = { cache: "no-store", credentials: "same-origin", ...options };
-    if (init.method === "POST") init.headers = { ...(init.headers || {}), "X-CSRF-Token": await csrfToken() };
-    const response = await fetch(url, init);
+  async function api(url) {
+    const response = await fetch(url, { cache: "no-store", credentials: "same-origin" });
     const text = await response.text();
     let body = null;
     try { body = text ? JSON.parse(text) : null; } catch (error) { body = null; }
@@ -379,7 +370,6 @@
       renderSummary(details);
       renderSegments(details.segments || []);
       renderCharts(Chart, details, series);
-      $("dash-delete").disabled = false;
       showMessage("");
       scheduleRefresh(details);
     } catch (error) {
@@ -394,45 +384,12 @@
     try {
       await loadCatalog(preferredRun || $("dash-run").value);
       if (!catalog.runs.length) {
-        showMessage(I18n.t("text.d8863186264d"), "secondary");
+        showMessage(I18n.t("dashboard.noRuns"), "secondary");
       }
       return true;
     } catch (error) {
       showMessage(I18n.f("text.9ee28309cc48", {p0: error.message}), "danger");
       return false;
-    }
-  }
-
-  async function createDemo() {
-    const button = $("dash-demo");
-    button.disabled = true;
-    showMessage(I18n.t("text.e377eb163585"), "info");
-    try {
-      const result = await api("/api/db/demo", { method: "POST" });
-      await loadCatalog(result.runId);
-      showMessage(I18n.f("text.bcaf61205baa", {p0: result.runId}), "success");
-      await loadRun(result.runId);
-    } catch (error) {
-      showMessage(I18n.f("text.a395af5a8375", {p0: error.message}), "danger");
-    } finally {
-      button.disabled = false;
-    }
-  }
-
-  async function deleteRun() {
-    const runId = currentRunId || $("dash-run").value;
-    if (!runId || !window.confirm(I18n.f("text.993d29dbebcf", {p0: runId}))) return;
-    try {
-      await api(`/api/db/run/delete?id=${encodeURIComponent(runId)}`, { method: "POST" });
-      clearTimeout(refreshTimer);
-      destroyCharts();
-      currentRunId = "";
-      $("dash-delete").disabled = true;
-      renderSegments([]);
-      await loadCatalog();
-      showMessage(I18n.f("text.117cc6b25f4e", {p0: runId}), "success");
-    } catch (error) {
-      showMessage(I18n.f("text.0dc0fac3cd75", {p0: error.message}), "danger");
     }
   }
 
@@ -442,8 +399,6 @@
     $("dash-run").addEventListener("change", () => { $("dash-load").disabled = !$("dash-run").value; });
     $("dash-load").addEventListener("click", () => void loadRun($("dash-run").value));
     $("dash-refresh").addEventListener("click", () => void refreshCatalog());
-    $("dash-demo").addEventListener("click", () => void createDemo());
-    $("dash-delete").addEventListener("click", () => void deleteRun());
     if (await refreshCatalog() && catalog.runs.length) await loadRun($("dash-run").value);
   }
 

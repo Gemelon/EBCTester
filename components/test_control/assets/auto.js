@@ -34,6 +34,17 @@
     $("auto-start").disabled = submitting || !latestStatus || latestStatus.controlsBusy ||
       link?.active || link?.pending || !link?.connected || !link?.hasFrame ||
       latestStatus.plan?.state === "running" || latestStatus.plan?.state === "interrupted";
+    let reason = "";
+    if (latestStatus && !submitting) {
+      if (!link?.connected) reason = "text.2f8a6d41e0c7";
+      else if (!link.hasFrame) reason = "text.5b9d03c7a1e8";
+      else if (link.pending) reason = "text.91e4c2f6a3b0";
+      else if (link.active) reason = "text.d03a7b58f2c1";
+      else if (latestStatus.plan?.state === "running" || latestStatus.plan?.state === "interrupted") reason = "text.4e6f1c92b8a5";
+      else if (latestStatus.controlsBusy) reason = "text.c5b1f84a90d2";
+    }
+    $("auto-start-hint").textContent = reason ? I18n.t(reason) : "";
+    $("auto-start-hint").classList.toggle("d-none", !reason);
   }
 
   function showMessage(text, kind = "info") {

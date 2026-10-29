@@ -210,6 +210,24 @@ retries the saved settings and the page reports connection status. Broker
 traffic is unencrypted TCP by default; restrict the broker account's topic
 permissions.
 
+Device discovery publishes a retained message to
+`homeassistant/device/ebctester_<wifi-station-mac>/config` with the required
+`dev` (device) and `o` (origin) mappings. Home Assistant rejects messages
+missing the origin or containing an unsupported root-level `name`; the
+device name is provided inside `dev`. To inspect discovery in Home Assistant,
+configure the MQTT broker entry under **Settings → Devices & services → MQTT**,
+listen to `homeassistant/#`, then select **Test connection** on the tester.
+Check Home Assistant's system logs if discovery arrives but no device appears.
+
+Recorded voltage, current and capacity are handed off without waiting for
+network I/O and published by the MQTT task as non-retained QoS 0 messages on
+`<topic_prefix>/state`. Disconnects discard pending measurements; no MQTT
+outbox is used for live samples. A busy handoff skips a sample instead of
+blocking the database writer. Without newly recorded samples, measurement
+entities become unavailable after three times the configured recording
+interval. Mode, plan status, connection, battery and result entities are
+currently discovered but do not yet receive state updates.
+
 ## SD card
 
 The SD-card component defaults to 4-bit SDMMC with CLK=GPIO14, CMD=GPIO15,
@@ -225,8 +243,9 @@ their pin assignments can be configured in the same menu. Both clocks default
 to 10 MHz. Ensure the chosen pins are available on the board and use suitable
 external pull-ups on the SD signal lines (3.3 V only). `GET /api/sd/status`
 reports `busMode`, `configuredBusMode` and `restartRequired`;
-`POST /api/sd/bus` (`{"mode":"spi"|"sdmmc","restart":bool}`, CSRF required)
-stores the mode and returns 202 when a restart was scheduled.
+`POST /api/sd/bus` (`{"mode":"spi"|"sdmmc","restart":bool}`, settings
+authorization including the optional admin password) stores the mode and
+returns 202 when a restart was scheduled.
 
 Format cards as FAT32. The ESP-IDF 6.0.1 bundled FatFs configuration disables
 exFAT, which this component therefore does not support. FatFs API UTF-8 encoding
@@ -282,8 +301,10 @@ every 15 seconds.
 | GET `/api/db/runs` | Batteries and up to 300 newest test runs |
 | GET `/api/db/run?id=` | Run, battery, segments and last measurement |
 | GET `/api/db/measurements?id=&max=` | Chunked series `[segment, uptimeMs, epochMs, I, U, Ah]`, stride-sampled to `max` (200–6000, default 1500) keeping segment boundaries |
-| POST `/api/db/demo` | Create a simulated 20 Ah LiFePO4 run (charge, rest, discharge, rest, charge; ~1200 points) |
-| POST `/api/db/run/delete?id=` | Delete a run with segments and measurements (and its demo battery when unused) |
+
+The dashboard is read-only. Demo-data generation and run deletion are not
+available; their former POST endpoints are no longer registered. Existing
+stored runs, including previously generated demo data, remain unchanged.
 
 The tab order is set with `CONFIG_OTA_SUITE_WEB_TAB_ORDER` in
 `sdkconfig.defaults` (`dashboard,battery,manual,auto,resistance,overview,sd-card,updates,settings`);
@@ -353,6 +374,8 @@ internal resistance measurement are checked against it; the web forms adopt
 the limit. The model cannot be changed during an operation or recording.
 `GET /api/tester/status` and `/api/tester/settings` report `testerModel` and
 `maxCurrent`; `POST /api/tester/model` (`{"model":"A20"|"A40L"}`) changes it.
+Like the other settings, saving uses `web_interface_authorize_settings_request`
+and asks for the admin password when OTA Suite requires it.
 
 - **Battery**: label, manufacturer, serial, manufacturing date, nominal
   capacity, notes; stored in NVS and optionally in the SQLite database.
@@ -504,7 +527,8 @@ g++ -std=c++17 -Wall -Itests/resistance_host/stubs -Icomponents/test_control \
 
 `tests/ui_mock/mock_server.py` serves the real web UI with a simulated device
 API (`python3 tests/ui_mock/mock_server.py --model A40L --tab settings`, then
-open http://127.0.0.1:8080). `python3 tests/ui_mock/ui_mock_test.py` checks the
+open http://127.0.0.1:8080 and log in as `admin` / `mock`; the same password
+confirms settings, `--no-login` and `--no-settings-password` skip both). `python3 tests/ui_mock/ui_mock_test.py` checks the
 API contract and renders the pages in headless Chrome to verify that the forms
 adopt the 20/40 A limit and the settings cards load without script errors.
 SD mounting, NVS persistence and restarts still require hardware.
@@ -611,9 +635,74 @@ Availability checks never contact the image URL.
 
 ## Security and persistence
 
-Local administration uses Basic authentication over **HTTP**: trusted LAN or
+### Browser authentication
+
+The shared web interface uses `/login` instead of the browser's Basic-auth
+dialog. `POST /api/auth/login` accepts JSON `username`/`password` (`admin` and the
+AP password) with `X-Web-Login: 1`. No CORS permission is granted. Invalid
+credentials do not create sessions; failed password checks impose a one-second
+retry interval without blocking a server task.
+
+**Administration → Settings → Login duration** selects 1 or 7 days. The default
+is 1 day. `POST /api/auth/settings` accepts `{"sessionDays":1}` or
+`{"sessionDays":7}` and persists the value in NVS namespace `web_auth`, key
+`session_days`. Writes and commits must succeed before the runtime value changes.
+The choice applies to subsequent logins, not already issued sessions.
+`GET /api/status` exposes `sessionDays` and `settingsPasswordRequired`.
+
+Each browser login gets a random 256-bit opaque `ota_session` cookie with
+`Path=/`, `HttpOnly`, `SameSite=Lax` and `Max-Age` of exactly 86400 or 604800
+seconds. Lax permits top-level links from external dashboards without losing
+the login; mutation requests remain protected by CSRF tokens.
+At most eight sessions are active at once; additional logins receive
+HTTP 429 instead of evicting another browser. The server independently enforces
+the fixed expiry with monotonic uptime, without SNTP, Internet or SD access.
+Requests and polling never extend expiry. Sessions live in RAM: device restart,
+expiry, or `POST /api/auth/logout` invalidates them. Closing/reopening a browser
+does not invalidate a persistent cookie, unless the browser clears it.
+
+Protected APIs require the cookie and respond with HTTP 401 after expiry.
+The UI returns to `/login` without replaying a failed action. All existing
+mutation routes still require `X-CSRF-Token` from authenticated `/api/status`.
+Only the login document/script, bundled CSS and language assets are public;
+device status, extension assets, SD language files and all controls remain protected.
+The login page uses built-in English/German, not protected SD catalogs.
+Existing Basic-auth API clients must switch to cookie login and CSRF tokens.
+
+`CONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD` in **OTA Suite web interface**
+defaults to `y` (also set in `sdkconfig.defaults`). When enabled, every device
+settings save requires `X-Admin-Password` in addition to the session and CSRF
+token. The UI opens a masked password dialog when Save is pressed; the password
+is neither stored in browser storage nor reused for another save. A canceled
+dialog sends no mutation; a wrong/missing password returns HTTP 403 and cannot
+write or apply settings. The password remains the AP/admin password, not the
+Wi-Fi station, MQTT broker or MariaDB password.
+
+Protected saves are `/api/network`, `/api/auth/settings`, `/api/debug/settings`,
+`/api/mariadb/settings`, and `/api/mqtt/settings` (when MQTT is compiled in).
+They use `web_interface_authorize_settings_request()`. Extension settings UIs
+use `await WebAuth.settingsHeaders()` and cancel the save if it returns `null`.
+Extensions must use this helper and the server-side settings guard for future
+settings routes. Start/stop/abort, OTA, connection tests, database sync, SD file
+operations, and browser-only language selection retain their existing behavior.
+Turning the option off removes only the extra password check, never login/CSRF.
+Authentication has no effect on running tests or SD recording.
+
+Host validation: `node --test tests\web_interface.test.js tests\web_auth_ui.test.js tests\ui_languages_test.js`
+and `python tests\web_auth_test.py`. The latter requires a host C compiler
+(`CC`, `cl` from a Visual Studio developer shell, or `cc`) and restored managed
+cJSON dependencies. It executes the real C authentication/session code with
+mocked HTTP, NVS, clock and random services, with the build option both on and
+off, testing expiry boundaries, password/CSRF checks, NVS failures, logout,
+restart, malformed inputs and session capacity. No hardware is accessed.
+
+### Transport and firmware security
+
+Local administration uses cookie authentication over **HTTP**: trusted LAN or
 protected AP only, never expose port 80 to the Internet. HTTP does not encrypt
-WLAN credentials/admin passwords. AP password grants administration and is
+WLAN credentials/admin passwords or session cookies. The cookie deliberately
+cannot use `Secure` on the current HTTP-only server. Persistent cookies do not
+make HTTP secure; use a trusted isolated network. AP password grants administration and is
 printed on serial; protect physical access. NVS is not encrypted by default.
 Consider HTTPS administration, flash/NVS encryption, Secure Boot and signed
 images for production. SHA256 protects against accidental corruption, **not**

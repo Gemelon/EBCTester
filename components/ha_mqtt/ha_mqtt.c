@@ -63,6 +63,35 @@ static char device_id[HA_DEVICE_ID_MAX];
 static QueueHandle_t command_queue;
 static SemaphoreHandle_t command_task_done;
 static TaskHandle_t command_task_handle;
+static char live_measurement_payload[112];
+static bool live_measurement_pending;
+static uint16_t live_measurement_generation;
+
+static void discard_live_measurement(void)
+{
+    portENTER_CRITICAL(&status_mux);
+    live_measurement_pending = false;
+    ++live_measurement_generation;
+    portEXIT_CRITICAL(&status_mux);
+}
+
+static void publish_live_measurement(const esp_mqtt_event_t *event)
+{
+    char payload[sizeof(live_measurement_payload)];
+    bool available = false;
+    portENTER_CRITICAL(&status_mux);
+    if (event != NULL && live_measurement_pending &&
+        event->msg_id == live_measurement_generation) {
+        memcpy(payload, live_measurement_payload, sizeof(payload));
+        live_measurement_pending = false;
+        available = true;
+    }
+    portEXIT_CRITICAL(&status_mux);
+    if (available && atomic_load(&mqtt_connected) &&
+        esp_mqtt_client_publish(mqtt_client, state_topic, payload, 0, 0, 0) < 0) {
+        ESP_LOGD(TAG, "Skipped live measurement because MQTT publishing failed");
+    }
+}
 
 typedef enum {
     HA_COMMAND_START_PLAN,
@@ -339,7 +368,9 @@ static esp_err_t publish_discovery(void)
 
     char configuration_url[32];
     get_configuration_url(configuration_url, sizeof(configuration_url));
-    bool ok = cJSON_AddStringToObject(root, "name", "EBCTester") != NULL &&
+    cJSON *origin = cJSON_AddObjectToObject(root, "o");
+    bool ok = origin != NULL &&
+              cJSON_AddStringToObject(origin, "name", "EBCTester") != NULL &&
               cJSON_AddStringToObject(root, "avty_t", availability_topic) != NULL &&
               cJSON_AddStringToObject(root, "pl_avail", "online") != NULL &&
               cJSON_AddStringToObject(root, "pl_not_avail", "offline") != NULL &&
@@ -509,6 +540,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
         }
     } else if (event_id == MQTT_EVENT_DISCONNECTED) {
         atomic_store(&mqtt_connected, false);
+        discard_live_measurement();
         set_status(HA_MQTT_STATE_DISCONNECTED,
                    atomic_load(&station_connected)
                        ? "Disconnected; retry scheduled"
@@ -519,6 +551,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
         set_status(online ? HA_MQTT_STATE_ERROR : HA_MQTT_STATE_DISCONNECTED,
                    online ? "Broker connection failed; retry scheduled"
                           : "Waiting for Wi-Fi");
+    } else if (event_id == MQTT_USER_EVENT) {
+        publish_live_measurement(event_data);
     } else if (event_id == MQTT_EVENT_DATA) {
         const esp_mqtt_event_handle_t event = event_data;
         if (event == NULL || event->current_data_offset != 0 ||
@@ -730,6 +764,7 @@ esp_err_t ha_mqtt_stop(void)
 
     started = false;
     atomic_store(&mqtt_connected, false);
+    discard_live_measurement();
     atomic_store(&station_connected, false);
     set_status(HA_MQTT_STATE_DISABLED, "MQTT is disabled");
     esp_timer_stop(reconnect_timer);
@@ -802,13 +837,29 @@ esp_err_t ha_mqtt_publish_measurement(const ha_mqtt_measurement_t *measurement)
         return ESP_FAIL;
     }
 
-    const int message_id = esp_mqtt_client_enqueue(mqtt_client, state_topic, payload,
-                                                    length, 0, 0, false);
-    if (message_id < 0) {
-        ESP_LOGD(TAG, "Skipped live measurement because the MQTT client is unavailable");
-        return ESP_FAIL;
+    esp_mqtt_event_t event = {.event_id = MQTT_USER_EVENT};
+    portENTER_CRITICAL(&status_mux);
+    if (live_measurement_pending || !atomic_load(&mqtt_connected)) {
+        portEXIT_CRITICAL(&status_mux);
+        ESP_LOGD(TAG, "Skipped live measurement because MQTT is busy or disconnected");
+        return ESP_ERR_INVALID_STATE;
     }
-    return ESP_OK;
+    memcpy(live_measurement_payload, payload, (size_t)length + 1);
+    live_measurement_pending = true;
+    event.msg_id = live_measurement_generation;
+    portEXIT_CRITICAL(&status_mux);
+
+    const esp_err_t err = esp_mqtt_dispatch_custom_event(mqtt_client, &event);
+    if (err != ESP_OK) {
+        portENTER_CRITICAL(&status_mux);
+        if (event.msg_id == live_measurement_generation) {
+            live_measurement_pending = false;
+        }
+        portEXIT_CRITICAL(&status_mux);
+        ESP_LOGD(TAG, "Skipped live measurement because MQTT dispatch failed: %s",
+                 esp_err_to_name(err));
+    }
+    return err;
 }
 
 #else

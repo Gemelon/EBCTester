@@ -49,12 +49,15 @@ class MockTestCase(unittest.TestCase):
         cls.server.server_close()
 
     def setUp(self):
-        self.device.reset()
+        self.device.reset(loginRequired=False)
 
-    def request(self, path, body=None, csrf=mock_server.CSRF_TOKEN):
-        headers = {"Content-Type": "application/json"}
+    def request(self, path, body=None, csrf=mock_server.CSRF_TOKEN, password=mock_server.MOCK_PASSWORD,
+                headers=None):
+        headers = {"Content-Type": "application/json", **(headers or {})}
         if csrf:
             headers["X-CSRF-Token"] = csrf
+        if password:
+            headers["X-Admin-Password"] = password
         data = json.dumps(body).encode() if body is not None else None
         req = urllib.request.Request(self.base + path, data=data, headers=headers)
         try:
@@ -81,6 +84,27 @@ class ApiContractTest(MockTestCase):
     def test_post_requires_csrf_token(self):
         self.assertEqual(self.request("/api/tester/model", {"model": "A40L"}, csrf=None)[0], 403)
         self.assertEqual(self.request("/api/sd/bus", {"mode": "sdmmc"}, csrf="wrong")[0], 403)
+
+    def test_login_session_is_required(self):
+        self.device.reset()
+        self.assertEqual(self.request("/api/status")[0], 401)
+        self.assertEqual(self.request("/api/auth/login", {"username": "admin", "password": "wrong"},
+                                      headers={"X-Web-Login": "1"})[0], 403)
+        req = urllib.request.Request(self.base + "/api/auth/login", method="POST",
+                                     data=json.dumps({"username": "admin", "password": mock_server.MOCK_PASSWORD}).encode(),
+                                     headers={"Content-Type": "application/json", "X-Web-Login": "1"})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            cookie = response.headers["Set-Cookie"].split(";")[0]
+        self.assertEqual(self.request("/api/status", headers={"Cookie": cookie})[0], 200)
+
+    def test_settings_require_admin_password(self):
+        for path, body in (("/api/tester/model", {"model": "A40L"}), ("/api/sd/bus", {"mode": "sdmmc"})):
+            self.assertEqual(self.request(path, body, password=None)[0], 403, path)
+            self.assertEqual(self.request(path, body, password="wrong")[0], 403, path)
+            self.assertIn(self.request(path, body)[0], (200, 202), path)
+        self.assertEqual(self.get_json("/api/tester/status")["testerModel"], "A40L")
+        # Test controls need no admin password, only the session and the CSRF token.
+        self.assertEqual(self.request("/api/tester/command", {"action": "stop"}, password=None)[0], 200)
 
     def test_model_change_reaches_status_and_settings(self):
         self.assertEqual(self.get_json("/api/tester/status")["maxCurrent"], 20)
@@ -143,7 +167,7 @@ class BrowserTest(MockTestCase):
     """Renders the real pages; DOM attributes show the limits that the scripts applied."""
 
     def render(self, first_tab, model="A20", lang="en-GB", **state):
-        self.device.reset(model=model, tabOrder=f"{first_tab},{TABS}", **state)
+        self.device.reset(model=model, tabOrder=f"{first_tab},{TABS}", loginRequired=False, **state)
         with tempfile.TemporaryDirectory() as profile:
             result = subprocess.run(
                 [find_chrome(), "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
@@ -211,6 +235,16 @@ class BrowserTest(MockTestCase):
         for german in ("Puffer leeren", "Herunterladen", "Ausgabe folgen", "Zeilen im Puffer"):
             self.assertIn(german, text)
         self.assertNotIn("Follow output", text)
+
+    def test_login_page_renders(self):
+        self.device.reset()
+        with tempfile.TemporaryDirectory() as profile:
+            result = subprocess.run(
+                [find_chrome(), "--headless=new", "--disable-gpu", "--no-first-run", f"--user-data-dir={profile}",
+                 "--lang=de-DE", "--enable-logging=stderr", "--v=0", "--virtual-time-budget=4000",
+                 "--dump-dom", self.base + "/"], capture_output=True, text=True, timeout=90)
+        self.assertIn('id="login-form"', result.stdout)
+        self.assertEqual([line for line in result.stderr.splitlines() if "CONSOLE" in line and "Uncaught" in line], [])
 
     def test_settings_cards_render(self):
         dom = self.render("settings", "A40L")

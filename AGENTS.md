@@ -12,6 +12,28 @@ Preserve explicitly requested UI translation catalogs, localization tests, and
 user-entered data in their intended languages. English is the base language and
 fallback. Preserve third-party license and copyright texts verbatim.
 
+## Release builds
+
+By default, finishing firmware changes includes compiling and publishing a
+testable release to the configured publication directory, unless the user
+explicitly requests otherwise. A validation-only app build is not sufficient.
+
+Increment the build number in `PROJECT_VER` in `CMakeLists.txt` exactly once
+per new release, before its first compilation. Keep that number unchanged
+for subsequent builds, fixes, and publication retries until publication
+succeeds. Do not increment it for every build or failed attempt. Increment
+again only when preparing the next release after successful publication.
+Never overwrite an existing published version with different firmware bytes.
+
+Run the full build including the configured publication target (normally
+`idf.py build`), not just `idf.py app`. Check the actual process exit code
+and publication output. Verify that the versioned BIN exists in the
+publication directory, matches the built image, and that the manifest
+references that version with the correct size and SHA256 before reporting
+success. If compilation or publication fails, fix the cause and retry with
+the same pending release number. Report unresolved failures explicitly.
+Do not flash hardware or start battery tests automatically.
+
 ## MQTT / Home Assistant integration
 
 Optional feature. Nice to have, never a dependency. The SD card database

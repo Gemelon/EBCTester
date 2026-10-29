@@ -19,7 +19,9 @@ optional `username` and `password`, and `topic_prefix` before calling
 in the MQTT settings page. On connection, the component publishes
 one retained Home Assistant device-discovery document to
 `homeassistant/device/ebctester_<wifi-station-mac>/config`. Every entity's
-`unique_id` includes that same stable MAC-derived device ID. Discovery is
+`unique_id` includes that same stable MAC-derived device ID. The message
+includes the required device (`dev`) and origin (`o`) mappings; the device
+name belongs inside `dev`, not at the discovery document's root. Discovery is
 republished when the broker announces `online` on `homeassistant/status`.
 The document describes the voltage, current, capacity, mode, plan, connection,
 assigned-battery, test-result, and timestamp entities on `<topic_prefix>/state`.
@@ -28,10 +30,14 @@ measurement entities expire after three such intervals.
 
 The test recorder invokes its sample-persisted callback only after the
 transaction commits successfully. The application bridges that callback to
-the MQTT API. It queues a non-retained QoS 0
-JSON update to `<topic_prefix>/state` containing the voltage, current, and
+the MQTT API. It hands off one live sample to the MQTT event task, which
+publishes a non-retained QoS 0 JSON update to `<topic_prefix>/state`
+containing the voltage, current, and
 capacity from that exact averaged database sample, with matching database
-precision. When disconnected, measurements are skipped rather than buffered.
+precision. When disconnected, measurements are skipped rather than buffered. A busy
+handoff skips new samples; disconnecting discards any pending handoff.
+QoS 0 publishing runs in the MQTT task, not the database writer, and does not
+use the MQTT outbox or replay measurements after reconnecting.
 The recorder and database writer do not wait for MQTT.
 
 When the application supplies a command callback, the component subscribes to
@@ -69,3 +75,17 @@ connection and configures a retained `offline` Last Will at
 `<topic_prefix>/availability`. Failed connections are retried with exponential
 backoff from 1 second up to 60 seconds. MQTT runs in its own client task; this
 component does not buffer measurements or call recording/test code.
+
+## Discovery troubleshooting and host tests
+
+In Home Assistant, open **Settings → Devices & services → MQTT** and configure
+the broker entry. Under **Listen to a topic**, subscribe to `homeassistant/#`,
+then use **Test connection** on the tester to republish discovery. The device
+should appear under **Settings → Devices & services → Devices** even before
+measurements are recorded. If the message arrives but no device appears, check
+Home Assistant's system logs for MQTT discovery validation errors.
+
+On Windows, run `python tests\mqtt_discovery_test.py` from a Visual Studio
+Developer Command Prompt. It compiles the firmware's discovery functions with
+the project's cJSON dependency and captures the retained MQTT message without
+connecting to a broker or hardware.
