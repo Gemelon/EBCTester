@@ -112,16 +112,43 @@ class ApiContractTest(MockTestCase):
             self.assertNotEqual(german[keys[0]], text)
 
 
+class CatalogTest(unittest.TestCase):
+    """Every translation key used by the web assets must exist in the English and German catalogs."""
+
+    def test_all_used_keys_exist(self):
+        catalog = {lang: json.loads((mock_server.SHARED / f"{lang}.json").read_text(encoding="utf-8"))["strings"]
+                   for lang in ("en", "de")}
+        self.assertEqual(set(catalog["en"]), set(catalog["de"]))
+        assets = [path for *_, html, script in mock_server.EXTENSIONS for path in (html, script)]
+        used = set()
+        for path in assets:
+            source = path.read_text(encoding="utf-8")
+            used |= set(re.findall(r'data-i18n="(text\.[0-9a-f]{12})"', source))
+            used |= set(re.findall(r'I18n\.[tf]\("(text\.[0-9a-f]{12})"', source))
+        self.assertGreater(len(used), 100)
+        self.assertEqual(sorted(used - set(catalog["en"])), [])
+
+    def test_new_texts_are_translated(self):
+        english = json.loads((mock_server.SHARED / "en.json").read_text(encoding="utf-8"))["strings"]
+        german = json.loads((mock_server.SHARED / "de.json").read_text(encoding="utf-8"))["strings"]
+        for text in ("Tester model", "Bus mode", "Save and restart", "Enable MQTT", "Follow output",
+                     "SD bus mode saved. The device restarts now.", "MQTT is disabled", "Debug log",
+                     "Current exceeds the %s limit of %d A."):
+            key = next(k for k, v in english.items() if v == text)
+            self.assertNotEqual(german[key], text, text)
+
+
 @unittest.skipUnless(find_chrome(), "Chrome/Chromium not found")
 class BrowserTest(MockTestCase):
     """Renders the real pages; DOM attributes show the limits that the scripts applied."""
 
-    def render(self, first_tab, model="A20"):
-        self.device.reset(model=model, tabOrder=f"{first_tab},{TABS}")
+    def render(self, first_tab, model="A20", lang="en-GB", **state):
+        self.device.reset(model=model, tabOrder=f"{first_tab},{TABS}", **state)
         with tempfile.TemporaryDirectory() as profile:
             result = subprocess.run(
                 [find_chrome(), "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-                 f"--user-data-dir={profile}", "--enable-logging=stderr", "--v=0",
+                 f"--user-data-dir={profile}", f"--lang={lang}", f"--accept-lang={lang}",
+                 "--enable-logging=stderr", "--v=0",
                  "--virtual-time-budget=8000", "--dump-dom", self.base + "/"],
                 capture_output=True, text=True, timeout=90)
         errors = [line for line in result.stderr.splitlines()
@@ -158,6 +185,32 @@ class BrowserTest(MockTestCase):
         for tab in TABS.split(","):
             with self.subTest(tab=tab):
                 self.assertIn(f'id="tab-{tab}"', self.render(tab))
+
+    def visible_text(self, dom):
+        dom = re.sub(r"<(script|style)\b.*?</\1>", " ", dom, flags=re.S)
+        return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", dom))
+
+    def test_new_and_settings_cards_follow_the_language(self):
+        catalog = {lang: json.loads((mock_server.SHARED / f"{lang}.json").read_text(encoding="utf-8"))["strings"]
+                   for lang in ("en", "de")}
+        sources = ["EBC tester", "Tester model", "Save setting", "SD card bus", "Bus mode", "Save and restart",
+                   "Enable debug log and Debug tab", "Enable MQTT", "MQTT broker host", "Topic prefix",
+                   "Allow remote plan start commands", "Save settings"]
+        keys = {text: next(k for k, v in catalog["en"].items() if v == text) for text in sources}
+        for lang, code in (("de", "de-DE"), ("en", "en-GB")):
+            with self.subTest(lang=lang):
+                text = self.visible_text(self.render("settings", "A40L", lang=code))
+                for source, key in keys.items():
+                    self.assertIn(catalog[lang][key], text, source)
+                if lang == "de":
+                    for source in ("Tester model", "Bus mode", "Enable MQTT", "Topic prefix", "Save setting"):
+                        self.assertNotIn(source, text)
+
+    def test_debug_tab_follows_the_language(self):
+        text = self.visible_text(self.render("debug", lang="de-DE"))
+        for german in ("Puffer leeren", "Herunterladen", "Ausgabe folgen", "Zeilen im Puffer"):
+            self.assertIn(german, text)
+        self.assertNotIn("Follow output", text)
 
     def test_settings_cards_render(self):
         dom = self.render("settings", "A40L")

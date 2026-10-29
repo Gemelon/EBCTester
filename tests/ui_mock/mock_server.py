@@ -234,7 +234,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/mqtt/status": lambda: self.send_json(
                 {"settings": self.device.state["mqtt"],
                  "state": "connecting" if self.device.state["mqtt"]["enabled"] else "disabled",
-                 "message": "Mock: no broker." if self.device.state["mqtt"]["enabled"] else "MQTT is disabled."}),
+                 "message": "Connecting to the MQTT broker" if self.device.state["mqtt"]["enabled"]
+                 else "MQTT is disabled"}),
             "/api/mariadb/status": self.mariadb_status,
             "/api/debug/status": self.debug_status,
             "/api/debug/log": self.debug_log,
@@ -319,7 +320,7 @@ class Handler(BaseHTTPRequestHandler):
     def mariadb_status(self):
         settings = self.device.state["mariadb"]
         self.send_json({"settings": settings, "state": "idle" if settings["enabled"] else "disabled",
-                        "busy": False, "message": "MariaDB backup is disabled." if not settings["enabled"] else "",
+                        "busy": False, "message": "",
                         "lastSuccess": 0, "lastAttempt": 0, "lastRuns": 0, "lastMeasurements": 0,
                         "pendingRuns": len(self.device.state["runs"]), "serverVersion": "",
                         "networkConnected": True, "databaseReady": True})
@@ -375,11 +376,11 @@ class Handler(BaseHTTPRequestHandler):
             "/api/tester/battery": self.post_battery,
             "/api/sd/bus": self.post_sd_bus,
             "/api/mqtt/settings": self.post_mqtt_settings,
-            "/api/mqtt/test": lambda body: self.send(200, "Mock: no broker reachable; nothing was sent."),
+            "/api/mqtt/test": lambda body: self.send(200, "Connection attempt started; status updates below."),
             "/api/mariadb/settings": self.post_mariadb_settings,
-            "/api/mariadb/test": lambda body: self.send(200, "Mock: no MariaDB server; nothing was sent."),
-            "/api/mariadb/sync": lambda body: self.send(200, "Mock: synchronization simulated."),
-            "/api/mariadb/full-sync": lambda body: self.send(200, "Mock: full synchronization simulated."),
+            "/api/mariadb/test": lambda body: self.send(200, "Connection test started."),
+            "/api/mariadb/sync": lambda body: self.send(200, "Synchronization started."),
+            "/api/mariadb/full-sync": lambda body: self.send(200, "Full transfer started."),
             "/api/debug/settings": self.post_debug_settings,
             "/api/debug/clear": lambda body: self.send_json({"nextSeq": self.device.state["logSeq"] + 1}),
             "/api/db/demo": self.post_demo,
@@ -405,8 +406,13 @@ class Handler(BaseHTTPRequestHandler):
         state = self.device.state
         limit = MAX_CURRENT[state["model"]]
         action = body.get("action")
-        if action in ("connect", "disconnect", "auto_connect"):
-            return self.send(200, "OK (mock).")
+        if action == "connect":
+            return self.send(200, "Connection request sent.")
+        if action == "disconnect":
+            return self.send(200, "Disconnect sent; keypad lock will be released.")
+        if action == "auto_connect":
+            return self.send(200, "Automatic connection enabled." if body.get("enabled")
+                             else "Automatic connection disabled.")
         if action == "stop":
             return self.send(200, "Stop sent.")
         if action == "charge":
@@ -445,7 +451,9 @@ class Handler(BaseHTTPRequestHandler):
         if body.get("action") == "start":
             error = check_plan(self.device.state["plan"]["steps"], MAX_CURRENT[self.device.state["model"]])
             return self.send(409, error) if error else self.send(200, "Plan started.")
-        return self.send(200, "OK (mock).")
+        if body.get("action") == "abort":
+            return self.send(200, "Plan aborted; stop sent.")
+        return self.send(200, "Planstatus zurueckgesetzt.")
 
     def post_resistance(self, body):
         state = self.device.state
@@ -465,7 +473,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def post_battery(self, body):
         self.device.state["battery"].update({k: v for k, v in body.items() if k in self.device.state["battery"]})
-        return self.send(200, "Battery saved.")
+        return self.send(200, "Battery saved and stored in database." if body.get("action") == "save_db"
+                         else "Battery applied for next test.")
 
     def post_sd_bus(self, body):
         state = self.device.state
@@ -493,7 +502,7 @@ class Handler(BaseHTTPRequestHandler):
                 settings[key] = body[key]
         if body.get("password"):
             settings["passwordSet"] = True
-        return self.send(200, "MQTT settings saved.")
+        return self.send(200, "MQTT settings saved and applied.")
 
     def post_mariadb_settings(self, body):
         settings = self.device.state["mariadb"]

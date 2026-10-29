@@ -3,20 +3,20 @@
 
 <div class="card">
   <div class="card-body">
-    <h2 class="h4">Debug</h2>
-    <p>
+    <h2 class="h4" data-i18n="text.1a03bd2fd107">Debug</h2>
+    <p data-i18n="text.af3616694ce7">
       Live log of the running firmware. The device keeps the last 500 log lines in memory.
       Bootloader output and messages logged before the web interface starts are only visible
       over the USB console.
     </p>
     <div id="debug-message" class="alert d-none" role="status"></div>
     <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-      <button id="debug-pause" class="btn btn-outline-secondary btn-sm" type="button">Pause</button>
-      <button id="debug-clear" class="btn btn-outline-secondary btn-sm" type="button">Clear buffer</button>
-      <button id="debug-download" class="btn btn-outline-secondary btn-sm" type="button">Download</button>
+      <button id="debug-pause" class="btn btn-outline-secondary btn-sm" type="button" data-i18n="text.858e4ba7a29f">Pause</button>
+      <button id="debug-clear" class="btn btn-outline-secondary btn-sm" type="button" data-i18n="text.925b27a67e37">Clear buffer</button>
+      <button id="debug-download" class="btn btn-outline-secondary btn-sm" type="button" data-i18n="text.d6eafe823591">Download</button>
       <div class="form-check form-switch ms-2">
         <input id="debug-follow" class="form-check-input" type="checkbox" role="switch" checked>
-        <label for="debug-follow" class="form-check-label">Follow output</label>
+        <label for="debug-follow" class="form-check-label" data-i18n="text.4965ddef69fa">Follow output</label>
       </div>
       <span id="debug-info" class="small text-body-secondary ms-auto"></span>
     </div>

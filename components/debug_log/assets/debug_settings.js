@@ -10,7 +10,7 @@
     const box = $("debug-settings-message");
     if (!box) return;
     box.className = `alert alert-${kind}${text ? "" : " d-none"}`;
-    box.textContent = text;
+    box.textContent = I18n.message(text);
   }
 
   async function fetchJson(url) {

@@ -16,7 +16,7 @@
     const box = $("debug-message");
     if (!box) return;
     box.className = `alert alert-${kind}${text ? "" : " d-none"}`;
-    box.textContent = text;
+    box.textContent = I18n.message(text);
   }
 
   function attached() {
@@ -79,19 +79,19 @@
         const status = await fetchJson(`/api/debug/log?after=${lastSeq}`);
         if (!attached()) return;
         if (!status.enabled) {
-          showMessage("The debug log is disabled in Settings.", "warning");
+          showMessage(I18n.t("text.70a26ac89ca5"), "warning");
           return;
         }
         showMessage("");
         if (lastSeq !== 0 && status.firstSeq > lastSeq + 1) {
-          appendLines([{ text: `--- ${status.firstSeq - lastSeq - 1} line(s) lost, buffer overrun ---` }]);
+          appendLines([{ text: I18n.f("text.6aef072d5fba", {p0: status.firstSeq - lastSeq - 1}) }]);
         }
         const lines = status.lines || [];
         appendLines(lines);
         if (lines.length) lastSeq = lines[lines.length - 1].seq;
         $("debug-info").textContent =
-          `${status.count}/${status.capacity} lines buffered` +
-          (status.dropped ? `, ${status.dropped} chunk(s) dropped while busy` : "");
+          I18n.f("text.31d3bbe81890", {p0: status.count, p1: status.capacity}) +
+          (status.dropped ? I18n.f("text.b6f413f08433", {p0: status.dropped}) : "");
         if (lines.length === 0) break;
       }
     } catch (error) {
@@ -104,7 +104,7 @@
 
   $("debug-pause").addEventListener("click", () => {
     paused = !paused;
-    $("debug-pause").textContent = paused ? "Resume" : "Pause";
+    $("debug-pause").textContent = paused ? I18n.t("text.d640c7421da0") : I18n.t("text.858e4ba7a29f");
     $("debug-pause").classList.toggle("btn-warning", paused);
     $("debug-pause").classList.toggle("btn-outline-secondary", !paused);
     if (!paused) void poll();
@@ -115,7 +115,7 @@
       const result = JSON.parse(await post("/api/debug/clear"));
       lastSeq = result.nextSeq - 1;
       $("debug-output").textContent = "";
-      showMessage("Log buffer cleared.", "success");
+      showMessage(I18n.t("text.8b40be6f56f2"), "success");
     } catch (error) {
       showMessage(error.message, "danger");
     }

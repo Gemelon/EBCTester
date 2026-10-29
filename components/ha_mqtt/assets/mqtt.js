@@ -6,12 +6,12 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const states = {
-    disabled: ["Disabled", "text-bg-secondary"],
-    not_configured: ["Not configured", "text-bg-warning"],
-    connecting: ["Connecting", "text-bg-info"],
-    connected: ["Connected", "text-bg-success"],
-    disconnected: ["Disconnected", "text-bg-warning"],
-    error: ["Connection error", "text-bg-danger"],
+    disabled: [I18n.t("text.75081b593d15"), "text-bg-secondary"],
+    not_configured: [I18n.t("text.dd1841d29502"), "text-bg-warning"],
+    connecting: [I18n.t("text.d403c686f6a1"), "text-bg-info"],
+    connected: [I18n.t("text.0338189c985e"), "text-bg-success"],
+    disconnected: [I18n.t("text.b0caf73f4640"), "text-bg-warning"],
+    error: [I18n.t("text.8d137af9c64f"), "text-bg-danger"],
   };
   let loaded = false;
   let pollTimer = 0;
@@ -19,7 +19,7 @@
   function showMessage(text, kind = "info") {
     const box = $("mqtt-message");
     box.className = `alert alert-${kind}${text ? "" : " d-none"}`;
-    box.textContent = text;
+    box.textContent = I18n.message(text);
   }
 
   async function csrfToken() {
@@ -63,7 +63,7 @@
       $("mqtt-port").value = settings.port;
       $("mqtt-username").value = settings.username;
       $("mqtt-password").value = "";
-      $("mqtt-password").placeholder = settings.passwordSet ? "Saved; leave blank to keep" : "";
+      $("mqtt-password").placeholder = settings.passwordSet ? I18n.t("text.95da8d2dba3b") : "";
       $("mqtt-topic-prefix").value = settings.topicPrefix;
       $("mqtt-interval").value = settings.intervalSeconds;
       $("mqtt-remote-start").checked = settings.allowRemoteStart;
@@ -72,7 +72,7 @@
     const [label, badge] = states[status.state] || states.error;
     $("mqtt-state").className = `badge ${badge}`;
     $("mqtt-state").textContent = label;
-    $("mqtt-status-text").textContent = status.message;
+    $("mqtt-status-text").textContent = I18n.message(status.message);
     clearTimeout(pollTimer);
     if (status.state === "connecting" || status.state === "disconnected" || status.state === "error") {
       pollTimer = setTimeout(refresh, 3000);
@@ -101,7 +101,7 @@
       });
       $("mqtt-password").value = "";
       loaded = false;
-      showMessage("Settings saved and applied.", "success");
+      showMessage(I18n.t("text.ecd2d61a10f2"), "success");
       await refresh();
     } catch (error) {
       showMessage(error.message, "danger");
