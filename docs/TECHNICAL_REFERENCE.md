@@ -256,7 +256,7 @@ database task retries while the card is unavailable; a database error on a
 mounted card is reported once and stops initialization rather than repeatedly
 renaming and recreating the database file.
 
-Measurements from the EBC-A20 are recorded by `test_store` (see "EBC-A20
+Measurements from the EBC-A20/A40L are recorded by `test_store` (see "EBC-A20/A40L
 tester"); MariaDB backup is described below.
 
 ## Measurement dashboard (offline)
@@ -324,7 +324,7 @@ API (login required, POST with CSRF token): `GET /api/mariadb/status`,
 `POST /api/mariadb/settings`, `/api/mariadb/test`, `/api/mariadb/sync`,
 `/api/mariadb/full-sync` (409 while a job is running).
 
-## EBC-A20 tester
+## EBC-A20/A40L tester
 
 UART pins and baud rates are set in menuconfig under **EBC battery tester
 UARTs** (both 8O1):
@@ -334,7 +334,7 @@ UARTs** (both 8O1):
 | UART1 | Tester ("Prozessor") | 17 | 18 | 9600 |
 | UART2 | Dongle (PC software) | 8 | 9 | 9600 |
 
-The EBC-A20 uses 5 V TTL levels: connect it through a level shifter, the
+The EBC-A20/A40L use 5 V TTL levels: connect it through a level shifter, the
 ESP32-S3 GPIOs are not 5 V tolerant. The dongle↔tester bridge is not
 implemented yet; UART2 is initialized and its input discarded.
 

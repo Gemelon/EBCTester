@@ -9,7 +9,7 @@
 
 **Test batteries and keep their measurements without running a PC for weeks.**
 
-EBCTester connects a ZKE EBC-A20 to a small ESP32-S3. The microcontroller
+EBCTester connects a ZKE EBC-A20/A40L to a small ESP32-S3. The microcontroller
 operates the tester, executes test plans, and records measurements on an SD
 card. Its local web interface lets you manage batteries, follow measurements,
 and view charts from a phone, even outside your home Wi-Fi network.
@@ -201,7 +201,7 @@ can still be operated from a phone through its own Wi-Fi access point.
   button click and confirmation.
 
 **Current version:** [![Release](https://img.shields.io/github/v/release/Gemelon/EBCTester)](https://github.com/Gemelon/EBCTester/releases/latest), developed with ESP-IDF 6.0.1 for ESP32-S3.
-The EBC-A20 is the currently supported tester; support for all ZKE models
+The EBC-A20/A40L are the currently supported testers; support for all ZKE models
 is not claimed. Additional export formats and cross-battery analysis are
 possible extensions, not completed features.
 
@@ -251,7 +251,7 @@ To build from source, see below.
 
 - ESP32-S3 with **16 MiB flash**, such as N16R8. Defaults enable optional
   octal PSRAM; other boards require matching settings.
-- ZKE EBC-A20 with suitable **3.3 V / 5 V TTL level shifting**.
+- ZKE EBC-A20/A40L with suitable **3.3 V / 5 V TTL level shifting**.
   ESP32 GPIOs are not 5 V tolerant.
 - FAT32 SD card, compatible wiring, and appropriate pull-ups.
 - VS Code with the ESP-IDF extension, ESP-IDF **6.0.1**, and Git.
