@@ -515,36 +515,6 @@ bool in_range(float value, float minimum, float maximum)
     return std::isfinite(value) && value >= minimum && value <= maximum;
 }
 
-int current_limit(TesterModel model)
-{
-    return static_cast<int>(max_current_a(model));
-}
-
-/* Model-specific current check on top of test_store::validate_plan, which only enforces the
- * absolute range of the plan format. */
-std::string check_plan_current(const std::vector<test_store::PlanStep> &steps, TesterModel model)
-{
-    const int limit = current_limit(model);
-    const int limit_hundredths = limit * 100;
-    char text[128];
-    for (size_t index = 0; index < steps.size(); ++index) {
-        const test_store::PlanStep &step = steps[index];
-        if (step.mode == 1 && step.p1 > limit_hundredths) {
-            std::snprintf(text, sizeof(text),
-                          "Step %u: Current 0.01–%d A, cutoff voltage 0.01–30 V, time 0–239 min.",
-                          static_cast<unsigned>(index + 1), limit);
-            return text;
-        }
-        if (step.mode == 3 && (step.p1 > limit_hundredths || step.p3 > limit_hundredths)) {
-            std::snprintf(text, sizeof(text),
-                          "Step %u: Current 0.01–%d A, charge voltage 0.01–30 V, cutoff current 0.01–%d A.",
-                          static_cast<unsigned>(index + 1), limit, limit);
-            return text;
-        }
-    }
-    return "";
-}
-
 } // namespace
 
 const char *run_state_name(RunState state)
@@ -561,32 +531,6 @@ const char *run_state_name(RunState state)
     default:
         return "idle";
     }
-}
-
-const char *tester_model_name(TesterModel model)
-{
-    return model == TesterModel::A40L ? "A40L" : "A20";
-}
-
-bool tester_model_from_name(const char *name, TesterModel &model)
-{
-    if (name == nullptr) {
-        return false;
-    }
-    if (std::strcmp(name, "A20") == 0) {
-        model = TesterModel::A20;
-        return true;
-    }
-    if (std::strcmp(name, "A40L") == 0) {
-        model = TesterModel::A40L;
-        return true;
-    }
-    return false;
-}
-
-float max_current_a(TesterModel model)
-{
-    return model == TesterModel::A40L ? 40.0f : 20.0f;
 }
 
 Settings get_settings()
@@ -623,13 +567,10 @@ std::string start_resistance(const resistance_test::Config &config)
     ensure_settings_loaded();
     if (controls_busy() || capturing || test_store::recorder_status().active)
         return "Another operation or recording is still active.";
-    const double limit = max_current_a(settings.model);
-    if (config.pulseCurrent > limit ||
-        (config.automatic && std::fmax(config.chargeCurrent, config.prepCurrent) > limit)) {
-        char text[96];
-        std::snprintf(text, sizeof(text), "Current exceeds the %s limit of %d A.",
-                      tester_model_name(settings.model), current_limit(settings.model));
-        return text;
+    const std::string error = check_resistance_current(settings.model, config.pulseCurrent, config.chargeCurrent,
+                                                       config.prepCurrent, config.automatic);
+    if (!error.empty()) {
+        return error;
     }
     return resistance_test::start(config, settings.battery);
 }
@@ -659,7 +600,7 @@ std::string set_tester_model(TesterModel model)
     }
     settings.model = model;
     save_setting([&](nvs_handle_t handle) { return nvs_set_u8(handle, "model", static_cast<uint8_t>(model)); });
-    ESP_LOGI(TAG, "Tester model set to %s (max. %d A)", tester_model_name(model), current_limit(model));
+    ESP_LOGI(TAG, "Tester model set to %s (max. %.0f A)", tester_model_name(model), max_current_a(model));
     return "";
 }
 
@@ -701,15 +642,11 @@ std::string start_charge(float current_a, float voltage_v, float cutoff_a)
 {
     std::lock_guard<std::recursive_mutex> guard(state_mutex);
     ensure_settings_loaded();
-    const float limit = max_current_a(settings.model);
-    if (!in_range(current_a, 0.01f, limit) || !in_range(voltage_v, 0.01f, 30.0f) ||
-        !in_range(cutoff_a, 0.01f, limit)) {
-        char text[96];
-        std::snprintf(text, sizeof(text), "Current 0.01–%d A, charge voltage 0.01–30 V, cutoff current 0.01–%d A.",
-                      current_limit(settings.model), current_limit(settings.model));
-        return text;
+    std::string error = check_charge(settings.model, current_a, voltage_v, cutoff_a);
+    if (!error.empty()) {
+        return error;
     }
-    std::string error = check_manual_allowed();
+    error = check_manual_allowed();
     if (error.empty()) {
         error = queue(EBC_CMD_CHARGE_CV, hundredths(current_a), hundredths(voltage_v), hundredths(cutoff_a));
     }
@@ -727,14 +664,11 @@ std::string start_discharge_cc(float current_a, float cutoff_v, uint16_t minutes
 {
     std::lock_guard<std::recursive_mutex> guard(state_mutex);
     ensure_settings_loaded();
-    if (!in_range(current_a, 0.01f, max_current_a(settings.model)) || !in_range(cutoff_v, 0.01f, 30.0f) ||
-        minutes > 239) {
-        char text[80];
-        std::snprintf(text, sizeof(text), "Current 0.01–%d A, cutoff voltage 0.01–30 V, time 0–239 min.",
-                      current_limit(settings.model));
-        return text;
+    std::string error = check_discharge_cc(settings.model, current_a, cutoff_v, minutes);
+    if (!error.empty()) {
+        return error;
     }
-    std::string error = check_manual_allowed();
+    error = check_manual_allowed();
     if (error.empty()) {
         error = queue(EBC_CMD_DISCHARGE_CC, hundredths(current_a), hundredths(cutoff_v), minutes);
     }

@@ -492,6 +492,23 @@ They cover prepared/automatic paths, measured-current resistance and capacity,
 recording loss, command errors and stop acknowledgement. Real hardware accuracy
 and battery safety must still be verified.
 
+`tests/tester_model_host/tester_model_host_test.cpp` covers the tester model
+limits (manual charge/discharge, plan steps, resistance currents and the exact
+A20 message texts used for translation). With GCC:
+
+```text
+g++ -std=c++17 -Wall -Itests/resistance_host/stubs -Icomponents/test_control \
+  -Icomponents/test_store/include tests/tester_model_host/tester_model_host_test.cpp \
+  components/test_control/tester_model.cpp -o tester_model_host_test && ./tester_model_host_test
+```
+
+`tests/ui_mock/mock_server.py` serves the real web UI with a simulated device
+API (`python3 tests/ui_mock/mock_server.py --model A40L --tab settings`, then
+open http://127.0.0.1:8080). `python3 tests/ui_mock/ui_mock_test.py` checks the
+API contract and renders the pages in headless Chrome to verify that the forms
+adopt the 20/40 A limit and the settings cards load without script errors.
+SD mounting, NVS persistence and restarts still require hardware.
+
 ## Update behavior
 
 - After WLAN becomes usable and every **six hours**, only `firmware.json` is
