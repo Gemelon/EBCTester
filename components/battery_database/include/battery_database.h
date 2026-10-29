@@ -23,8 +23,6 @@ bool battery_database_is_ready(void);
 /* Serializes all SQLite access; returns ESP_ERR_INVALID_STATE until the database is ready. */
 esp_err_t battery_database_execute(battery_database_operation_t operation, void *context,
                                    TickType_t timeout_ticks);
-/* Writes a simulated, completed capacity test (battery, plan, run, segments, measurements). */
-esp_err_t battery_database_create_demo_run(char *run_id, size_t run_id_size);
 
 #ifdef __cplusplus
 }

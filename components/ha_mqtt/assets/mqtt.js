@@ -19,7 +19,7 @@
   function showMessage(text, kind = "info") {
     const box = $("mqtt-message");
     box.className = `alert alert-${kind}${text ? "" : " d-none"}`;
-    box.textContent = text;
+    box.textContent = I18n.message(text || "");
   }
 
   async function csrfToken() {
@@ -94,9 +94,11 @@
     $("mqtt-test").disabled = true;
     try {
       const body = JSON.stringify(readForm());
+      const headers = await WebAuth.settingsHeaders();
+      if (headers === null) return;
       await api("/api/mqtt/settings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...headers },
         body,
       });
       $("mqtt-password").value = "";

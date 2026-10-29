@@ -10,7 +10,7 @@
     const box = $("debug-settings-message");
     if (!box) return;
     box.className = `alert alert-${kind}${text ? "" : " d-none"}`;
-    box.textContent = text;
+    box.textContent = I18n.message(text || "");
   }
 
   async function fetchJson(url) {
@@ -34,12 +34,13 @@
     showMessage("");
     $("debug-settings-save").disabled = true;
     try {
-      const csrfToken = (await fetchJson("/api/status")).csrfToken || "";
+      const headers = await WebAuth.settingsHeaders();
+      if (headers === null) return;
       const response = await fetch("/api/debug/settings", {
         method: "POST",
         cache: "no-store",
         credentials: "same-origin",
-        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken },
+        headers: { "Content-Type": "application/json", ...headers },
         body: JSON.stringify({ enabled: $("debug-settings-enabled").checked }),
       });
       const text = await response.text();

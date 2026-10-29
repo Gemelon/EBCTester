@@ -250,7 +250,7 @@ esp_err_t read_body(httpd_req_t *req, char *buffer, size_t capacity)
 
 esp_err_t settings_handler(httpd_req_t *req)
 {
-    if (!web_interface_authorize_request(req, true)) {
+    if (!web_interface_authorize_settings_request(req)) {
         return ESP_OK;
     }
     char body[MAX_BODY];

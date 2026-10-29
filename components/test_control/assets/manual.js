@@ -11,12 +11,29 @@
   let submitting = false;
   let latestStatus = null;
 
+  function startBlockReason(status) {
+    const link = status?.link;
+    if (!status) return "";
+    if (!link?.connected) return "text.7c3e1a90b2d4";
+    if (!link.hasFrame) return "text.5b9d03c7a1e8";
+    if (link.pending) return "text.91e4c2f6a3b0";
+    if (link.active) return "text.d03a7b58f2c1";
+    if (status.plan?.state === "running") return "text.8a2d5e07c6f3";
+    if (status.controlsBusy) return "text.c5b1f84a90d2";
+    return "";
+  }
+
   function updateControls() {
     const link = latestStatus?.link;
     const busy = submitting || !latestStatus || latestStatus.controlsBusy || link?.pending ||
       link?.active || latestStatus.plan?.state === "running";
     for (const form of ["man-charge-form", "man-discharge-form"]) {
       for (const button of $(form).querySelectorAll("button")) button.disabled = busy || !link?.connected || !link?.hasFrame;
+    }
+    const reason = submitting ? "" : startBlockReason(latestStatus);
+    for (const id of ["man-hint-charge", "man-hint-discharge"]) {
+      $(id).textContent = reason ? I18n.t(reason) : "";
+      $(id).classList.toggle("d-none", !reason);
     }
     $("man-connect").disabled = Boolean(busy);
     $("man-disconnect").disabled = Boolean(busy);

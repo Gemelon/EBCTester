@@ -329,6 +329,22 @@ The **Battery tester** section contains Measurements, Battery, Manual,
 Automatic, and Internal resistance. **Administration** contains Device
 information, SD card, Updates, and Settings.
 
+Under **Administration → Settings → Login duration**, choose **Daily (24 hours)**
+or **Weekly (7 days)**. Daily is the default. The duration starts at login,
+does not renew with activity, and applies to new logins after saving. The browser
+remembers the session across browser restarts unless cookies are cleared.
+A device restart or **Log out** ends the session; recording and test plans continue
+independently of browser login.
+
+Saving device settings asks for the AP/admin password by default, including
+Wi-Fi, login duration, debug logging, MariaDB and MQTT settings. Canceling the
+prompt or entering an incorrect password does not save changes. Disable this
+additional confirmation at build time with
+`CONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD=n` under **OTA Suite web interface**
+in `menuconfig`. Login and CSRF protection remain mandatory. Test controls,
+OTA actions, SD operations, and the browser-only language selection do not
+require this additional password.
+
 Plans support D-CC, D-CP, C-CV, waits, and repetitions. After a restart, an
 interrupted plan is not resumed blindly. Stop and Abort remain available;
 conflicting start actions are blocked.
@@ -393,8 +409,9 @@ The OTA manifest format is unchanged. See
 - Battery settings and protection limits must match chemistry, wiring, and
   equipment ratings. Software does not replace hardware protection.
   Long-running tests are not automatically safe to leave unattended.
-- The local server uses HTTP Basic Authentication. Use only a trusted LAN or
-  protected AP; never expose it to the internet.
+- The local server uses cookie-based sessions over unencrypted HTTP. Use only
+  a trusted LAN or protected AP; never expose it to the internet. HTTP exposes
+  both passwords and session cookies to network interception.
 - MariaDB uses unencrypted TCP. NVS/flash are not encrypted by default;
   protect passwords and serial access.
 - SHA256 is not a signature. Secure Boot, signed firmware, and flash/NVS
@@ -416,12 +433,16 @@ Host tests require Node.js, Python, and CMake for publishing; no additional
 Node packages:
 
 ```powershell
-node --test tests\web_interface.test.js tests\publication.test.js tests\ui_languages_test.js
+node --test tests\dashboard.test.js tests\web_interface.test.js tests\web_auth_ui.test.js tests\publication.test.js tests\ui_languages_test.js
 python tests\resistance_schema_test.py
+python tests\web_auth_test.py
 python tests\license_metadata_test.py
 ```
 
 Set `CMAKE_EXE`, `OTA_SUITE_DIR`, and `SD_CARD_MANAGER_DIR` if needed.
+Authentication tests require restored managed dependencies and a host C compiler
+(`CC`, `cl` in a Visual Studio developer shell, or `cc`). They run with password
+confirmation both enabled and disabled, without contacting or flashing hardware.
 Native manifest/DCIR tests and hardware checks are described in the
 [technical reference](docs/TECHNICAL_REFERENCE.md).
 `python tests\ui_language_fixture.py` serves simulated browser data only;

@@ -68,6 +68,17 @@
       !tester.link?.connected || !tester.link?.hasFrame || !tester.databaseReady || !$("res-confirm").checked;
     $("res-save").disabled = busy || !loaded;
     $("res-abort").disabled = !status?.busy;
+    let reason = "";
+    if (loaded && status && tester && !sending && !status.busy) {
+      const link = tester.link;
+      if (!link?.connected) reason = "text.2f8a6d41e0c7";
+      else if (!link.hasFrame) reason = "text.5b9d03c7a1e8";
+      else if (tester.controlsBusy) reason = "text.c5b1f84a90d2";
+      else if (!tester.databaseReady) reason = "text.36d9a2e7f1b4";
+      else if (!$("res-confirm").checked) reason = "text.e1708b3c5a96";
+    } else if (status?.busy) reason = "text.0f4c7d29b6e8";
+    $("res-start-hint").textContent = reason ? I18n.t(reason) : "";
+    $("res-start-hint").classList.toggle("d-none", !reason);
     $("res-method").disabled = busy;
     for (const field of fields) $(`res-${field[0]}`).disabled = busy;
   }

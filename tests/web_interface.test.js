@@ -21,6 +21,7 @@ const languages = {
 
 const readyStatus = {
   version: "1.0", project: "EBCTester", csrfToken: "test-token",
+  sessionDays: 1, settingsPasswordRequired: false,
   ssid: "Test-WLAN", apSsid: "BatteryTester-123456", ip: "192.168.1.42",
   connected: true, configuring: false, timeReady: true,
   otaConfigured: true, bootConfirmed: true, otaReady: true, otaBusy: false,
@@ -37,6 +38,8 @@ function createPage(status = readyStatus, confirmResult = true) {
   const requests = [];
   const timers = [];
   const confirmations = [];
+  const redirects = [];
+  let unauthorized = false;
   let responseStatus = { ...status };
   let actionError = null;
   let offline = false;
@@ -53,6 +56,9 @@ function createPage(status = readyStatus, confirmResult = true) {
         replaceChildren() {},
         addEventListener(name, listener) { this.listeners[name] = listener; },
         removeAttribute(name) { delete this[name]; },
+        showModal() { this.open = true; },
+        close() { this.open = false; },
+        focus() {},
       });
     }
     return elements.get(id);
@@ -66,12 +72,14 @@ function createPage(status = readyStatus, confirmResult = true) {
     localStorage: { getItem: () => "de" },
     EBCLanguages: languages,
     console,
+    location: { replace: (url) => redirects.push(url) },
     TextEncoder, AbortSignal: { timeout: () => undefined },
     confirm: (message) => { confirmations.push(message); return confirmResult; },
     setTimeout: (callback) => timers.push(callback),
     fetch: async (url, options) => {
       requests.push({ url, options });
       if (offline) throw new Error("offline");
+      if (unauthorized) return { ok: false, status: 401, text: async () => "Login required." };
       if (url === "/api/status") {
         const snapshot = { ...responseStatus };
         if (statusDelay) {
@@ -89,7 +97,7 @@ function createPage(status = readyStatus, confirmResult = true) {
   vm.runInContext(languageScript, context);
   vm.runInContext(script, context);
   return {
-    element, requests, confirmations,
+    element, requests, confirmations, redirects, context,
     async settle() { await new Promise(setImmediate); },
     async poll(next = responseStatus) {
       responseStatus = { ...next };
@@ -99,6 +107,7 @@ function createPage(status = readyStatus, confirmResult = true) {
     },
     setActionError(message) { actionError = message; },
     setOffline(value) { offline = value; },
+    setUnauthorized() { unauthorized = true; },
     delayNextStatus() {
       let release;
       statusDelay = new Promise((resolve) => { release = resolve; });
@@ -330,4 +339,108 @@ test("availability notes and last successful check are safe text", async () => {
   assert.match(page.element("update-version").textContent, /veraltet/);
   page.click();
   assert.equal(page.mutations().length, 0);
+});
+
+test("daily/weekly setting is loaded once and does not overwrite unsaved edits", async () => {
+  const page = createPage({ ...readyStatus, sessionDays: 7 });
+  await page.settle();
+  assert.equal(page.element("session-days").value, "7");
+  page.element("session-days").value = "1";
+  await page.poll({ ...readyStatus, sessionDays: 7 });
+  assert.equal(page.element("session-days").value, "1");
+  page.element("login-settings-form").listeners.submit({ preventDefault() {} });
+  await page.settle();
+  const action = page.mutations()[0];
+  assert.equal(action.url, "/api/auth/settings");
+  assert.deepEqual(JSON.parse(action.options.body), { sessionDays: 1 });
+  assert.equal(action.options.headers["X-CSRF-Token"], "test-token");
+  assert.equal(action.options.headers["X-Admin-Password"], undefined);
+});
+
+test("settings save waits for a masked password dialog and clears its password afterward", async () => {
+  const page = createPage({ ...readyStatus, settingsPasswordRequired: true });
+  await page.settle();
+  page.element("ssid").value = "Test";
+  page.element("password").value = "wifi-password";
+  page.submit();
+  page.submit();
+  await page.settle();
+  assert.equal(page.mutations().length, 0);
+  assert.equal(page.element("settings-password-dialog").open, true);
+  page.element("settings-admin-password").value = "admin-password";
+  page.element("settings-password-form").onsubmit({ preventDefault() {} });
+  await page.settle();
+  assert.equal(page.mutations().length, 1);
+  assert.equal(page.mutations()[0].options.headers["X-Admin-Password"], "admin-password");
+  assert.equal(page.element("settings-admin-password").value, "");
+  assert.equal(page.element("settings-password-dialog").open, false);
+  await page.poll({ ...readyStatus, settingsPasswordRequired: true });
+  page.submit();
+  await page.settle();
+  assert.equal(page.element("settings-password-dialog").open, true);
+  page.element("settings-password-cancel").onclick();
+  await page.settle();
+});
+
+for (const cancel of ["button", "escape"]) {
+  test(`cancelling settings confirmation by ${cancel} sends nothing and preserves edits`, async () => {
+    const page = createPage({ ...readyStatus, settingsPasswordRequired: true });
+    await page.settle();
+    page.element("ssid").value = "Test";
+    page.element("password").value = "wifi-password";
+    page.submit();
+    await page.settle();
+    if (cancel === "button") page.element("settings-password-cancel").onclick();
+    else page.element("settings-password-dialog").oncancel({ preventDefault() {} });
+    await page.settle();
+    assert.equal(page.mutations().length, 0);
+    assert.equal(page.element("password").value, "wifi-password");
+    assert.equal(page.element("wifi-save").disabled, false);
+  });
+}
+
+test("failed password confirmation does not retry or discard Wi-Fi form values", async () => {
+  const page = createPage({ ...readyStatus, settingsPasswordRequired: true });
+  await page.settle();
+  page.element("ssid").value = "Test";
+  page.element("password").value = "wifi-password";
+  page.setActionError("Incorrect admin password. Settings were not saved.");
+  page.submit();
+  await page.settle();
+  page.element("settings-admin-password").value = "wrong-password";
+  page.element("settings-password-form").onsubmit({ preventDefault() {} });
+  await page.settle();
+  assert.equal(page.mutations().length, 1);
+  assert.equal(page.element("password").value, "wifi-password");
+  assert.match(page.element("action-result").textContent, /Falsches Admin-Passwort/);
+});
+
+test("expired sessions redirect once without replaying actions", async () => {
+  const page = createPage();
+  await page.settle();
+  page.setUnauthorized();
+  await page.poll();
+  await page.poll();
+  assert.deepEqual(page.redirects, ["/login"]);
+  assert.equal(page.mutations().length, 0);
+});
+
+test("logout posts CSRF and returns to login without a settings password prompt", async () => {
+  const page = createPage({ ...readyStatus, settingsPasswordRequired: true });
+  await page.settle();
+  await page.element("logout").listeners.click();
+  assert.equal(page.mutations()[0].url, "/api/auth/logout");
+  assert.equal(page.mutations()[0].options.headers["X-CSRF-Token"], "test-token");
+  assert.deepEqual(page.redirects, ["/login"]);
+  assert.notEqual(page.element("settings-password-dialog").open, true);
+});
+
+test("concurrent settings confirmations are rejected while the first is loading", async () => {
+  const page = createPage({ ...readyStatus, settingsPasswordRequired: true });
+  await page.settle();
+  const first = page.context.WebAuth.settingsHeaders();
+  await assert.rejects(page.context.WebAuth.settingsHeaders(), /bereits geoeffnet/);
+  await page.settle();
+  page.element("settings-password-cancel").onclick();
+  assert.equal(await first, null);
 });
