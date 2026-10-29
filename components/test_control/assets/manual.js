@@ -51,7 +51,7 @@
     const input = $("man-discharge-value");
     $("man-discharge-value-label").textContent = cp ? I18n.t("text.c9d1515a58db") : I18n.t("text.bb39ee18acd6");
     input.min = cp ? "1" : "0.01";
-    input.max = cp ? "2000" : "20";
+    input.max = cp ? "2000" : "40";
     input.step = cp ? "1" : "0.01";
     input.value = cp ? manual.power ?? 5 : manual.dischargeCurrent ?? 0.5;
     $("man-discharge-cutoff").value = cp ? manual.powerCutoff ?? 2.5 : manual.dischargeCutoff ?? 2.5;

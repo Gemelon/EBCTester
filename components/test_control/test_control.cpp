@@ -616,9 +616,9 @@ std::string stop()
 
 std::string start_charge(float current_a, float voltage_v, float cutoff_a)
 {
-    if (!in_range(current_a, 0.01f, 20.0f) || !in_range(voltage_v, 0.01f, 30.0f) ||
-        !in_range(cutoff_a, 0.01f, 20.0f)) {
-        return "Current 0.01–20 A, charge voltage 0.01–30 V, cutoff current 0.01–20 A.";
+    if (!in_range(current_a, 0.01f, 40.0f) || !in_range(voltage_v, 0.01f, 30.0f) ||
+        !in_range(cutoff_a, 0.01f, 40.0f)) {
+        return "Current 0.01–40 A, charge voltage 0.01–30 V, cutoff current 0.01–40 A.";
     }
     std::lock_guard<std::recursive_mutex> guard(state_mutex);
     ensure_settings_loaded();
@@ -638,8 +638,8 @@ std::string start_charge(float current_a, float voltage_v, float cutoff_a)
 
 std::string start_discharge_cc(float current_a, float cutoff_v, uint16_t minutes)
 {
-    if (!in_range(current_a, 0.01f, 20.0f) || !in_range(cutoff_v, 0.01f, 30.0f) || minutes > 239) {
-        return "Current 0.01–20 A, cutoff voltage 0.01–30 V, time 0–239 min.";
+    if (!in_range(current_a, 0.01f, 40.0f) || !in_range(cutoff_v, 0.01f, 30.0f) || minutes > 239) {
+        return "Current 0.01–40 A, cutoff voltage 0.01–30 V, time 0–239 min.";
     }
     std::lock_guard<std::recursive_mutex> guard(state_mutex);
     ensure_settings_loaded();

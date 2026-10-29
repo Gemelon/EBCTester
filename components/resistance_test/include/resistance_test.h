@@ -15,7 +15,7 @@ struct Config {
     bool automatic = false;
     double chargeCurrent = 0.5, chargeVoltage = 3.45, chargeCutoff = 0.1;
     double capacityAh = 20, targetSoc = 50, prepCurrent = 0.5;
-    double cutoffVoltage = 2.5, maxVoltage = 3.6, maxPower = 50;
+    double cutoffVoltage = 2.0, maxVoltage = 3.8, maxPower = 150;
     double restSeconds = 60, baselineSeconds = 3, idleCurrent = 0.02;
     double pulseCurrent = 0.5, pulseSeconds = 12;
     double time1 = 1, time2 = 5, time3 = 10, timingTolerance = 1.5;
@@ -30,13 +30,13 @@ struct Field {
 };
 
 inline constexpr std::array<Field, 22> fields = {{
-    {"chargeCurrent", &Config::chargeCurrent, .01, 20}, {"chargeVoltage", &Config::chargeVoltage, .01, 30},
-    {"chargeCutoff", &Config::chargeCutoff, .01, 20}, {"capacityAh", &Config::capacityAh, .001, 10000},
-    {"targetSoc", &Config::targetSoc, 0, 100}, {"prepCurrent", &Config::prepCurrent, .01, 20},
+    {"chargeCurrent", &Config::chargeCurrent, .01, 40}, {"chargeVoltage", &Config::chargeVoltage, .01, 30},
+    {"chargeCutoff", &Config::chargeCutoff, .01, 40}, {"capacityAh", &Config::capacityAh, .001, 10000},
+    {"targetSoc", &Config::targetSoc, 0, 100}, {"prepCurrent", &Config::prepCurrent, .01, 40},
     {"cutoffVoltage", &Config::cutoffVoltage, .01, 30}, {"maxVoltage", &Config::maxVoltage, .01, 30},
     {"maxPower", &Config::maxPower, .01, 2000}, {"restSeconds", &Config::restSeconds, 1, 86400},
     {"baselineSeconds", &Config::baselineSeconds, 1, 60}, {"idleCurrent", &Config::idleCurrent, 0, .5},
-    {"pulseCurrent", &Config::pulseCurrent, .01, 20}, {"pulseSeconds", &Config::pulseSeconds, 1, 120},
+    {"pulseCurrent", &Config::pulseCurrent, .01, 40}, {"pulseSeconds", &Config::pulseSeconds, 1, 120},
     {"time1", &Config::time1, .1, 120}, {"time2", &Config::time2, .1, 120},
     {"time3", &Config::time3, .1, 120}, {"timingTolerance", &Config::timingTolerance, .1, 5},
     {"maxGap", &Config::maxGap, .1, 5}, {"maxChargeSeconds", &Config::maxChargeSeconds, 10, 172800},

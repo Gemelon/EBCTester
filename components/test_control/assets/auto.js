@@ -7,11 +7,11 @@
   const $ = (id) => document.getElementById(id);
   // scale converts UI units to the integer encoding stored in the plan.
   const MODES = {
-    1: { name: "D-CC", fields: [[I18n.t("text.bb39ee18acd6"), 100, 0.01, 20], [I18n.t("text.7cf603e56ff8"), 100, 0.01, 30], [I18n.t("text.2cba9409833c"), 1, 0, 239]],
+    1: { name: "D-CC", fields: [[I18n.t("text.bb39ee18acd6"), 100, 0.01, 40], [I18n.t("text.7cf603e56ff8"), 100, 0.01, 30], [I18n.t("text.2cba9409833c"), 1, 0, 239]],
       hint: I18n.t("text.9bb42763fbad") },
     2: { name: "D-CP", fields: [[I18n.t("text.c9d1515a58db"), 1, 1, 2000], [I18n.t("text.7cf603e56ff8"), 100, 0.01, 30], [I18n.t("text.2cba9409833c"), 1, 0, 239]],
       hint: I18n.t("text.e97e2f42401b") },
-    3: { name: "C-CV", fields: [[I18n.t("text.bb39ee18acd6"), 100, 0.01, 20], [I18n.t("text.276ed7b6e344"), 100, 0.01, 30], [I18n.t("text.b2c884412725"), 100, 0.01, 20]],
+    3: { name: "C-CV", fields: [[I18n.t("text.bb39ee18acd6"), 100, 0.01, 40], [I18n.t("text.276ed7b6e344"), 100, 0.01, 30], [I18n.t("text.b2c884412725"), 100, 0.01, 40]],
       hint: I18n.t("text.db5db847724b") },
     4: { name: I18n.t("text.233631694afc"), fields: [null, null, ["Dauer (min)", 1, 1, 239]],
       hint: I18n.t("text.380be0c6ecf0") },

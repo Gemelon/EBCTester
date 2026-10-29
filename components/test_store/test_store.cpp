@@ -762,14 +762,14 @@ std::string validate_plan(const std::vector<PlanStep> &steps)
         switch (step.mode) {
         case 1:
         case 2:
-            if (step.p1 < 1 || step.p1 > 2000 || step.p2 < 1 || step.p2 > 3000 || step.p3 > 239) {
-                return row + (step.mode == 1 ? "Current 0.01–20 A" : "Power 1–2000 W") +
+            if (step.p1 < 1 || step.p1 > (step.mode == 1 ? 4000 : 2000) || step.p2 < 1 || step.p2 > 3000 || step.p3 > 239) {
+                return row + (step.mode == 1 ? "Current 0.01–40 A" : "Power 1–2000 W") +
                        ", cutoff voltage 0.01–30 V, time 0–239 min.";
             }
             break;
         case 3:
-            if (step.p1 < 1 || step.p1 > 2000 || step.p2 < 1 || step.p2 > 3000 || step.p3 < 1 || step.p3 > 2000) {
-                return row + "Current 0.01–20 A, charge voltage 0.01–30 V, cutoff current 0.01–20 A.";
+            if (step.p1 < 1 || step.p1 > 4000 || step.p2 < 1 || step.p2 > 3000 || step.p3 < 1 || step.p3 > 4000) {
+                return row + "Current 0.01–40 A, charge voltage 0.01–30 V, cutoff current 0.01–40 A.";
             }
             break;
         case 4:
