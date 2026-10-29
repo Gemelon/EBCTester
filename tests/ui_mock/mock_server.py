@@ -20,20 +20,37 @@ ROOT = Path(__file__).resolve().parents[2]
 SUITE = Path(os.environ.get("OTA_SUITE_DIR", ROOT / "external" / "ota-suite"))
 SD_MANAGER = Path(os.environ.get("SD_CARD_MANAGER_DIR", ROOT / "external" / "sd-card-manager"))
 SHARED = SUITE / "components" / "web_interface" / "assets"
-TESTER = ROOT / "components" / "test_control" / "assets"
+COMPONENTS = ROOT / "components"
+TESTER = COMPONENTS / "test_control" / "assets"
+DASHBOARD = COMPONENTS / "battery_dashboard" / "assets"
 SD_ASSETS = SD_MANAGER / "components" / "sd_card_manager" / "assets"
+LANGUAGES = ROOT / "sd_card" / "languages"
 CSRF_TOKEN = "mock-csrf-token"
 
+# Same extensions, labels, placements and registration order as the firmware (main.c).
 # id, label, placement, html, script
 EXTENSIONS = [
+    ("sd-card", "SD card", "tab", SD_ASSETS / "sd_card.html", SD_ASSETS / "sd_card.js"),
+    ("sd-settings", "SD card bus", "settings", SD_ASSETS / "sd_settings.html", SD_ASSETS / "sd_settings.js"),
+    ("dashboard", "Measurements", "tab", DASHBOARD / "dashboard.html", DASHBOARD / "dashboard.js"),
+    ("mariadb", "MariaDB backup", "settings", COMPONENTS / "mariadb_sync" / "assets" / "mariadb.html",
+     COMPONENTS / "mariadb_sync" / "assets" / "mariadb.js"),
+    ("debug-settings", "Debug log", "settings", COMPONENTS / "debug_log" / "assets" / "debug_settings.html",
+     COMPONENTS / "debug_log" / "assets" / "debug_settings.js"),
+    ("debug", "Debug", "tab", COMPONENTS / "debug_log" / "assets" / "debug.html",
+     COMPONENTS / "debug_log" / "assets" / "debug.js"),
+    ("mqtt", "Home Assistant MQTT", "settings", COMPONENTS / "ha_mqtt" / "assets" / "mqtt.html",
+     COMPONENTS / "ha_mqtt" / "assets" / "mqtt.js"),
     ("battery", "Battery", "tab", TESTER / "battery.html", TESTER / "battery.js"),
     ("manual", "Manual", "tab", TESTER / "manual.html", TESTER / "manual.js"),
     ("auto", "Automatic", "tab", TESTER / "auto.html", TESTER / "auto.js"),
     ("resistance", "Internal resistance", "tab", TESTER / "resistance.html", TESTER / "resistance.js"),
-    ("sd-card", "SD card", "tab", SD_ASSETS / "sd_card.html", SD_ASSETS / "sd_card.js"),
     ("tester-settings", "EBC tester", "settings", TESTER / "tester_settings.html", TESTER / "tester_settings.js"),
-    ("sd-settings", "SD card bus", "settings", SD_ASSETS / "sd_settings.html", SD_ASSETS / "sd_settings.js"),
+    ("languages", "Language", "settings", COMPONENTS / "ui_localization" / "assets" / "languages.html",
+     COMPONENTS / "ui_localization" / "assets" / "languages.js"),
 ]
+TAB_ORDER = "dashboard,battery,manual,auto,resistance,overview,sd-card,updates,settings,debug"
+PRIMARY_TABS = "dashboard,battery,manual,auto,resistance"
 
 MAX_CURRENT = {"A20": 20, "A40L": 40}
 
@@ -46,9 +63,44 @@ RESISTANCE_CONFIG = {
 }
 
 
+def demo_run(run_id, started_ms):
+    """A discharge/charge run with plausible LiFePO4 curves for the Measurements tab."""
+    points, segments = [], []
+    capacity, uptime = 0.0, 0
+    for number, (mode, current, minutes) in enumerate((("D-CC", 20.0, 90), ("WAIT", 0.0, 10), ("C-CV", 10.0, 120)),
+                                                      start=1):
+        start_ms, segment_capacity = started_ms + uptime, 0.0
+        for minute in range(minutes + 1):
+            fraction = minute / minutes
+            if mode == "D-CC":
+                voltage = 3.30 - 0.08 * fraction - 0.4 * fraction ** 8
+            elif mode == "WAIT":
+                voltage = 2.85 + 0.25 * (1 - (1 - fraction) ** 3)
+            else:
+                voltage = min(3.65, 3.25 + 0.5 * fraction)
+                current = 10.0 if voltage < 3.65 else max(0.5, 10.0 * (1 - fraction) * 2)
+            if minute:
+                segment_capacity += current / 60
+            points.append([number, uptime + minute * 60000, start_ms + minute * 60000,
+                           -current if mode == "D-CC" else current, round(voltage, 4), round(segment_capacity, 4)])
+        segments.append({"n": number, "mode": mode, "step": number, "cycle": 1, "sp1": current, "sp2": 2.5,
+                         "sp3": 0, "samples": minutes + 1, "capacityAh": round(segment_capacity, 3),
+                         "startMs": start_ms, "endMs": start_ms + minutes * 60000})
+        capacity, uptime = segment_capacity, uptime + minutes * 60000
+    last = points[-1]
+    return {
+        "run": {"id": run_id, "batteryId": 1, "batteryLabel": "LiFePO4 280 Ah (demo)", "manufacturer": "EVE",
+                "serial": "DEMO-001", "nominalAh": 280, "plan": "Capacity test", "status": "COMPLETED",
+                "currentStep": 3, "cyclePass": 1, "started": started_ms, "ended": started_ms + uptime},
+        "last": {"current": last[3], "voltage": last[4], "capacity": capacity},
+        "segments": segments,
+        "series": {"points": points, "total": len(points), "stride": 1},
+    }
+
+
 def initial_state():
     return {
-        "tabOrder": "manual,auto,resistance,battery,overview,sd-card,updates,settings",
+        "tabOrder": TAB_ORDER,
         "model": "A20",
         "connected": True,
         "busy": False,
@@ -63,6 +115,13 @@ def initial_state():
         "configuredBusMode": "spi",
         "restarts": 0,
         "frames": 0,
+        "runs": {"demo-1": demo_run("demo-1", 1793000000000)},
+        "mqtt": {"enabled": False, "host": "", "port": 1883, "username": "", "passwordSet": False,
+                 "topicPrefix": "ebctester", "intervalSeconds": 20, "allowRemoteStart": False},
+        "mariadb": {"enabled": False, "host": "", "port": 3306, "user": "", "database": "ebctester",
+                    "intervalMinutes": 60, "passwordSet": False},
+        "debug": True,
+        "logSeq": 0,
         "requests": [],
     }
 
@@ -140,6 +199,9 @@ class Handler(BaseHTTPRequestHandler):
             "/app.js": (SHARED / "app.js", "text/javascript"),
             "/app.css": (SHARED / "app.css", "text/css"),
             "/bootstrap.min.css": (SHARED / "bootstrap.min.css", "text/css"),
+            "/ui/dashboard/chart.js": (DASHBOARD / "chart.umd.js", "text/javascript"),
+            "/ui/dashboard/brand-logo.png": (DASHBOARD / "brand_logo.png", "image/png"),
+            "/ui/dashboard/brand-icon.png": (DASHBOARD / "brand_icon.png", "image/png"),
         }
         if url.path in static:
             return self.send_file(*static[url.path])
@@ -147,7 +209,7 @@ class Handler(BaseHTTPRequestHandler):
             en = (SHARED / "en.json").read_text(encoding="utf-8")
             de = (SHARED / "de.json").read_text(encoding="utf-8")
             script = (SHARED / "i18n.js").read_text(encoding="utf-8")
-            return self.send(200, f"window.EBCLanguages={{en:{en},de:{de},sdEnabled:false}};\n{script}",
+            return self.send(200, f"window.EBCLanguages={{en:{en},de:{de},sdEnabled:true}};\n{script}",
                              "text/javascript")
         for ext_id, _, _, html, script in EXTENSIONS:
             if url.path == f"/ui/{ext_id}/content":
@@ -163,7 +225,23 @@ class Handler(BaseHTTPRequestHandler):
             "/api/tester/resistance/history": lambda: self.send_json([]),
             "/api/sd/status": self.sd_status,
             "/api/sd/list": lambda: self.send_json(
-                {"path": parse_qs(url.query).get("path", [""])[0], "items": [], "nextOffset": 0, "hasMore": False}),
+                {"path": parse_qs(url.query).get("path", [""])[0], "nextOffset": 0, "hasMore": False,
+                 "items": [{"name": "languages", "directory": True, "size": 0},
+                           {"name": "ebc_a20.db", "directory": False, "size": 1835008}]}),
+            "/api/db/runs": self.db_runs,
+            "/api/db/run": lambda: self.db_run(parse_qs(url.query).get("id", [""])[0], details=True),
+            "/api/db/measurements": lambda: self.db_run(parse_qs(url.query).get("id", [""])[0], details=False),
+            "/api/mqtt/status": lambda: self.send_json(
+                {"settings": self.device.state["mqtt"],
+                 "state": "connecting" if self.device.state["mqtt"]["enabled"] else "disabled",
+                 "message": "Mock: no broker." if self.device.state["mqtt"]["enabled"] else "MQTT is disabled."}),
+            "/api/mariadb/status": self.mariadb_status,
+            "/api/debug/status": self.debug_status,
+            "/api/debug/log": self.debug_log,
+            "/api/i18n/languages": lambda: self.send_json(
+                {"languages": [{"code": "fil", "name": self.language_file("fil")["name"]}], "errors": []}),
+            "/api/i18n/language": lambda: self.send_json(
+                self.language_file(parse_qs(url.query).get("code", [""])[0])),
         }
         if url.path in routes:
             return routes[url.path]()
@@ -173,7 +251,7 @@ class Handler(BaseHTTPRequestHandler):
         state = self.device.state
         self.send_json({
             "version": "mock", "project": "EBCTester", "csrfToken": CSRF_TOKEN, "tabOrder": state["tabOrder"],
-            "primaryTabs": "manual,auto,resistance,battery", "activityUrl": "/api/tester/status",
+            "primaryTabs": PRIMARY_TABS, "activityUrl": "/api/tester/status",
             "ssid": "mock", "apSsid": "BatteryTester-MOCK", "ip": "127.0.0.1", "networkMessage": "Wi-Fi connected.",
             "connected": True, "configuring": False, "timeReady": True, "otaConfigured": False,
             "otaInsecureHttp": False, "bootConfirmed": True, "otaReady": False, "otaBusy": False,
@@ -182,7 +260,8 @@ class Handler(BaseHTTPRequestHandler):
             "updateNotes": "", "updateMessage": "", "updateLastSuccess": 0, "updateLastSuccessUptime": 0,
             "tabs": [{"id": ext_id, "label": label, "contentUrl": f"/ui/{ext_id}/content",
                       "scriptUrl": f"/ui/{ext_id}/script", "placement": placement}
-                     for ext_id, label, placement, _, _ in EXTENSIONS],
+                     for ext_id, label, placement, _, _ in EXTENSIONS
+                     if ext_id != "debug" or state["debug"]],
         })
 
     def tester_status(self):
@@ -224,6 +303,54 @@ class Handler(BaseHTTPRequestHandler):
                         "restartRequired": state["busMode"] != state["configuredBusMode"],
                         "restartPending": False})
 
+    def db_runs(self):
+        runs = [details["run"] for details in self.device.state["runs"].values()]
+        self.send_json({"batteries": [{"id": 1, "label": "LiFePO4 280 Ah (demo)", "nominalAh": 280}],
+                        "runs": sorted(runs, key=lambda run: run["started"], reverse=True)})
+
+    def db_run(self, run_id, details):
+        run = self.device.state["runs"].get(run_id)
+        if run is None:
+            return self.send(404, "Test run not found.")
+        if details:
+            return self.send_json({key: run[key] for key in ("run", "last", "segments")})
+        return self.send_json(run["series"])
+
+    def mariadb_status(self):
+        settings = self.device.state["mariadb"]
+        self.send_json({"settings": settings, "state": "idle" if settings["enabled"] else "disabled",
+                        "busy": False, "message": "MariaDB backup is disabled." if not settings["enabled"] else "",
+                        "lastSuccess": 0, "lastAttempt": 0, "lastRuns": 0, "lastMeasurements": 0,
+                        "pendingRuns": len(self.device.state["runs"]), "serverVersion": "",
+                        "networkConnected": True, "databaseReady": True})
+
+    def debug_lines(self):
+        state = self.device.state
+        lines = []
+        for _ in range(3):
+            state["logSeq"] += 1
+            lines.append({"seq": state["logSeq"],
+                          "text": f"I ({state['logSeq'] * 1000}) mock: model {state['model']}, SD bus {state['busMode']}"})
+        return lines
+
+    def debug_status(self):
+        state = self.device.state
+        self.send_json({"enabled": state["debug"], "capacity": 500, "count": min(state["logSeq"], 500),
+                        "firstSeq": 1, "nextSeq": state["logSeq"] + 1, "dropped": 0, "setting": state["debug"]})
+
+    def debug_log(self):
+        with self.device.lock:
+            state = self.device.state
+            lines = self.debug_lines() if state["debug"] else []
+            self.send_json({"enabled": state["debug"], "capacity": 500 if state["debug"] else 0,
+                            "count": len(lines), "firstSeq": lines[0]["seq"] if lines else 0,
+                            "nextSeq": state["logSeq"] + 1, "lines": lines})
+
+    def language_file(self, code):
+        if code != "fil":
+            return {}
+        return json.loads((LANGUAGES / "fil.json").read_text(encoding="utf-8"))
+
     # ---------- POST ----------
 
     def do_POST(self):
@@ -234,7 +361,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(403, "Invalid session token. Reload the page.")
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            body = json.loads(self.rfile.read(length) or b"null")
+            body = json.loads(self.rfile.read(length) or b"{}")
         except (ValueError, json.JSONDecodeError):
             return self.send(400, "JSON request missing, too large or invalid.")
         if not isinstance(body, dict):
@@ -247,6 +374,16 @@ class Handler(BaseHTTPRequestHandler):
             "/api/tester/resistance": self.post_resistance,
             "/api/tester/battery": self.post_battery,
             "/api/sd/bus": self.post_sd_bus,
+            "/api/mqtt/settings": self.post_mqtt_settings,
+            "/api/mqtt/test": lambda body: self.send(200, "Mock: no broker reachable; nothing was sent."),
+            "/api/mariadb/settings": self.post_mariadb_settings,
+            "/api/mariadb/test": lambda body: self.send(200, "Mock: no MariaDB server; nothing was sent."),
+            "/api/mariadb/sync": lambda body: self.send(200, "Mock: synchronization simulated."),
+            "/api/mariadb/full-sync": lambda body: self.send(200, "Mock: full synchronization simulated."),
+            "/api/debug/settings": self.post_debug_settings,
+            "/api/debug/clear": lambda body: self.send_json({"nextSeq": self.device.state["logSeq"] + 1}),
+            "/api/db/demo": self.post_demo,
+            "/api/db/run/delete": lambda body: self.post_delete_run(parse_qs(url.query).get("id", [""])[0]),
         }
         if url.path not in routes:
             return self.send(404, "Not found.")
@@ -349,6 +486,42 @@ class Handler(BaseHTTPRequestHandler):
         return self.send(202, "SD bus mode saved. The device restarts now.")
 
 
+    def post_mqtt_settings(self, body):
+        settings = self.device.state["mqtt"]
+        for key in ("enabled", "host", "port", "username", "topicPrefix", "intervalSeconds", "allowRemoteStart"):
+            if key in body:
+                settings[key] = body[key]
+        if body.get("password"):
+            settings["passwordSet"] = True
+        return self.send(200, "MQTT settings saved.")
+
+    def post_mariadb_settings(self, body):
+        settings = self.device.state["mariadb"]
+        for key in ("enabled", "host", "port", "user", "database", "intervalMinutes"):
+            if key in body:
+                settings[key] = body[key]
+        if body.get("password"):
+            settings["passwordSet"] = True
+        return self.send(200, "MariaDB settings saved.")
+
+    def post_debug_settings(self, body):
+        enabled = bool(body.get("enabled"))
+        self.device.state["debug"] = enabled
+        return self.send(200, "Debug log enabled; the Debug tab is now available." if enabled
+                         else "Debug log disabled and buffer released.")
+
+    def post_demo(self, body):
+        runs = self.device.state["runs"]
+        run_id = f"demo-{len(runs) + 1}"
+        runs[run_id] = demo_run(run_id, 1793000000000 + len(runs) * 86400000)
+        return self.send_json({"runId": run_id})
+
+    def post_delete_run(self, run_id):
+        if self.device.state["runs"].pop(run_id, None) is None:
+            return self.send(404, "Test run not found.")
+        return self.send(200, "Test run deleted.")
+
+
 def make_server(host="127.0.0.1", port=8080, device=None, quiet=True):
     handler = type("BoundHandler", (Handler,), {"device": device or MockDevice(), "quiet": quiet})
     return ThreadingHTTPServer((host, port), handler)
@@ -358,11 +531,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--model", choices=sorted(MAX_CURRENT), default="A20")
-    parser.add_argument("--tab", default="manual", help="tab opened first, e.g. settings, manual, auto")
+    parser.add_argument("--tab", default="dashboard", help="tab opened first, e.g. settings, manual, auto")
     args = parser.parse_args()
     device = MockDevice()
-    device.reset(model=args.model, tabOrder=f"{args.tab},manual,auto,resistance,battery,overview,sd-card,"
-                                            "updates,settings")
+    order = [args.tab] + [tab for tab in TAB_ORDER.split(",") if tab != args.tab]
+    device.reset(model=args.model, tabOrder=",".join(order))
     server = make_server(port=args.port, device=device, quiet=False)
     print(f"Mock device UI: http://127.0.0.1:{args.port}  (Ctrl+C to stop)")
     try:

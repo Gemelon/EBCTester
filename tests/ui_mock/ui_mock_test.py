@@ -24,7 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import mock_server  # noqa: E402
 
-TABS = "manual,auto,resistance,battery,overview,sd-card,updates,settings"
+TABS = mock_server.TAB_ORDER
 
 
 def find_chrome():
@@ -153,6 +153,11 @@ class BrowserTest(MockTestCase):
             for name in ("chargeCurrent", "chargeCutoff", "prepCurrent", "pulseCurrent"):
                 self.assertEqual(self.max_of(dom, f"res-{name}"), limit, f"{name} ({model})")
             self.assertEqual(self.max_of(dom, "res-maxPower"), "2000")
+
+    def test_every_tab_renders_without_script_errors(self):
+        for tab in TABS.split(","):
+            with self.subTest(tab=tab):
+                self.assertIn(f'id="tab-{tab}"', self.render(tab))
 
     def test_settings_cards_render(self):
         dom = self.render("settings", "A40L")
