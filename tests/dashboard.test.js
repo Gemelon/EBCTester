@@ -19,16 +19,20 @@ function page(runs = [], error = null) {
   const requests = [];
   const charts = [];
   const timers = [];
+  const observers = new Map();
+  const translations = { ...strings };
   function element(id) {
     assert.notEqual(id, "dash-demo");
     assert.notEqual(id, "dash-delete");
     if (!elements.has(id)) elements.set(id, {
-      value: "", textContent: "", disabled: false, options: [], listeners: {}, style: {},
+      value: "", textContent: id === "page-subtitle" ? translations["text.690c0f1d7edf"] : "",
+      disabled: false, options: [], listeners: {}, style: {},
       querySelector() { return {}; },
       setAttribute() {},
       replaceChildren(...children) { this.options = children; this.value = children[0]?.value || ""; },
       append(child) { this.options.push(child); if (!this.value) this.value = child.value || ""; },
       addEventListener(name, listener) { this.listeners[name] = listener; },
+      insertAdjacentElement(position, child) { this.insertedPosition = position; this.insertedElement = child; },
     });
     return elements.get(id);
   }
@@ -36,10 +40,14 @@ function page(runs = [], error = null) {
     document: {
       getElementById: element, querySelector: () => ({}), head: { append() {} },
       createElement: () => ({ append() {} }), visibilityState: "visible",
+      addEventListener(name, listener) { documentListeners[name] = listener; },
     },
-    MutationObserver: class { observe() {} },
+    MutationObserver: class {
+      constructor(callback) { this.callback = callback; }
+      observe(target) { observers.set(target, this.callback); }
+    },
     I18n: {
-      t: (key) => { assert.ok(Object.hasOwn(strings, key), key); return strings[key]; },
+      t: (key) => { assert.ok(Object.hasOwn(translations, key), key); return translations[key]; },
       f: (key, values) => strings[key].replace(/\{(p\d+)\}/g, (_, name) => String(values[name])),
       message: (text) => text, locale: "en-GB",
     },
@@ -66,10 +74,11 @@ function page(runs = [], error = null) {
         text: async () => error || JSON.stringify(body) };
     },
   };
+  const documentListeners = {};
   context.window = context;
   vm.createContext(context);
   vm.runInContext(script, context);
-  return { element, requests, charts, timers };
+  return { element, requests, charts, timers, documentListeners, observers, translations };
 }
 
 const settle = () => new Promise(setImmediate);
@@ -104,6 +113,72 @@ test("database errors remain visible without generating or deleting data", async
   assert.match(view.element("dash-message").textContent, /Database not ready/);
   assert.match(view.element("dash-message").className, /alert-danger/);
   assert.equal(view.requests.length, 1);
+});
+
+test("the header shows the detected tester model and identifies unknown IDs", () => {
+  const view = page();
+  const indicator = view.element("app-brand").insertedElement;
+  const subtitle = view.element("page-subtitle");
+  assert.equal(indicator.textContent, "Unknown");
+  assert.match(subtitle.textContent, /Unknown/);
+  assert.equal(view.element("app-brand").insertedPosition, "afterend");
+  view.documentListeners["tester-status"]({ detail: { link: {
+    connected: true, hasModel: false,
+  } } });
+  assert.equal(indicator.textContent, "Unknown");
+  view.documentListeners["tester-status"]({ detail: { link: {
+    connected: true, hasModel: true, model: 0x10, modelKnown: true, modelName: "EBC-A40L",
+  } } });
+  assert.equal(indicator.textContent, "EBC-A40L");
+  assert.equal(indicator.className, "small text-white");
+  assert.match(subtitle.textContent, /EBC-A40L/);
+  view.documentListeners["tester-status"]({ detail: { link: {
+    connected: true, hasModel: true, model: 0x17, modelKnown: false,
+  } } });
+  assert.equal(indicator.textContent, "Unknown (0x17)");
+  assert.match(indicator.className, /text-bg-warning/);
+  assert.match(subtitle.textContent, /0x17/);
+  view.documentListeners["tester-status"]({ detail: { link: { connected: false, hasModel: false } } });
+  assert.equal(indicator.textContent, "Unknown");
+  assert.match(subtitle.textContent, /Unknown/);
+  view.documentListeners["tester-status-error"]();
+  assert.equal(indicator.textContent, "Unknown");
+});
+
+test("shell refreshes cannot restore a stale model or overwrite administration subtitles", () => {
+  const view = page();
+  const subtitle = view.element("page-subtitle");
+  const updateHeading = view.observers.get(subtitle);
+  assert.equal(typeof updateHeading, "function");
+  const status = view.documentListeners["tester-status"];
+  for (const link of [
+    { connected: false },
+    { connected: true, hasModel: true, modelKnown: true, modelName: "EBC-A40L", model: 0x10 },
+    { connected: true, hasModel: true, modelKnown: false, model: 0x17 },
+  ]) {
+    status({ detail: { link } });
+    const expected = subtitle.textContent;
+    for (let poll = 0; poll < 20; poll++) {
+      subtitle.textContent = view.translations["text.690c0f1d7edf"];
+      updateHeading();
+      assert.equal(subtitle.textContent, expected);
+      updateHeading();
+      assert.equal(subtitle.textContent, expected, "observer updates must stabilize");
+    }
+    subtitle.textContent = strings["text.9735448f0c23"];
+    updateHeading();
+    status({ detail: { link } });
+    assert.equal(subtitle.textContent, strings["text.9735448f0c23"]);
+    subtitle.textContent = view.translations["text.690c0f1d7edf"];
+    updateHeading();
+    assert.equal(subtitle.textContent, expected);
+  }
+  view.translations["text.690c0f1d7edf"] = "Measurements for EBC-A20";
+  subtitle.textContent = view.translations["text.690c0f1d7edf"];
+  updateHeading();
+  assert.equal(subtitle.textContent, "Measurements for Unknown (0x17)");
+  view.documentListeners["tester-status-error"]();
+  assert.equal(subtitle.textContent, "Measurements for Unknown");
 });
 
 test("demo generation and run deletion are absent from firmware routes and build inputs", () => {

@@ -66,6 +66,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/ui/dashboard/chart.js":
             return self.respond((EXTENSIONS["dashboard"][0] / "chart.umd.js").read_bytes(),
                                 "application/javascript")
+        if path == "/ui/tester/validation.js":
+            return self.respond((EXTENSIONS["manual"][0] / "validation.js").read_bytes(),
+                                "application/javascript")
         parts = path.split("/")
         if len(parts) == 4 and parts[1] == "ui" and parts[2] in EXTENSIONS:
             directory, basename, _ = EXTENSIONS[parts[2]]

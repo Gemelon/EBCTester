@@ -39,8 +39,10 @@ typedef struct {
 typedef struct {
     bool connected;
     bool has_frame;
+    bool has_model;
     bool auto_connect;
     bool command_pending;
+    uint8_t model;
     ebc_frame_t frame; /* last measurement frame */
     uint32_t frames_ok;
     uint32_t frames_bad;

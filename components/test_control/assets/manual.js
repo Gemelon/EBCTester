@@ -3,13 +3,35 @@
 
 "use strict";
 
-(() => {
+(async () => {
+  const { bindNumericValidation, setNumericBounds } = await import("/ui/tester/validation.js");
   const $ = (id) => document.getElementById(id);
+  const chargeValidation = bindNumericValidation($("man-charge-form"));
+  const dischargeValidation = bindNumericValidation($("man-discharge-form"));
   const fmt = (value, digits, unit) => (Number.isFinite(value) ? `${value.toFixed(digits)} ${unit}` : "-");
   let manual = {};
   let timer = 0;
   let submitting = false;
   let latestStatus = null;
+  let activeLimits = { chargeVoltage: 5, dischargeVoltage: 5, chargeCurrent: 5, dischargeCurrent: 20, power: 85 };
+
+  function modelLimits() {
+    return activeLimits;
+  }
+
+  function updateModelHeading(link) {
+    const subtitle = document.querySelector("#tab-manual p[data-model-heading]");
+    if (!subtitle) return;
+    const base = I18n.t("text.dd59d095071c").replace("EBC-A20", "Unknown");
+    if (!link?.connected || !link?.hasModel) {
+      subtitle.textContent = base;
+      return;
+    }
+    const ident = `0x${Number(link.model).toString(16).padStart(2, "0").toUpperCase()}`;
+    const name = link.modelKnown
+      ? link.modelName : `Unknown (${ident})`;
+    subtitle.textContent = I18n.t("text.dd59d095071c").replace("EBC-A20", name);
+  }
 
   function startBlockReason(status) {
     const link = status?.link;
@@ -65,14 +87,31 @@
 
   function applyDischargeMode() {
     const cp = discharge() === "cp";
+    const limits = modelLimits();
     const input = $("man-discharge-value");
     $("man-discharge-value-label").textContent = cp ? I18n.t("text.c9d1515a58db") : I18n.t("text.bb39ee18acd6");
-    input.min = cp ? "1" : "0.01";
-    input.max = cp ? "2000" : "20";
-    input.step = cp ? "1" : "0.01";
+    setNumericBounds(input, { min: cp ? 1 : 0.01, max: cp ? limits.power : limits.dischargeCurrent,
+      step: cp ? 1 : 0.01 });
     input.value = cp ? manual.power ?? 5 : manual.dischargeCurrent ?? 0.5;
     $("man-discharge-cutoff").value = cp ? manual.powerCutoff ?? 2.5 : manual.dischargeCutoff ?? 2.5;
     $("man-discharge-minutes").value = cp ? manual.powerMinutes ?? 239 : manual.dischargeMinutes ?? 239;
+    updateModelLimits();
+  }
+
+  function updateModelLimits() {
+    const limits = modelLimits();
+    setNumericBounds($("man-charge-current"), { max: limits.chargeCurrent });
+    setNumericBounds($("man-charge-voltage"), { max: limits.chargeVoltage });
+    setNumericBounds($("man-charge-cutoff"), { max: Math.min(
+      limits.chargeCurrent, Number($("man-charge-current").value) || limits.chargeCurrent) });
+    setNumericBounds($("man-discharge-cutoff"), { max: limits.dischargeVoltage });
+    const cp = discharge() === "cp";
+    setNumericBounds($("man-discharge-value"), { max: cp
+      ? Math.min(limits.power,
+        limits.dischargeCurrent * (Number($("man-discharge-cutoff").value) || limits.dischargeVoltage))
+      : limits.dischargeCurrent });
+    chargeValidation.refresh();
+    dischargeValidation.refresh();
   }
 
   async function loadSettings() {
@@ -91,6 +130,9 @@
   function render(status) {
     latestStatus = status;
     const link = status.link || {};
+    if (link.limits) activeLimits = link.limits;
+    updateModelHeading(link);
+    updateModelLimits();
     const badge = $("man-link-badge");
     if (link.connected && link.active) {
       badge.className = "badge text-bg-success fs-6";
@@ -196,8 +238,15 @@
   for (const radio of document.querySelectorAll("input[name='man-discharge-mode']")) {
     radio.addEventListener("change", applyDischargeMode);
   }
+  for (const id of ["man-charge-current", "man-discharge-cutoff"]) {
+    $(id).addEventListener("input", updateModelLimits);
+  }
 
   void loadSettings();
   updateControls();
   void refresh();
-})();
+})().catch(error => {
+  const box = document.getElementById("man-message");
+  box.className = "alert alert-danger";
+  box.textContent = I18n.message(error.message);
+});

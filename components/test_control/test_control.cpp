@@ -12,6 +12,7 @@
 
 #include "cJSON.h"
 #include "ebc_link.h"
+#include "ebc_model.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "nvs.h"
@@ -509,6 +510,75 @@ bool in_range(float value, float minimum, float maximum)
     return std::isfinite(value) && value >= minimum && value <= maximum;
 }
 
+bool has_hundredth_precision(float value)
+{
+    return std::fabs(value * 100.0f - std::roundf(value * 100.0f)) < 0.0001f;
+}
+
+ebc_model_limits_t current_model_limits()
+{
+    ebc_link_status_t link;
+    ebc_link_get_status(&link);
+    ebc_model_limits_t limits;
+    ebc_model_get_limits(link.connected && link.has_model ? link.model : 0, &limits);
+    return limits;
+}
+
+std::string validate_plan_for_model(const std::vector<test_store::PlanStep> &steps,
+                                    const ebc_model_limits_t &limits)
+{
+    const std::string generic_error = test_store::validate_plan(steps);
+    if (!generic_error.empty()) {
+        return generic_error;
+    }
+    for (size_t index = 0; index < steps.size(); ++index) {
+        const test_store::PlanStep &step = steps[index];
+        const std::string row = "Step " + std::to_string(index + 1) + ": ";
+        if (step.mode == 1) {
+            if (step.p1 > limits.max_discharge_current_a * 100.0f ||
+                step.p2 > limits.max_discharge_voltage_v * 100.0f) {
+                return row + "Discharge current or cutoff voltage exceeds the " + limits.name + " limits.";
+            }
+        } else if (step.mode == 2) {
+            const float cutoff_voltage = step.p2 / 100.0f;
+            if (step.p1 > limits.max_power_w ||
+                cutoff_voltage > limits.max_discharge_voltage_v ||
+                step.p1 > limits.max_discharge_current_a * cutoff_voltage) {
+                return row + "Constant-power settings exceed the " + limits.name + " power, current, or voltage limits.";
+            }
+        } else if (step.mode == 3) {
+            if (step.p1 > limits.max_charge_current_a * 100.0f ||
+                step.p2 > limits.max_charge_voltage_v * 100.0f ||
+                step.p3 > limits.max_charge_current_a * 100.0f || step.p3 > step.p1) {
+                return row + "Charge current, voltage, or cutoff exceeds the " + limits.name + " limits.";
+            }
+        }
+    }
+    return "";
+}
+
+std::string validate_resistance_for_model(const resistance_test::Config &config,
+                                          const ebc_model_limits_t &limits)
+{
+    const std::string generic_error = resistance_test::validate(config);
+    if (!generic_error.empty()) {
+        return generic_error;
+    }
+    if (config.chargeCurrent > limits.max_charge_current_a ||
+        config.prepCurrent > limits.max_charge_current_a ||
+        config.chargeCutoff > config.chargeCurrent ||
+        config.chargeVoltage > limits.max_charge_voltage_v) {
+        return "Internal resistance charge settings exceed the " + std::string(limits.name) + " limits.";
+    }
+    if (config.cutoffVoltage > limits.max_discharge_voltage_v ||
+        config.maxVoltage > limits.max_discharge_voltage_v ||
+        config.maxPower > limits.max_power_w ||
+        config.pulseCurrent > limits.max_discharge_current_a) {
+        return "Internal resistance discharge settings exceed the " + std::string(limits.name) + " limits.";
+    }
+    return "";
+}
+
 } // namespace
 
 const char *run_state_name(RunState state)
@@ -561,7 +631,19 @@ std::string start_resistance(const resistance_test::Config &config)
     ensure_settings_loaded();
     if (controls_busy() || capturing || test_store::recorder_status().active)
         return "Another operation or recording is still active.";
+    const std::string error = validate_resistance_for_model(config, current_model_limits());
+    if (!error.empty()) {
+        return error;
+    }
     return resistance_test::start(config, settings.battery);
+}
+
+std::string save_resistance_config(const resistance_test::Config &config)
+{
+    std::lock_guard<std::recursive_mutex> guard(state_mutex);
+    ensure_settings_loaded();
+    const std::string error = validate_resistance_for_model(config, current_model_limits());
+    return error.empty() ? resistance_test::save_config(config) : error;
 }
 
 std::string abort_resistance()
@@ -616,12 +698,18 @@ std::string stop()
 
 std::string start_charge(float current_a, float voltage_v, float cutoff_a)
 {
-    if (!in_range(current_a, 0.01f, 20.0f) || !in_range(voltage_v, 0.01f, 30.0f) ||
-        !in_range(cutoff_a, 0.01f, 20.0f)) {
-        return "Current 0.01–20 A, charge voltage 0.01–30 V, cutoff current 0.01–20 A.";
-    }
     std::lock_guard<std::recursive_mutex> guard(state_mutex);
     ensure_settings_loaded();
+    const ebc_model_limits_t limits = current_model_limits();
+    if (!in_range(current_a, 0.01f, limits.max_charge_current_a) ||
+        !in_range(voltage_v, 0.01f, limits.max_charge_voltage_v) ||
+        !in_range(cutoff_a, 0.01f, limits.max_charge_current_a) || cutoff_a > current_a ||
+        !has_hundredth_precision(current_a) || !has_hundredth_precision(voltage_v) ||
+        !has_hundredth_precision(cutoff_a)) {
+        return "Charge current/cutoff must be 0.01 A or more and no greater than the requested current or " +
+               std::string(limits.name) + " limit; charge voltage must be 0.01–" +
+               std::to_string(limits.max_charge_voltage_v) + " V.";
+    }
     std::string error = check_manual_allowed();
     if (error.empty()) {
         error = queue(EBC_CMD_CHARGE_CV, hundredths(current_a), hundredths(voltage_v), hundredths(cutoff_a));
@@ -638,11 +726,17 @@ std::string start_charge(float current_a, float voltage_v, float cutoff_a)
 
 std::string start_discharge_cc(float current_a, float cutoff_v, uint16_t minutes)
 {
-    if (!in_range(current_a, 0.01f, 20.0f) || !in_range(cutoff_v, 0.01f, 30.0f) || minutes > 239) {
-        return "Current 0.01–20 A, cutoff voltage 0.01–30 V, time 0–239 min.";
-    }
     std::lock_guard<std::recursive_mutex> guard(state_mutex);
     ensure_settings_loaded();
+    const ebc_model_limits_t limits = current_model_limits();
+    if (!in_range(current_a, 0.01f, limits.max_discharge_current_a) ||
+        !in_range(cutoff_v, 0.01f, limits.max_discharge_voltage_v) || minutes > 239) {
+        return "Discharge current or cutoff voltage exceeds the " + std::string(limits.name) +
+               " limits; time must be 0–239 min.";
+    }
+    if (!has_hundredth_precision(current_a) || !has_hundredth_precision(cutoff_v)) {
+        return "Discharge current and cutoff voltage must use 0.01-unit increments.";
+    }
     std::string error = check_manual_allowed();
     if (error.empty()) {
         error = queue(EBC_CMD_DISCHARGE_CC, hundredths(current_a), hundredths(cutoff_v), minutes);
@@ -659,11 +753,17 @@ std::string start_discharge_cc(float current_a, float cutoff_v, uint16_t minutes
 
 std::string start_discharge_cp(float power_w, float cutoff_v, uint16_t minutes)
 {
-    if (!in_range(power_w, 1.0f, 2000.0f) || !in_range(cutoff_v, 0.01f, 30.0f) || minutes > 239) {
-        return "Power 1–2000 W, cutoff voltage 0.01–30 V, time 0–239 min.";
-    }
     std::lock_guard<std::recursive_mutex> guard(state_mutex);
     ensure_settings_loaded();
+    const ebc_model_limits_t limits = current_model_limits();
+    if (!in_range(power_w, 1.0f, limits.max_power_w) ||
+        std::fabs(power_w - std::roundf(power_w)) > 0.0001f ||
+        !in_range(cutoff_v, 0.01f, limits.max_discharge_voltage_v) || minutes > 239 ||
+        !has_hundredth_precision(cutoff_v) ||
+        power_w > limits.max_discharge_current_a * cutoff_v) {
+        return "Constant-power settings exceed the " + std::string(limits.name) +
+               " power, current, or voltage limits; time must be 0–239 min.";
+    }
     std::string error = check_manual_allowed();
     if (error.empty()) {
         error = queue(EBC_CMD_DISCHARGE_CP, static_cast<uint16_t>(lroundf(power_w)), hundredths(cutoff_v), minutes);
@@ -694,7 +794,7 @@ std::string set_battery(const test_store::Battery &battery)
 std::string set_plan(const test_store::Plan &plan)
 {
     if (!plan.steps.empty()) {
-        const std::string error = test_store::validate_plan(plan.steps);
+        const std::string error = validate_plan_for_model(plan.steps, current_model_limits());
         if (!error.empty()) {
             return error;
         }
@@ -726,7 +826,7 @@ std::string start_plan()
     if (controls_busy()) {
         return "An operation is active or a command is pending. Please stop it first.";
     }
-    const std::string error = test_store::validate_plan(settings.plan.steps);
+    const std::string error = validate_plan_for_model(settings.plan.steps, current_model_limits());
     if (!error.empty()) {
         return error;
     }

@@ -3,9 +3,75 @@
 
 # EBCTester technical reference
 
-Implementation details for firmware 1.3.36. Commands and file paths below
+Implementation details for firmware 1.3.56. Commands and file paths below
 are relative to the project root. For purpose, setup, safety and licensing,
 see [README](../README.md) and [third-party notices](../THIRD_PARTY_NOTICES.md).
+
+## EBC model detection and limits
+
+Each 19-byte status frame carries the model identifier at byte index 16
+(zero-based), immediately before the checksum and `0xF8` terminator. The
+checksum is validated before that byte is used. Known identifiers map to
+model limits; an unknown identifier logs a warning, keeps the connection
+available, and uses the conservative fallback shown below.
+
+| Model | Ident | Max charge V | Max charge A | Max discharge V | Max discharge A | Max CP power |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| EBC-A20 | `0x09` | 18 V | 5 A | 30 V | 20 A | 85 W |
+| EBC-A40L | `0x10` | 5 V | 40 A | 5 V | 40 A | 200 W |
+| EBC-A50L | Unknown | 5 V | 50 A | 5 V | 50 A | 250 W |
+| Unknown identifier fallback | Any other byte | 5 V | 5 A | 5 V | 20 A | 85 W |
+
+The A50L's manufacturer product page describes it as a 0–5 V, 50 A device;
+the manufacturer home page lists the A50L class as 0–5 V / 50 A / 250 W
+([product page](http://www.zketech.com/en/pd.jsp?id=30),
+[manufacturer home page](http://www.zketech.com/en/)). Its status-frame
+identifier is not published and remains unconfirmed. Therefore an A50L uses
+the unknown-identifier fallback until its byte is captured and added to the
+model table. The advertised current range does not verify the protocol's
+0.01 A setpoint resolution; test this on the physical A50L before relying on
+10 mA increments.
+
+All manual charge/discharge requests and test-plan steps are checked against
+the connected model before queueing or starting. Constant-power requests must
+also fit the model's maximum current at the configured cutoff voltage.
+Internal-resistance parameters are checked against the same charge, discharge,
+voltage and power limits, in addition to the existing timing and measurement
+checks. The browser receives the active limit profile and updates numeric form
+bounds; server-side validation remains authoritative. When disconnected or
+unknown, configuration uses the conservative profile. No battery-chemistry
+field exists in the current data model; users of A40L/A50L must select
+lithium-cell settings and remain within the 5 V profile.
+
+The detected model is exposed in the top navigation beside the EBCTester logo
+and replaces the fixed model name in the primary section subtitle and manual
+control description. The model identifier is tracked from all valid status
+frames, including auxiliary frames that do not contain measurements.
+Before identification and after disconnecting, the model label is `Unknown`,
+without assuming an EBC model prefix. Unrecognized identifiers appear as
+`Unknown (0xNN)` and retain the conservative limits.
+The dashboard synchronizes the model subtitle after shared-shell DOM updates,
+before the browser paints, so independent status polls cannot display the
+shell's static model name between updates. Administration subtitles are left
+unchanged, and language changes use the current translated subtitle template.
+
+Numeric inputs in Manual, Automatic and Internal resistance use persistent
+inline validation messages when a field loses focus. Touched fields are
+revalidated when dependent setpoints or model limits change. Invalid forms
+cannot submit start/save requests. Regular status polling does not rewrite
+unchanged numeric bounds or dismiss validation messages; native transient
+validation popups are replaced by accessible feedback below each field.
+
+### Branch builds and BIN files
+
+Git branches contain source changes, not separate firmware files. A build
+produces `build/EBCTester.bin` from the checked-out branch, so do not treat a
+BIN from `main` as the build for `multi-model-support`. Keep test builds
+versioned and publish them as immutable, versioned files; do not overwrite a
+published version with different firmware bytes. After merging or rebasing
+changes from `main`, rebuild and validate the resulting branch before testing.
+Only flash a test BIN deliberately; automated validation does not flash
+hardware.
 
 ## UI languages and SD template
 

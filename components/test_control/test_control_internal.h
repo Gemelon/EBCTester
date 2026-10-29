@@ -47,6 +47,7 @@ PlanStatus get_plan_status();
 bool controls_busy();
 std::string start_resistance(const resistance_test::Config &config);
 std::string abort_resistance();
+std::string save_resistance_config(const resistance_test::Config &config);
 
 /* All functions return an empty string on success or a German error message. */
 std::string set_auto_connect(bool enabled);

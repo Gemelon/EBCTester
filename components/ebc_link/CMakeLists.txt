@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 idf_component_register(
-    SRCS "ebc_link.c"
+    SRCS "ebc_link.c" "ebc_model.c"
     INCLUDE_DIRS "include"
     PRIV_REQUIRES esp_driver_uart esp_driver_gpio esp_timer
 )

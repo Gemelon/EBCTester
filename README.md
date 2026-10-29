@@ -9,10 +9,11 @@
 
 **Test batteries and keep their measurements without running a PC for weeks.**
 
-EBCTester connects a ZKE EBC-A20 to a small ESP32-S3. The microcontroller
-operates the tester, executes test plans, and records measurements on an SD
-card. Its local web interface lets you manage batteries, follow measurements,
-and view charts from a phone, even outside your home Wi-Fi network.
+EBCTester connects supported ZKE EBC battery testers to a small ESP32-S3. The
+microcontroller operates the tester, executes test plans, and records
+measurements on an SD card. Its local web interface lets you manage batteries,
+follow measurements, and view charts from a phone, even outside your home
+Wi-Fi network.
 
 ## A look at the web interface
 
@@ -146,6 +147,32 @@ loadable from SD.
 </p>
 
 </details>
+
+## EBC model support
+
+The connected tester model is detected from the identifier byte in each valid
+status frame. Model-specific charge voltage/current, discharge voltage/current,
+and constant-power limits are applied to manual commands, plans, and internal
+resistance settings.
+
+| Model | Ident | Charge voltage | Charge current | Discharge voltage | Discharge current | Max. power |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| EBC-A20 | `0x09` | 18 V | 5 A | 30 V | 20 A | 85 W |
+| EBC-A40L | `0x10` | 5 V | 40 A | 5 V | 40 A | 200 W |
+| EBC-A50L | Not confirmed | 5 V | 50 A | 5 V | 50 A | 250 W |
+
+The manufacturer describes the A50L as a 0–5 V, 50 A, 250 W tester
+([product page](http://www.zketech.com/en/pd.jsp?id=30)). Its identifier byte
+has not yet been confirmed, so it currently appears as an unknown model and
+uses conservative limits of 5 V / 5 A charging and 5 V / 20 A / 85 W
+discharging. Unknown identifiers do not prevent connection.
+
+The protocol encodes setpoints in two base-240 bytes, with current and voltage
+setpoints sent in 0.01-unit increments. The numeric range is sufficient for
+50 A, but the 10 mA current resolution has not yet been verified on real A50L
+hardware. The application does not store a battery-chemistry selection; for
+the 5 V models, select settings appropriate for a lithium cell and verify them
+against the connected battery before starting.
 
 ## Why this project?
 

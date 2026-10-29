@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 "use strict";
-(() => {
+(async () => {
+  const { bindNumericValidation, setNumericBounds } = await import("/ui/tester/validation.js");
   const $ = id => document.getElementById(id);
+  let formValidation;
   const groups = [
     [I18n.t("text.749080e53cd5"), true, [
       ["capacityAh", I18n.t("text.6b429b27a2d6"), .001, 10000, .001],
@@ -43,8 +45,29 @@
   };
   let loaded = false, sending = false, tester = null, status = null;
   let timer = 0, historyRequested = false;
+  const conservativeLimits = {
+    chargeVoltage: 5, dischargeVoltage: 5, chargeCurrent: 5, dischargeCurrent: 20, power: 85,
+  };
   const fields = groups.flatMap(group => group[2]);
   const fmt = (value, digits = 3) => Number.isFinite(value) ? value.toFixed(digits) : "-";
+  function updateModelLimits() {
+    const limits = tester?.link?.limits || conservativeLimits;
+    for (const [name] of fields) {
+      let maximum;
+      if (name === "chargeCurrent" || name === "prepCurrent") maximum = limits.chargeCurrent;
+      else if (name === "chargeVoltage") maximum = limits.chargeVoltage;
+      else if (name === "chargeCutoff") {
+        maximum = Math.min(limits.chargeCurrent, Number($("res-chargeCurrent")?.value) || limits.chargeCurrent);
+      } else if (name === "cutoffVoltage" || name === "maxVoltage") maximum = limits.dischargeVoltage;
+      else if (name === "maxPower") maximum = limits.power;
+      else if (name === "pulseCurrent") maximum = limits.dischargeCurrent;
+      else continue;
+      const field = fields.find(entry => entry[0] === name);
+      field[3] = maximum;
+      setNumericBounds($(`res-${name}`), { max: maximum });
+    }
+    formValidation?.refresh();
+  }
   function message(text, kind = "danger") {
     $("res-message").className = `alert alert-${kind}${text ? "" : " d-none"}`;
     $("res-message").textContent = I18n.message(text);
@@ -113,6 +136,8 @@
     group.append(row);
     $("res-fields").append(group);
   }
+  formValidation = bindNumericValidation($("res-form"));
+  updateModelLimits();
   function collect() {
     const config = {automatic:$("res-method").value === "automatic"};
     for (const [name, label, min, max] of fields) {
@@ -203,6 +228,7 @@
   }
   async function action(name) {
     if (sending && name !== "abort") return;
+    if (name !== "abort" && !formValidation.validateAll()) return;
     let body;
     try { body = name === "abort" ? {action:name} : {action:name, config:collect()}; }
     catch (error) { message(error.message); return; }
@@ -219,12 +245,17 @@
   }
   document.addEventListener("tester-status", event => {
     tester = event.detail;
+    updateModelLimits();
     $("res-battery").textContent = tester.battery || I18n.t("text.e2a71bcb34a6");
     $("res-live").textContent = tester.link?.connected ?
       `${fmt(tester.link.voltage)} V / ${fmt(tester.link.current)} A` : I18n.t("text.b0caf73f4640");
     controls();
   });
-  document.addEventListener("tester-status-error", () => { tester = null; controls(); });
+  document.addEventListener("tester-status-error", () => {
+    tester = null;
+    updateModelLimits();
+    controls();
+  });
   $("res-form").addEventListener("submit", event => { event.preventDefault(); void action("start"); });
   $("res-save").addEventListener("click", () => void action("save"));
   $("res-abort").addEventListener("click", () => void action("abort"));
@@ -235,9 +266,14 @@
   $("res-confirm").addEventListener("change", controls);
   $("res-history-refresh").addEventListener("click", () => void history());
   for (const [name] of fields) $(`res-${name}`).addEventListener("input", () => {
+    updateModelLimits();
     $("res-confirm").checked = false;
     controls();
   });
   method();
   void refresh();
-})();
+})().catch(error => {
+  const box = document.getElementById("res-message");
+  box.className = "alert alert-danger";
+  box.textContent = I18n.message(error.message);
+});

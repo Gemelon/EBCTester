@@ -3,6 +3,7 @@
  */
 
 #include "ebc_link.h"
+#include "ebc_model.h"
 
 #include <string.h>
 
@@ -40,6 +41,8 @@ static uint32_t frames_ok;
 static uint32_t frames_bad;
 static int64_t last_rx_us;
 static int64_t last_connect_try_us;
+static uint8_t active_model;
+static bool active_model_valid;
 
 const char *ebc_link_mode_name(uint8_t mode)
 {
@@ -109,7 +112,7 @@ static bool decode_frame(const uint8_t *buffer, ebc_frame_t *frame)
 #define VALUE(i) ((int)buffer[i] * 240 + buffer[(i) + 1])
     memset(frame, 0, sizeof(*frame));
     frame->mode = buffer[1];
-    frame->model = buffer[16];
+    frame->model = buffer[16]; /* Final payload byte, immediately before checksum and frame end. */
     frame->auxiliary = (frame->mode >= 0x64 && frame->mode <= 0x66) ||
                        (frame->mode >= 0x6E && frame->mode <= 0x70);
     if (!frame->auxiliary) {
@@ -141,6 +144,7 @@ static void handle_frame(const uint8_t *buffer, int64_t now)
         xSemaphoreGive(lock);
         return;
     }
+    bool model_changed = false;
     xSemaphoreTake(lock, portMAX_DELAY);
     frames_ok++;
     last_rx_us = now;
@@ -148,11 +152,29 @@ static void handle_frame(const uint8_t *buffer, int64_t now)
         connected = true;
         ESP_LOGI(TAG, "Connected to EBC (model 0x%02X)", frame.model);
     }
+    if (!active_model_valid || active_model != frame.model) {
+        active_model = frame.model;
+        active_model_valid = true;
+        model_changed = true;
+    }
     if (!frame.auxiliary) {
         last_frame = frame;
         has_frame = true;
     }
     xSemaphoreGive(lock);
+
+    if (model_changed) {
+        ebc_model_limits_t limits;
+        ebc_model_get_limits(frame.model, &limits);
+        if (limits.known) {
+            ESP_LOGI(TAG, "Detected %s (ident 0x%02X)", limits.name, frame.model);
+        } else {
+            ESP_LOGW(TAG,
+                     "Unknown EBC ident 0x%02X; using conservative limits "
+                     "(charge 5 V/5 A, discharge 5 V/20 A/85 W)",
+                     frame.model);
+        }
+    }
 
     if (listener.on_frame != NULL) {
         listener.on_frame(&frame, listener.context);
@@ -328,6 +350,8 @@ void ebc_link_get_status(ebc_link_status_t *status)
     xSemaphoreTake(lock, portMAX_DELAY);
     status->connected = connected;
     status->has_frame = has_frame;
+    status->has_model = active_model_valid;
+    status->model = active_model;
     status->auto_connect = auto_connect;
     status->command_pending = pending_valid;
     status->frame = last_frame;
