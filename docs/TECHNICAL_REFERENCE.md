@@ -7,6 +7,17 @@ Implementation details for firmware 1.3.36. Commands and file paths below
 are relative to the project root. For purpose, setup, safety and licensing,
 see [README](../README.md) and [third-party notices](../THIRD_PARTY_NOTICES.md).
 
+## Hardware schematic
+
+See the [EBCTester schematic (PDF)](EBCTester.pdf) for the board wiring and
+the [default connections](../README.md#default-connections) for the firmware's
+default pin assignments. Verify that the configured pins match your hardware.
+
+The PDF is a publicly available documentation snapshot from a separate
+hardware repository containing the editable KiCad schematic, PCB layout,
+and bill of materials. That repository is still under development and is
+currently accessible only to collaborators.
+
 ## UI languages and SD template
 
 The header language selector supports built-in **English** and **Deutsch**.

@@ -296,6 +296,12 @@ and data before repartitioning.
 
 ### Default connections
 
+The [EBCTester hardware schematic (PDF)](docs/EBCTester.pdf) documents the
+board wiring. The editable KiCad schematic, PCB layout, and bill of materials
+are maintained in a separate hardware repository that is still under
+development and is currently accessible only to collaborators. The PDF
+included here is a publicly available documentation snapshot.
+
 | Connection | TX | RX | Settings |
 | --- | ---: | ---: | --- |
 | UART1 to tester | 17 | 18 | 9600 baud, 8O1 |
