@@ -1,0 +1,20 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+<div class="card">
+  <div class="card-body">
+    <h2 class="h5">EBC tester</h2>
+    <p>Select the tester before connecting. Its limits apply to manual control, test plans, and internal resistance settings, even while disconnected.</p>
+    <div id="tester-message" class="alert alert-info d-none" role="status"></div>
+    <div id="tester-model-error" class="alert alert-danger d-none" role="alert"></div>
+    <form id="tester-model-form">
+      <label for="tester-model" class="form-label">Tester model</label>
+      <select id="tester-model" class="form-select mb-3" required>
+        <option value="">Select a tester</option>
+        <option value="9">EBC-A20 (charge 5 A, discharge 20 A)</option>
+        <option value="16">EBC-A40L (charge/discharge 40 A)</option>
+      </select>
+      <button id="tester-model-save" type="submit" class="btn btn-primary">Save tester model</button>
+    </form>
+    <p class="small text-muted mt-3 mb-0">The model can only be changed when no operation, plan, or recording is active. Changing the model disconnects an idle tester. Existing plans and parameters are not changed; check them against the new limits before starting.</p>
+  </div>
+</div>

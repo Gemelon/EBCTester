@@ -30,13 +30,13 @@ struct Field {
 };
 
 inline constexpr std::array<Field, 22> fields = {{
-    {"chargeCurrent", &Config::chargeCurrent, .01, 20}, {"chargeVoltage", &Config::chargeVoltage, .01, 30},
-    {"chargeCutoff", &Config::chargeCutoff, .01, 20}, {"capacityAh", &Config::capacityAh, .001, 10000},
-    {"targetSoc", &Config::targetSoc, 0, 100}, {"prepCurrent", &Config::prepCurrent, .01, 20},
+    {"chargeCurrent", &Config::chargeCurrent, .01, 50}, {"chargeVoltage", &Config::chargeVoltage, .01, 30},
+    {"chargeCutoff", &Config::chargeCutoff, .01, 50}, {"capacityAh", &Config::capacityAh, .001, 10000},
+    {"targetSoc", &Config::targetSoc, 0, 100}, {"prepCurrent", &Config::prepCurrent, .01, 50},
     {"cutoffVoltage", &Config::cutoffVoltage, .01, 30}, {"maxVoltage", &Config::maxVoltage, .01, 30},
-    {"maxPower", &Config::maxPower, .01, 2000}, {"restSeconds", &Config::restSeconds, 1, 86400},
+    {"maxPower", &Config::maxPower, .01, 250}, {"restSeconds", &Config::restSeconds, 1, 86400},
     {"baselineSeconds", &Config::baselineSeconds, 1, 60}, {"idleCurrent", &Config::idleCurrent, 0, .5},
-    {"pulseCurrent", &Config::pulseCurrent, .01, 20}, {"pulseSeconds", &Config::pulseSeconds, 1, 120},
+    {"pulseCurrent", &Config::pulseCurrent, .01, 50}, {"pulseSeconds", &Config::pulseSeconds, 1, 120},
     {"time1", &Config::time1, .1, 120}, {"time2", &Config::time2, .1, 120},
     {"time3", &Config::time3, .1, 120}, {"timingTolerance", &Config::timingTolerance, .1, 5},
     {"maxGap", &Config::maxGap, .1, 5}, {"maxChargeSeconds", &Config::maxChargeSeconds, 10, 172800},

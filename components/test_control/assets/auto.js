@@ -3,8 +3,10 @@
 
 "use strict";
 
-(() => {
+(async () => {
+  const { bindNumericValidation, setNumericBounds } = await import("/ui/tester/validation.js");
   const $ = (id) => document.getElementById(id);
+  const editorValidation = bindNumericValidation($("auto-editor"));
   // scale converts UI units to the integer encoding stored in the plan.
   const MODES = {
     1: { name: "D-CC", fields: [[I18n.t("text.bb39ee18acd6"), 100, 0.01, 20], [I18n.t("text.7cf603e56ff8"), 100, 0.01, 30], [I18n.t("text.2cba9409833c"), 1, 0, 239]],
@@ -28,6 +30,9 @@
   let timer = 0;
   let submitting = false;
   let latestStatus = null;
+  let modelLimits = {
+    chargeVoltage: 5, dischargeVoltage: 5, chargeCurrent: 5, dischargeCurrent: 20, power: 85,
+  };
 
   function updateStartButton() {
     const link = latestStatus?.link;
@@ -113,16 +118,30 @@
 
   function applyMode() {
     const mode = MODES[$("auto-mode").value];
+    if (Number($("auto-mode").value) === 1) {
+      mode.fields[0][3] = modelLimits.dischargeCurrent;
+      mode.fields[1][3] = modelLimits.dischargeVoltage;
+    } else if (Number($("auto-mode").value) === 2) {
+      mode.fields[0][3] = Math.min(modelLimits.power,
+        modelLimits.dischargeCurrent * (Number($("auto-value-2").value) || modelLimits.dischargeVoltage));
+      mode.fields[1][3] = modelLimits.dischargeVoltage;
+    } else if (Number($("auto-mode").value) === 3) {
+      mode.fields[0][3] = modelLimits.chargeCurrent;
+      mode.fields[1][3] = modelLimits.chargeVoltage;
+      mode.fields[2][3] = Math.min(
+        modelLimits.chargeCurrent, Number($("auto-value-1").value) || modelLimits.chargeCurrent);
+    }
     mode.fields.forEach((field, index) => {
       const n = index + 1;
       $(`auto-field-${n}`).classList.toggle("d-none", !field);
-      if (!field) return;
       const input = $(`auto-value-${n}`);
+      input.disabled = !field;
+      input.required = Boolean(field);
+      if (!field) return;
       $(`auto-label-${n}`).textContent = field[0];
-      input.min = String(field[2]);
-      input.max = String(field[3]);
-      input.step = field[1] === 100 ? "0.01" : "1";
+      setNumericBounds(input, { min: field[2], max: field[3], step: field[1] === 100 ? 0.01 : 1 });
     });
+    editorValidation.refresh();
     $("auto-hint").textContent = mode.hint;
   }
 
@@ -205,6 +224,8 @@
     latestStatus = status;
     const run = status.plan || {};
     const link = status.link || {};
+    modelLimits = link.limits || modelLimits;
+    applyMode();
     const [label, color] = STATES[run.state] || STATES.idle;
     $("auto-state").className = `badge text-bg-${color} fs-6`;
     $("auto-state").textContent = label;
@@ -276,6 +297,9 @@
   });
 
   $("auto-mode").addEventListener("change", applyMode);
+  for (const id of ["auto-value-1", "auto-value-2"]) {
+    $(id).addEventListener("input", applyMode);
+  }
   $("auto-editor").addEventListener("submit", (event) => {
     event.preventDefault();
     edit((steps) => {
@@ -285,10 +309,13 @@
       return at;
     });
   });
-  $("auto-replace").addEventListener("click", () => edit((steps) => {
-    steps[selected] = readEditor();
-    return selected;
-  }));
+  $("auto-replace").addEventListener("click", () => {
+    if (!editorValidation.validateAll()) return;
+    edit((steps) => {
+      steps[selected] = readEditor();
+      return selected;
+    });
+  });
   $("auto-up").addEventListener("click", () => edit((steps) => {
     [steps[selected - 1], steps[selected]] = [steps[selected], steps[selected - 1]];
     return selected - 1;
@@ -326,4 +353,8 @@
   void loadSettings();
   void loadCatalog();
   void refresh();
-})();
+})().catch(error => {
+  const box = document.getElementById("auto-message");
+  box.className = "alert alert-danger";
+  box.textContent = I18n.message(error.message);
+});

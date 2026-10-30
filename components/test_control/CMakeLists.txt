@@ -8,4 +8,6 @@ idf_component_register(
                   espressif__cjson nvs_flash esp_timer
     EMBED_FILES "assets/battery.html" "assets/battery.js" "assets/manual.html" "assets/manual.js"
                 "assets/auto.html" "assets/auto.js" "assets/resistance.html" "assets/resistance.js"
+                "assets/validation.js"
+                "assets/tester.html" "assets/tester.js"
 )

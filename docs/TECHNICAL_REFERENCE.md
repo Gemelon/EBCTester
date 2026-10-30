@@ -3,7 +3,7 @@
 
 # EBCTester technical reference
 
-Implementation details for firmware 1.3.36. Commands and file paths below
+Implementation details for firmware 1.3.56. Commands and file paths below
 are relative to the project root. For purpose, setup, safety and licensing,
 see [README](../README.md) and [third-party notices](../THIRD_PARTY_NOTICES.md).
 
@@ -17,6 +17,109 @@ The PDF is a publicly available documentation snapshot from a separate
 hardware repository containing the editable KiCad schematic, PCB layout,
 and bill of materials. That repository is still under development and is
 currently accessible only to collaborators.
+
+## EBC model selection, verification and limits
+
+Each 19-byte status frame carries the model identifier at byte index 16
+(zero-based), immediately before the checksum and `0xF8` terminator. The
+checksum is validated before that byte is used. The configured model is saved
+as the `model` byte in the `tester` NVS namespace through
+`POST /api/tester/model` (`{"model":9}` or `{"model":16}`), protected by the
+same settings authorization and CSRF checks as other settings.
+It is selected under **Administration > Settings > EBC tester**.
+No default model is assumed on first use or upgrade; selection is required
+before connecting or saving model-dependent plans and resistance settings.
+
+| Model | Ident | Max charge V | Max charge A | Max discharge V | Max discharge A | Max CP power |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| EBC-A20 | `0x09` | 18 V | 5 A | 30 V | 20 A | 85 W |
+| EBC-A40L | `0x10` | 5 V | 40 A | 5 V | 40 A | 200 W |
+| EBC-A50L | Unknown | 5 V | 50 A | 5 V | 50 A | 250 W |
+| Unknown identifier fallback | Any other byte | 5 V | 5 A | 5 V | 20 A | 85 W |
+
+The A50L's manufacturer product page describes it as a 0–5 V, 50 A device;
+the manufacturer home page lists the A50L class as 0–5 V / 50 A / 250 W
+([product page](http://www.zketech.com/en/pd.jsp?id=30),
+[manufacturer home page](http://www.zketech.com/en/)). Its status-frame
+identifier is not published and remains unconfirmed. Its byte must first be
+captured and added to the model table. Unknown identifiers are rejected, so A50L cannot currently be
+selected or connected. The advertised current range does not verify the protocol's
+0.01 A setpoint resolution; test this on the physical A50L before relying on
+10 mA increments.
+
+All manual charge/discharge requests and test-plan steps are checked against
+the saved model before queueing or starting. Constant-power requests must
+also fit the model's maximum current at the configured cutoff voltage.
+Internal-resistance parameters are checked against the same charge, discharge,
+voltage and power limits, in addition to the existing timing and measurement
+checks. The browser receives the active limit profile and updates numeric form
+bounds; server-side validation remains authoritative. The saved profile remains
+active without a tester connection, allowing offline plan and parameter setup.
+Before selection, the UI uses conservative bounds but connections and
+model-dependent saves are blocked. No battery-chemistry
+field exists in the current data model; users of A40L/A50L must select
+lithium-cell settings and remain within the 5 V profile.
+
+The selected model is exposed in the top navigation beside the EBCTester logo
+and replaces the fixed model name in the primary section subtitle and manual
+control description, including after disconnecting and restarting.
+`GET /api/tester/settings` exposes the configured `model`;
+`GET /api/tester/status` exposes it as `link.model`, `hasModel`, `modelName`,
+`modelKnown`, and `limits`. The actual identifier is reported separately as
+`detectedModel` / `hasDetectedModel`, with `modelMismatch` and `error` for a
+rejected connection.
+
+The link checks the identifier in every valid frame, including auxiliary
+frames, before reporting a connection or delivering data to the recorder,
+plan executor or measurement callbacks. A mismatch clears connection and
+measurement state, discards pending commands and sends Disconnect immediately
+after the rejected frame. Its error remains visible; further frames are
+ignored and automatic reconnection is suppressed until an explicit Connect
+retry or a changed selection. A mismatch during an existing connection also
+uses the normal connection-loss callback to interrupt operations.
+Changing the selection is blocked during an operation, pending command, plan
+or recording. An idle connection is disconnected at the next valid frame;
+auto-connect, if enabled, subsequently verifies the new selection.
+Existing plans and parameters are preserved, not silently clamped or rewritten.
+The dashboard synchronizes the model subtitle after shared-shell DOM updates,
+before the browser paints, so independent status polls cannot display the
+shell's static model name between updates. Administration subtitles are left
+unchanged, and language changes use the current translated subtitle template.
+
+Run `python tests/ebc_link_test.py` in a host C/C++20 compiler environment to test
+the actual link, model and controller implementation with mocked UART, NVS,
+clock, recorder and task services.
+It covers checksum validation, matching/mismatching and auxiliary frames,
+pending-command discard, automatic retry lockout, explicit retries, selection
+changes, disconnects, timeouts, offline validation at exact model limits,
+selection persistence/reload, storage failures and active-operation locks.
+`node --test tests/tester_settings.test.js
+tests/dashboard.test.js tests/validation.test.js` checks selection saves,
+authorization headers, error reporting, disconnected model labels and form bounds.
+
+Numeric inputs in Manual, Automatic and Internal resistance use persistent
+inline validation messages when a field loses focus. Touched fields are
+revalidated when dependent setpoints or model limits change. Invalid forms
+cannot submit start/save requests. Regular status polling does not rewrite
+unchanged numeric bounds or dismiss validation messages; native transient
+validation popups are replaced by accessible feedback below each field.
+
+### Branch builds and BIN files
+
+Firmware builds default to size optimization (`CONFIG_COMPILER_OPTIMIZATION_SIZE`,
+`-Os`). With the installed Xtensa GCC 15.2.0 toolchain, debug optimization
+(`-Og`) reproducibly crashes during register allocation in the ESP-IDF RGB LCD
+driver. The same source compiles successfully with `-Os`; no SDK source patch
+is required.
+
+Git branches contain source changes, not separate firmware files. A build
+produces `build/EBCTester.bin` from the checked-out branch, so do not treat a
+BIN from `main` as the build for `multi-model-support`. Keep test builds
+versioned and publish them as immutable, versioned files; do not overwrite a
+published version with different firmware bytes. After merging or rebasing
+changes from `main`, rebuild and validate the resulting branch before testing.
+Only flash a test BIN deliberately; automated validation does not flash
+hardware.
 
 ## UI languages and SD template
 
@@ -547,7 +650,7 @@ and battery safety must still be verified.
   not a boot-health requirement. Add battery-critical self-tests when available;
   this startup window is not a complete hardware self-test.
 
-## Manifest and atomic NAS publication
+## Manifest and firmware publication
 
 Publication is **disabled in a fresh checkout**. To retain automatic
 publication on your own machine, create the Git-ignored
@@ -558,12 +661,26 @@ set(EBCTESTER_PUBLISH_FIRMWARE ON)
 set(EBCTESTER_PUBLISH_DIR "D:/firmware-releases")
 set(EBCTESTER_PUBLISH_ORIGIN "https://updates.example.org")
 set(EBCTESTER_PUBLISH_URL_PATH "/BatteryTester")
+set(EBCTESTER_SFTP_UPLOAD ON)
+set(EBCTESTER_SFTP_HOST "sftp.example.org")
+set(EBCTESTER_SFTP_USER "firmware")
+set(EBCTESTER_SFTP_REMOTE_DIR "/public/firmware")
 ```
 
 Use your own existing writable local/NAS directory and server origin. The same
 values can be set as CMake cache variables. To disable a local setting, change
 the local file to `OFF` and reconfigure. Configure the matching device manifest
 URL in menuconfig; that URL is independent of the publisher settings.
+
+SFTP is optional and requires the OpenSSH `sftp` client. The remote directory
+must already exist and map to the configured public origin and URL path. Verify
+the server host key and add it to `known_hosts`; make the private key available
+through `ssh-agent` or the default SSH key. The build uses batch mode and strict
+host-key checking. It does not store or transmit a password. SFTP runs only
+after local publication succeeds and uploads the immutable versioned BIN,
+compatibility BIN, license bundle, and manifest last. Before uploading a
+versioned BIN, the build downloads any existing remote copy and verifies its
+size and SHA256; a different copy fails rather than being overwritten.
 
 When enabled, each successful ESP-IDF build:
 

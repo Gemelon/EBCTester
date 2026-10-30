@@ -19,6 +19,59 @@
     };
     installLogo();
     new MutationObserver(installLogo).observe(brand, { childList: true });
+
+    const modelIndicator = document.createElement("span");
+    modelIndicator.id = "detected-ebc-model";
+    modelIndicator.className = "small text-white";
+    modelIndicator.textContent = "Unknown";
+    brand.insertAdjacentElement("afterend", modelIndicator);
+    const modelHeading = document.getElementById("page-subtitle");
+    const modelError = document.createElement("div");
+    modelError.id = "tester-connection-error";
+    modelError.className = "alert alert-danger d-none";
+    modelError.setAttribute("role", "alert");
+    if (modelHeading) modelHeading.parentElement.insertAdjacentElement("afterend", modelError);
+    let modelName = "Unknown";
+    let renderedHeading = null;
+    function updateModelHeading() {
+      if (!modelHeading) return;
+      const template = I18n.t("text.690c0f1d7edf");
+      if (modelHeading.textContent !== template && modelHeading.textContent !== renderedHeading) return;
+      renderedHeading = template.replace("EBC-A20", modelName);
+      if (modelHeading.textContent !== renderedHeading) modelHeading.textContent = renderedHeading;
+    }
+    // The shared shell restores its section subtitle on every status refresh.
+    if (modelHeading) {
+      new MutationObserver(updateModelHeading).observe(modelHeading, { childList: true, characterData: true, subtree: true });
+    }
+    function renderDetectedModel(link) {
+      modelError.textContent = I18n.message(link?.error || "");
+      modelError.className = `alert alert-danger${link?.error ? "" : " d-none"}`;
+      if (!link?.hasModel) {
+        modelIndicator.className = "small text-white";
+        modelIndicator.textContent = "Unknown";
+        modelIndicator.title = "";
+        modelName = "Unknown";
+        updateModelHeading();
+        return;
+      }
+      const ident = `0x${Number(link.model).toString(16).padStart(2, "0").toUpperCase()}`;
+      const name = link.modelKnown
+        ? link.modelName : `Unknown (${ident})`;
+      modelIndicator.className = link.modelKnown
+        ? "small text-white" : "badge text-bg-warning text-dark";
+      modelIndicator.textContent = name;
+      modelIndicator.title = link.modelKnown
+        ? `Selected ${name} (${ident})`
+        : `Unknown model identifier ${ident}; conservative limits are active.`;
+      modelName = name;
+      updateModelHeading();
+    }
+    document.addEventListener("tester-status", event => {
+      renderDetectedModel(event.detail?.link);
+    });
+    document.addEventListener("tester-status-error", () => renderDetectedModel(null));
+    renderDetectedModel(null);
   }
 
   let favicon = document.querySelector('link[rel~="icon"]');

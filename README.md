@@ -9,10 +9,11 @@
 
 **Test batteries and keep their measurements without running a PC for weeks.**
 
-EBCTester connects a ZKE EBC-A20 to a small ESP32-S3. The microcontroller
-operates the tester, executes test plans, and records measurements on an SD
-card. Its local web interface lets you manage batteries, follow measurements,
-and view charts from a phone, even outside your home Wi-Fi network.
+EBCTester connects supported ZKE EBC battery testers to a small ESP32-S3. The
+microcontroller operates the tester, executes test plans, and records
+measurements on an SD card. Its local web interface lets you manage batteries,
+follow measurements, and view charts from a phone, even outside your home
+Wi-Fi network.
 
 ## A look at the web interface
 
@@ -146,6 +147,44 @@ loadable from SD.
 </p>
 
 </details>
+
+## EBC model support
+
+Select and save the tester under **Administration > Settings > EBC tester**
+before connecting. The saved model appears beside the logo and in the control
+headings even while disconnected. Its charge voltage/current, discharge
+voltage/current, and constant-power limits apply to manual commands, plans,
+and internal resistance settings, so plans and parameters can be prepared
+without a connected tester.
+
+The selection persists across restarts. On first installation or upgrade from
+automatic model detection, select the model once; there is no assumed default.
+Changing it is blocked during an operation, plan, or recording and disconnects
+an idle tester. Existing plans and parameters are preserved and checked against
+the selected limits when saved or started.
+
+On connection, each valid status frame's identifier must match the selection.
+A mismatch (including an unknown identifier) displays an error, disconnects
+the tester, discards pending commands, and blocks automatic reconnection.
+Correct the selection or attached device and click **Connect** to retry.
+
+| Model | Ident | Charge voltage | Charge current | Discharge voltage | Discharge current | Max. power |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| EBC-A20 | `0x09` | 18 V | 5 A | 30 V | 20 A | 85 W |
+| EBC-A40L | `0x10` | 5 V | 40 A | 5 V | 40 A | 200 W |
+| EBC-A50L | Not confirmed | 5 V | 50 A | 5 V | 50 A | 250 W |
+
+The manufacturer describes the A50L as a 0–5 V, 50 A, 250 W tester
+([product page](http://www.zketech.com/en/pd.jsp?id=30)). Its identifier byte
+has not yet been confirmed, so it cannot currently be selected or connected.
+Only EBC-A20 and EBC-A40L are selectable.
+
+The protocol encodes setpoints in two base-240 bytes, with current and voltage
+setpoints sent in 0.01-unit increments. The numeric range is sufficient for
+50 A, but the 10 mA current resolution has not yet been verified on real A50L
+hardware. The application does not store a battery-chemistry selection; for
+the 5 V models, select settings appropriate for a lithium cell and verify them
+against the connected battery before starting.
 
 ## Why this project?
 
@@ -387,7 +426,7 @@ does not survive its startup window.
 The default manifest address is a placeholder. Set your HTTPS URL in
 menuconfig under **OTA Suite update checks**.
 
-NAS publishing is disabled in a fresh checkout. To enable it, create the
+Local/NAS publishing is disabled in a fresh checkout. To enable it, create the
 Git-ignored `CMakeUserConfig.cmake`:
 
 ```cmake
@@ -395,6 +434,10 @@ set(EBCTESTER_PUBLISH_FIRMWARE ON)
 set(EBCTESTER_PUBLISH_DIR "D:/firmware-releases")
 set(EBCTESTER_PUBLISH_ORIGIN "https://updates.example.org")
 set(EBCTESTER_PUBLISH_URL_PATH "/BatteryTester")
+set(EBCTESTER_SFTP_UPLOAD ON)
+set(EBCTESTER_SFTP_HOST "sftp.example.org")
+set(EBCTESTER_SFTP_USER "firmware")
+set(EBCTESTER_SFTP_REMOTE_DIR "/public/firmware")
 ```
 
 After reconfiguration, successful builds publish a versioned image, the
@@ -402,7 +445,16 @@ compatibility name, and finally an atomic `firmware.json`. The directory must
 already exist. Published versions cannot be replaced with different bytes:
 **increase the version first**. Publication errors fail the step.
 
-Enabled publishing copies license documentation before the image to
+SFTP is optional and runs after local publication. Install the OpenSSH client,
+add the server's verified host key to `known_hosts`, and make the SSH key
+available through `ssh-agent` (or your default SSH key). Passwords are never
+stored in the project or passed on the command line. The remote destination
+directory must already exist and be served at the configured origin and URL
+path. SFTP transfers the immutable versioned BIN, compatibility BIN, license
+bundle, and finally the manifest; an existing versioned BIN is downloaded and
+hash-checked before the upload, and different bytes are rejected.
+
+Publishing copies license documentation before the image to
 `licenses/EBCTester-<version>/`. Missing documents fail the step.
 **Distribute the complete license directory with firmware**, not just `.bin`.
 The OTA manifest format is unchanged. See
