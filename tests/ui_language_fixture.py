@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Thomas Stoll
 # SPDX-License-Identifier: Apache-2.0
 
-"""Local-only UI fixture; never sends tester commands or accesses device storage."""
+"""Local-only UI fixture; simulated selections/connections never access hardware or device storage."""
 import json
 import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -20,6 +20,7 @@ EXTENSIONS = {
     "sd-card": (SD, "sd_card", "SD Karte"),
     "mariadb": (ROOT / "components" / "mariadb_sync" / "assets", "mariadb", "MariaDB-Sicherung"),
     "languages": (ROOT / "components" / "ui_localization" / "assets", "languages", "Language"),
+    "tester": (ROOT / "components" / "test_control" / "assets", "tester", "EBC tester"),
 }
 CONFIG = dict(automatic=False, capacityAh=20, targetSoc=50, chargeCurrent=.5, chargeVoltage=3.45,
               chargeCutoff=.1, prepCurrent=.5, cutoffVoltage=2.5, maxVoltage=3.6, maxPower=50,
@@ -29,6 +30,11 @@ CONFIG = dict(automatic=False, capacityAh=20, targetSoc=50, chargeCurrent=.5, ch
 USER_BATTERY = "Laden Batterie ä <b>user</b>"
 USER_PLAN = "Warten Plan ä"
 USER_NOTES = "<img src=x onerror=alert(1)> Notizen Benutzer"
+TESTER = dict(model=0, connected=False, error="")
+MODELS = {
+    9: ("EBC-A20", dict(chargeVoltage=18, chargeCurrent=5, dischargeVoltage=30, dischargeCurrent=20, power=85)),
+    16: ("EBC-A40L", dict(chargeVoltage=5, chargeCurrent=40, dischargeVoltage=5, dischargeCurrent=40, power=200)),
+}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -78,7 +84,7 @@ class Handler(BaseHTTPRequestHandler):
                                     "text/html" if suffix == ".html" else "application/javascript")
         if path == "/api/status":
             tabs = [dict(id=id, label=item[2], contentUrl=f"/ui/{id}/content", scriptUrl=f"/ui/{id}/script",
-                         placement="settings" if id in ("mariadb", "languages") else "tab")
+                         placement="settings" if id in ("mariadb", "languages", "tester") else "tab")
                     for id, item in EXTENSIONS.items()]
             return self.respond(dict(project="EBCTester", version="fixture", csrfToken="test",
                                      sessionDays=1, settingsPasswordRequired=True,
@@ -98,15 +104,21 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(dict(version=1, code=parse_qs(url.query)["code"][0], name="Français",
                                      strings={key: "Batterie spéciale"}))
         if path == "/api/tester/status":
+            model_name, limits = MODELS.get(TESTER["model"],
+                ("Unknown", dict(chargeVoltage=5, chargeCurrent=5, dischargeVoltage=5, dischargeCurrent=20, power=85)))
             return self.respond(dict(databaseReady=True, controlsBusy=False, battery=USER_BATTERY,
-                                     link=dict(connected=True, hasFrame=True, active=False, pending=False,
+                                     link=dict(connected=TESTER["connected"], hasFrame=TESTER["connected"], active=False, pending=False,
                                                mode=0, modeName="D-CC stopped", voltage=3.3, current=0, power=0,
-                                               capacity=0, ageMs=300, framesOk=10, framesBad=0, model=8,
+                                               capacity=0, ageMs=300, framesOk=10, framesBad=0, model=TESTER["model"],
+                                               hasModel=TESTER["model"] != 0, modelKnown=TESTER["model"] in MODELS,
+                                               modelName=model_name, limits=limits, error=TESTER["error"],
+                                               detectedModel=9, hasDetectedModel=bool(TESTER["error"]) or TESTER["connected"],
+                                               modelMismatch=bool(TESTER["error"]),
                                                setpoint1=.5, setpoint2=2.5, setpoint3=0),
                                      recorder=dict(active=False, written=0),
                                      plan=dict(state="idle", name=USER_PLAN, message="Plan completed successfully.")))
         if path == "/api/tester/settings":
-            return self.respond(dict(battery=dict(label=USER_BATTERY, manufacturer="User", notes=USER_NOTES),
+            return self.respond(dict(model=TESTER["model"], battery=dict(label=USER_BATTERY, manufacturer="User", notes=USER_NOTES),
                                      plan=dict(name=USER_PLAN, steps=[]), manual={}))
         if path == "/api/tester/catalog":
             return self.respond(dict(databaseReady=True, batteries=[USER_BATTERY], plans=[USER_PLAN]))
@@ -131,7 +143,27 @@ class Handler(BaseHTTPRequestHandler):
         return self.respond("Fixture route not found.", "text/plain", 404)
 
     def do_POST(self):
-        self.rfile.read(int(self.headers.get("Content-Length", "0")))
+        body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+        if self.path == "/api/tester/model":
+            model = json.loads(body).get("model")
+            if model not in MODELS:
+                return self.respond("Unsupported tester model.", "text/plain", 400)
+            TESTER.update(model=model, connected=False, error="")
+            return self.respond("Tester model saved and applied.", "text/plain")
+        if self.path == "/api/tester/command":
+            action = json.loads(body).get("action")
+            if action == "connect":
+                if TESTER["model"] == 0:
+                    return self.respond("Select and save a tester model in Settings first.", "text/plain", 409)
+                if TESTER["model"] != 9:
+                    TESTER.update(connected=False, error="Tester mismatch: selected EBC-A40L, received EBC-A20. "
+                                  "Connection closed. Select the correct tester in Settings and reconnect.")
+                else:
+                    TESTER.update(connected=True, error="")
+                return self.respond("Connection request sent.", "text/plain")
+            if action == "disconnect":
+                TESTER["connected"] = False
+                return self.respond("Disconnect sent.", "text/plain")
         self.respond("Invalid values.", "text/plain; charset=utf-8", 400)
 
 

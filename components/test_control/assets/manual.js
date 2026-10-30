@@ -13,6 +13,7 @@
   let timer = 0;
   let submitting = false;
   let latestStatus = null;
+  let connectionError = "";
   let activeLimits = { chargeVoltage: 5, dischargeVoltage: 5, chargeCurrent: 5, dischargeCurrent: 20, power: 85 };
 
   function modelLimits() {
@@ -23,7 +24,7 @@
     const subtitle = document.querySelector("#tab-manual p[data-model-heading]");
     if (!subtitle) return;
     const base = I18n.t("text.dd59d095071c").replace("EBC-A20", "Unknown");
-    if (!link?.connected || !link?.hasModel) {
+    if (!link?.hasModel) {
       subtitle.textContent = base;
       return;
     }
@@ -163,11 +164,13 @@
     const plan = status.plan || {};
     $("man-plan").textContent = plan.state === "running"
       ? I18n.f("text.4040cdd62f95", {p0: plan.step, p1: plan.steps}) : I18n.t("text.f19cd8e6f34a");
-    $("man-model").textContent = link.hasFrame ? link.model : "-";
+    $("man-model").textContent = link.hasDetectedModel ? link.detectedModel : "-";
     $("man-frames").textContent = `${link.framesOk ?? 0} / ${link.framesBad ?? 0}`;
     $("man-age").textContent = link.ageMs >= 0 ? I18n.f("text.80b331d82b21", {p0: (link.ageMs / 1000).toFixed(1)}) : I18n.t("text.0e370a9362dc");
     $("man-pending").textContent = link.pending ? I18n.t("text.3702fc186663") : I18n.t("text.4d03db393cf1");
     $("man-auto").checked = Boolean(link.autoConnect);
+    if (link.error || connectionError) showMessage(link.error || "", "danger");
+    connectionError = link.error || "";
     updateControls();
   }
 

@@ -190,6 +190,15 @@ void ensure_settings_loaded()
         if (nvs_get_u8(handle, "auto", &auto_connect) == ESP_OK) {
             settings.auto_connect = auto_connect != 0;
         }
+        uint8_t model = 0;
+        const esp_err_t model_err = nvs_get_u8(handle, "model", &model);
+        ebc_model_limits_t limits;
+        ebc_model_get_limits(model, &limits);
+        if (model_err == ESP_OK && limits.known) {
+            settings.model = model;
+        } else if (model_err != ESP_ERR_NVS_NOT_FOUND) {
+            ESP_LOGW(TAG, "Stored tester model is invalid or unreadable; select a tester in Settings");
+        }
         const std::string battery = read_nvs_string(handle, "battery");
         if (!battery.empty()) {
             battery_from_json(battery.c_str(), settings.battery);
@@ -213,6 +222,7 @@ void ensure_settings_loaded()
         ESP_LOGW(TAG, "Test plan was running before restart; marked as interrupted");
         save_run_state();
     }
+    ebc_link_set_expected_model(settings.model);
     ebc_link_set_auto_connect(settings.auto_connect);
     ESP_LOGI(TAG, "Tester settings loaded (plan '%s', %u steps, auto-connect %s)", settings.plan.name.c_str(),
              static_cast<unsigned>(settings.plan.steps.size()), settings.auto_connect ? "on" : "off");
@@ -434,6 +444,9 @@ void on_frame(const ebc_frame_t *frame, void *)
     }
     std::lock_guard<std::recursive_mutex> guard(state_mutex);
     ensure_settings_loaded();
+    if (settings.model == 0 || frame->model != settings.model) {
+        return;
+    }
     if (resistance_test::busy()) {
         resistance_test::on_frame(*frame);
         return;
@@ -517,16 +530,18 @@ bool has_hundredth_precision(float value)
 
 ebc_model_limits_t current_model_limits()
 {
-    ebc_link_status_t link;
-    ebc_link_get_status(&link);
+    ensure_settings_loaded();
     ebc_model_limits_t limits;
-    ebc_model_get_limits(link.connected && link.has_model ? link.model : 0, &limits);
+    ebc_model_get_limits(settings.model, &limits);
     return limits;
 }
 
 std::string validate_plan_for_model(const std::vector<test_store::PlanStep> &steps,
                                     const ebc_model_limits_t &limits)
 {
+    if (!limits.known) {
+        return "Select and save a tester model in Settings first.";
+    }
     const std::string generic_error = test_store::validate_plan(steps);
     if (!generic_error.empty()) {
         return generic_error;
@@ -560,6 +575,9 @@ std::string validate_plan_for_model(const std::vector<test_store::PlanStep> &ste
 std::string validate_resistance_for_model(const resistance_test::Config &config,
                                           const ebc_model_limits_t &limits)
 {
+    if (!limits.known) {
+        return "Select and save a tester model in Settings first.";
+    }
     const std::string generic_error = resistance_test::validate(config);
     if (!generic_error.empty()) {
         return generic_error;
@@ -656,15 +674,56 @@ std::string set_auto_connect(bool enabled)
 {
     std::lock_guard<std::recursive_mutex> guard(state_mutex);
     ensure_settings_loaded();
+    if (enabled && settings.model == 0) {
+        return "Select and save a tester model in Settings first.";
+    }
     settings.auto_connect = enabled;
     ebc_link_set_auto_connect(enabled);
     save_setting([&](nvs_handle_t handle) { return nvs_set_u8(handle, "auto", enabled ? 1 : 0); });
     return "";
 }
 
+std::string set_model(uint8_t model)
+{
+    std::lock_guard<std::recursive_mutex> guard(state_mutex);
+    ensure_settings_loaded();
+    ebc_model_limits_t limits;
+    ebc_model_get_limits(model, &limits);
+    if (!limits.known) {
+        return "Unsupported tester model.";
+    }
+    if (model == settings.model) {
+        return "";
+    }
+    if (controls_busy() || capturing || test_store::recorder_status().active) {
+        return "The tester model cannot be changed during an operation, plan, or recording.";
+    }
+    nvs_handle_t handle;
+    esp_err_t err = open_nvs(NVS_READWRITE, &handle);
+    if (err == ESP_OK) {
+        err = nvs_set_u8(handle, "model", model);
+        if (err == ESP_OK) {
+            err = nvs_commit(handle);
+        }
+        nvs_close(handle);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Cannot store tester model: %s", esp_err_to_name(err));
+        return "Could not save tester model.";
+    }
+    settings.model = model;
+    ebc_link_set_expected_model(model);
+    ESP_LOGI(TAG, "Selected %s (0x%02X)", limits.name, model);
+    return "";
+}
+
 std::string connect()
 {
     std::lock_guard<std::recursive_mutex> guard(state_mutex);
+    ensure_settings_loaded();
+    if (settings.model == 0) {
+        return "Select and save a tester model in Settings first.";
+    }
     if (controls_busy()) {
         return "Connecting is locked during an operation.";
     }
@@ -793,14 +852,14 @@ std::string set_battery(const test_store::Battery &battery)
 
 std::string set_plan(const test_store::Plan &plan)
 {
+    std::lock_guard<std::recursive_mutex> guard(state_mutex);
+    ensure_settings_loaded();
     if (!plan.steps.empty()) {
         const std::string error = validate_plan_for_model(plan.steps, current_model_limits());
         if (!error.empty()) {
             return error;
         }
     }
-    std::lock_guard<std::recursive_mutex> guard(state_mutex);
-    ensure_settings_loaded();
     if (plan_status.state == RunState::Running) {
         return "The plan cannot be changed while it is running.";
     }

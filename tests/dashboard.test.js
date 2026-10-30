@@ -33,13 +33,14 @@ function page(runs = [], error = null) {
       append(child) { this.options.push(child); if (!this.value) this.value = child.value || ""; },
       addEventListener(name, listener) { this.listeners[name] = listener; },
       insertAdjacentElement(position, child) { this.insertedPosition = position; this.insertedElement = child; },
+      parentElement: { insertAdjacentElement(position, child) { elements.set(child.id, child); } },
     });
     return elements.get(id);
   }
   const context = {
     document: {
       getElementById: element, querySelector: () => ({}), head: { append() {} },
-      createElement: () => ({ append() {} }), visibilityState: "visible",
+      createElement: () => ({ append() {}, setAttribute() {} }), visibilityState: "visible",
       addEventListener(name, listener) { documentListeners[name] = listener; },
     },
     MutationObserver: class {
@@ -115,7 +116,7 @@ test("database errors remain visible without generating or deleting data", async
   assert.equal(view.requests.length, 1);
 });
 
-test("the header shows the detected tester model and identifies unknown IDs", () => {
+test("the header shows the saved tester model while disconnected and preserves mismatch errors", () => {
   const view = page();
   const indicator = view.element("app-brand").insertedElement;
   const subtitle = view.element("page-subtitle");
@@ -127,11 +128,20 @@ test("the header shows the detected tester model and identifies unknown IDs", ()
   } } });
   assert.equal(indicator.textContent, "Unknown");
   view.documentListeners["tester-status"]({ detail: { link: {
-    connected: true, hasModel: true, model: 0x10, modelKnown: true, modelName: "EBC-A40L",
+    connected: false, hasModel: true, model: 0x10, modelKnown: true, modelName: "EBC-A40L",
   } } });
   assert.equal(indicator.textContent, "EBC-A40L");
   assert.equal(indicator.className, "small text-white");
+  assert.match(indicator.title, /Selected EBC-A40L/);
   assert.match(subtitle.textContent, /EBC-A40L/);
+  const mismatch = "Tester mismatch: selected EBC-A40L, received EBC-A20. Connection closed.";
+  view.documentListeners["tester-status"]({ detail: { link: {
+    connected: false, hasModel: true, model: 0x10, modelKnown: true, modelName: "EBC-A40L",
+    modelMismatch: true, detectedModel: 0x09, error: mismatch,
+  } } });
+  assert.equal(indicator.textContent, "EBC-A40L", "a rejected device must not replace the saved model");
+  assert.equal(view.element("tester-connection-error").textContent, mismatch);
+  assert.doesNotMatch(view.element("tester-connection-error").className, /d-none/);
   view.documentListeners["tester-status"]({ detail: { link: {
     connected: true, hasModel: true, model: 0x17, modelKnown: false,
   } } });
@@ -140,6 +150,7 @@ test("the header shows the detected tester model and identifies unknown IDs", ()
   assert.match(subtitle.textContent, /0x17/);
   view.documentListeners["tester-status"]({ detail: { link: { connected: false, hasModel: false } } });
   assert.equal(indicator.textContent, "Unknown");
+  assert.match(view.element("tester-connection-error").className, /d-none/);
   assert.match(subtitle.textContent, /Unknown/);
   view.documentListeners["tester-status-error"]();
   assert.equal(indicator.textContent, "Unknown");

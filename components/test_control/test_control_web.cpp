@@ -34,6 +34,10 @@ extern const unsigned char resistance_js_start[] asm("_binary_resistance_js_star
 extern const unsigned char resistance_js_end[] asm("_binary_resistance_js_end");
 extern const unsigned char validation_js_start[] asm("_binary_validation_js_start");
 extern const unsigned char validation_js_end[] asm("_binary_validation_js_end");
+extern const unsigned char tester_html_start[] asm("_binary_tester_html_start");
+extern const unsigned char tester_html_end[] asm("_binary_tester_html_end");
+extern const unsigned char tester_js_start[] asm("_binary_tester_js_start");
+extern const unsigned char tester_js_end[] asm("_binary_tester_js_end");
 
 namespace test_control {
 namespace {
@@ -180,10 +184,10 @@ esp_err_t status_handler(httpd_req_t *req)
     if (!web_interface_authorize_request(req, false)) {
         return ESP_OK;
     }
-    ebc_link_status_t link;
-    ebc_link_get_status(&link);
     const PlanStatus plan = get_plan_status();
     const Settings settings = get_settings();
+    ebc_link_status_t link;
+    ebc_link_get_status(&link);
     const test_store::RecorderStatus recorder = test_store::recorder_status();
 
     cJSON *root = cJSON_CreateObject();
@@ -191,17 +195,31 @@ esp_err_t status_handler(httpd_req_t *req)
     cJSON *ebc = cJSON_AddObjectToObject(root, "link");
     cJSON_AddBoolToObject(ebc, "connected", link.connected);
     cJSON_AddBoolToObject(ebc, "hasFrame", link.has_frame);
-    cJSON_AddBoolToObject(ebc, "hasModel", link.has_model);
+    cJSON_AddBoolToObject(ebc, "hasModel", settings.model != 0);
     cJSON_AddBoolToObject(ebc, "autoConnect", link.auto_connect);
     cJSON_AddBoolToObject(ebc, "pending", link.command_pending);
     cJSON_AddNumberToObject(ebc, "mode", link.frame.mode);
     cJSON_AddStringToObject(ebc, "modeName", link.has_frame ? ebc_link_mode_name(link.frame.mode) : "-");
     cJSON_AddBoolToObject(ebc, "active", link.has_frame && ebc_link_mode_is_active(link.frame.mode));
-    cJSON_AddNumberToObject(ebc, "model", link.model);
+    cJSON_AddNumberToObject(ebc, "model", settings.model);
+    cJSON_AddNumberToObject(ebc, "detectedModel", link.model);
+    cJSON_AddBoolToObject(ebc, "hasDetectedModel", link.has_model);
+    cJSON_AddBoolToObject(ebc, "modelMismatch", link.model_mismatch);
     ebc_model_limits_t limits;
-    ebc_model_get_limits(link.connected && link.has_model ? link.model : 0, &limits);
+    ebc_model_get_limits(settings.model, &limits);
     cJSON_AddStringToObject(ebc, "modelName", limits.name);
     cJSON_AddBoolToObject(ebc, "modelKnown", limits.known);
+    std::string connection_error;
+    if (link.model_mismatch) {
+        ebc_model_limits_t detected;
+        ebc_model_get_limits(link.model, &detected);
+        char ident[16];
+        snprintf(ident, sizeof(ident), " (0x%02X)", link.model);
+        connection_error = "Tester mismatch: selected " + std::string(limits.name) + ", received " +
+            detected.name + (detected.known ? "" : ident) +
+            ". Connection closed. Select the correct tester in Settings and reconnect.";
+    }
+    cJSON_AddStringToObject(ebc, "error", connection_error.c_str());
     cJSON *model_limits = cJSON_AddObjectToObject(ebc, "limits");
     cJSON_AddNumberToObject(model_limits, "chargeVoltage", limits.max_charge_voltage_v);
     cJSON_AddNumberToObject(model_limits, "dischargeVoltage", limits.max_discharge_voltage_v);
@@ -249,6 +267,7 @@ esp_err_t settings_handler(httpd_req_t *req)
     }
     const Settings settings = get_settings();
     cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "model", settings.model);
     cJSON *manual = cJSON_AddObjectToObject(root, "manual");
     cJSON_AddNumberToObject(manual, "chargeCurrent", settings.manual.charge_current_a);
     cJSON_AddNumberToObject(manual, "chargeVoltage", settings.manual.charge_voltage_v);
@@ -265,6 +284,23 @@ esp_err_t settings_handler(httpd_req_t *req)
     cJSON_AddStringToObject(plan, "name", settings.plan.name.c_str());
     cJSON_AddItemToObject(plan, "steps", steps_json(settings.plan.steps));
     return send_json(req, root);
+}
+
+esp_err_t model_handler(httpd_req_t *req)
+{
+    if (!web_interface_authorize_settings_request(req)) {
+        return ESP_OK;
+    }
+    cJSON *root = read_json(req);
+    if (root == nullptr) {
+        return ESP_OK;
+    }
+    const double model = get_number(root, "model");
+    cJSON_Delete(root);
+    if (!std::isfinite(model) || model < 1 || model > UINT8_MAX || std::floor(model) != model) {
+        return send_text(req, "400 Bad Request", "Invalid tester model.");
+    }
+    return send_result(req, set_model(static_cast<uint8_t>(model)), "Tester model saved and applied.");
 }
 
 esp_err_t command_handler(httpd_req_t *req)
@@ -642,8 +678,11 @@ const httpd_uri_t auto_routes[] = {
     {.uri = "/api/tester/plan", .method = HTTP_POST, .handler = plan_handler, .user_ctx = nullptr},
     {.uri = "/api/tester/plan/action", .method = HTTP_POST, .handler = plan_action_handler, .user_ctx = nullptr},
 };
+const httpd_uri_t tester_routes[] = {
+    {.uri = "/api/tester/model", .method = HTTP_POST, .handler = model_handler, .user_ctx = nullptr},
+};
 
-web_interface_extension_t extensions[4] = {};
+web_interface_extension_t extensions[5] = {};
 
 } // namespace
 
@@ -663,6 +702,10 @@ esp_err_t register_web_extensions()
                      static_cast<size_t>(resistance_html_end - resistance_html_start), resistance_js_start,
                      static_cast<size_t>(resistance_js_end - resistance_js_start), resistance_routes,
                      sizeof(resistance_routes) / sizeof(resistance_routes[0]), "tab", nullptr};
+    extensions[4] = {"tester", "EBC tester", tester_html_start,
+                     static_cast<size_t>(tester_html_end - tester_html_start), tester_js_start,
+                     static_cast<size_t>(tester_js_end - tester_js_start), tester_routes,
+                     sizeof(tester_routes) / sizeof(tester_routes[0]), "settings", nullptr};
     for (const web_interface_extension_t &extension : extensions) {
         const esp_err_t err = web_interface_register_extension(&extension);
         if (err != ESP_OK) {

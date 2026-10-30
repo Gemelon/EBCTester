@@ -42,7 +42,9 @@ typedef struct {
     bool has_model;
     bool auto_connect;
     bool command_pending;
+    bool model_mismatch;
     uint8_t model;
+    uint8_t expected_model;
     ebc_frame_t frame; /* last measurement frame */
     uint32_t frames_ok;
     uint32_t frames_bad;
@@ -60,6 +62,8 @@ typedef struct {
 /* Configures UART1 (tester) and UART2 (dongle) and starts the receive task. */
 esp_err_t ebc_link_init(const ebc_link_listener_t *listener);
 void ebc_link_get_status(ebc_link_status_t *status);
+/* Zero requires a model selection before connecting. Changing it disconnects an idle link. */
+void ebc_link_set_expected_model(uint8_t model);
 /* Sends the command right after the next valid status frame (half-duplex link).
  * Returns ESP_ERR_INVALID_STATE if not connected or another command is pending. */
 esp_err_t ebc_link_queue_command(uint8_t command, uint16_t p1, uint16_t p2, uint16_t p3);

@@ -26,6 +26,11 @@
     modelIndicator.textContent = "Unknown";
     brand.insertAdjacentElement("afterend", modelIndicator);
     const modelHeading = document.getElementById("page-subtitle");
+    const modelError = document.createElement("div");
+    modelError.id = "tester-connection-error";
+    modelError.className = "alert alert-danger d-none";
+    modelError.setAttribute("role", "alert");
+    if (modelHeading) modelHeading.parentElement.insertAdjacentElement("afterend", modelError);
     let modelName = "Unknown";
     let renderedHeading = null;
     function updateModelHeading() {
@@ -40,7 +45,9 @@
       new MutationObserver(updateModelHeading).observe(modelHeading, { childList: true, characterData: true, subtree: true });
     }
     function renderDetectedModel(link) {
-      if (!link?.connected || !link?.hasModel) {
+      modelError.textContent = I18n.message(link?.error || "");
+      modelError.className = `alert alert-danger${link?.error ? "" : " d-none"}`;
+      if (!link?.hasModel) {
         modelIndicator.className = "small text-white";
         modelIndicator.textContent = "Unknown";
         modelIndicator.title = "";
@@ -55,7 +62,7 @@
         ? "small text-white" : "badge text-bg-warning text-dark";
       modelIndicator.textContent = name;
       modelIndicator.title = link.modelKnown
-        ? `Detected ${name} (${ident})`
+        ? `Selected ${name} (${ident})`
         : `Unknown model identifier ${ident}; conservative limits are active.`;
       modelName = name;
       updateModelHeading();

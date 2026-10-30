@@ -36,6 +36,7 @@ struct PlanStatus {
 
 struct Settings {
     ManualSettings manual;
+    uint8_t model = 0;
     bool auto_connect = false;
     test_store::Battery battery;
     test_store::Plan plan;
@@ -51,6 +52,7 @@ std::string save_resistance_config(const resistance_test::Config &config);
 
 /* All functions return an empty string on success or a German error message. */
 std::string set_auto_connect(bool enabled);
+std::string set_model(uint8_t model);
 std::string connect();
 std::string disconnect();
 std::string stop();

@@ -22,7 +22,7 @@ typedef struct {
     float max_power_w;
 } ebc_model_limits_t;
 
-/* Unknown identifiers use conservative limits and do not prevent connection. */
+/* Unknown identifiers use conservative limits; they cannot be selected for connection. */
 void ebc_model_get_limits(uint8_t ident, ebc_model_limits_t *limits);
 
 #ifdef __cplusplus
