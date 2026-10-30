@@ -3,7 +3,7 @@
 
 # EBCTester technical reference
 
-Implementation details for firmware 1.3.56. Commands and file paths below
+Implementation details for firmware 1.4.61. Commands and file paths below
 are relative to the project root. For purpose, setup, safety and licensing,
 see [README](../README.md) and [third-party notices](../THIRD_PARTY_NOTICES.md).
 
@@ -105,6 +105,11 @@ unchanged numeric bounds or dismiss validation messages; native transient
 validation popups are replaced by accessible feedback below each field.
 
 ### Branch builds and BIN files
+
+Firmware versions use `major.minor.build`. The build number increases across
+minor and major releases instead of resetting to zero; for example, `1.3.60`
+is followed by `1.4.61` for a new minor release. Set `PROJECT_VER` before the
+first release build and retain it for retries until publication succeeds.
 
 Firmware builds default to size optimization (`CONFIG_COMPILER_OPTIMIZATION_SIZE`,
 `-Os`). With the installed Xtensa GCC 15.2.0 toolchain, debug optimization
@@ -658,7 +663,7 @@ publication on your own machine, create the Git-ignored
 
 ```cmake
 set(EBCTESTER_PUBLISH_FIRMWARE ON)
-set(EBCTESTER_PUBLISH_DIR "D:/firmware-releases")
+set(EBCTESTER_PUBLISH_DIR "")
 set(EBCTESTER_PUBLISH_ORIGIN "https://updates.example.org")
 set(EBCTESTER_PUBLISH_URL_PATH "/BatteryTester")
 set(EBCTESTER_SFTP_UPLOAD ON)
@@ -667,7 +672,10 @@ set(EBCTESTER_SFTP_USER "firmware")
 set(EBCTESTER_SFTP_REMOTE_DIR "/public/firmware")
 ```
 
-Use your own existing writable local/NAS directory and server origin. The same
+With SFTP enabled, an empty `EBCTESTER_PUBLISH_DIR` automatically uses
+`build/firmware-publication` as a local staging directory. No NAS or mapped
+network drive is required. For local-only publication, disable SFTP and set
+`EBCTESTER_PUBLISH_DIR` to an existing writable directory. Use your own server origin. The same
 values can be set as CMake cache variables. To disable a local setting, change
 the local file to `OFF` and reconfigure. Configure the matching device manifest
 URL in menuconfig; that URL is independent of the publisher settings.
@@ -677,7 +685,7 @@ must already exist and map to the configured public origin and URL path. Verify
 the server host key and add it to `known_hosts`; make the private key available
 through `ssh-agent` or the default SSH key. The build uses batch mode and strict
 host-key checking. It does not store or transmit a password. SFTP runs only
-after local publication succeeds and uploads the immutable versioned BIN,
+after local preparation succeeds and uploads the immutable versioned BIN,
 compatibility BIN, license bundle, and manifest last. Before uploading a
 versioned BIN, the build downloads any existing remote copy and verifies its
 size and SHA256; a different copy fails rather than being overwritten.
@@ -697,7 +705,7 @@ your configured origin and URL path. The local copy directory
 does not determine the web URL. Existing devices must also have the new
 manifest URL configured in menuconfig and installed in their firmware.
 For a different origin, change publication and device manifest configuration.
-SMB/server rename semantics determine atomicity; use one publisher at a time.
+Filesystem/server rename semantics determine atomicity; use one publisher at a time.
 **A build never installs firmware.**
 
 Manifest schema (all seven fields mandatory; no extra or duplicate fields):

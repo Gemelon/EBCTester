@@ -3,7 +3,7 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-set(PROJECT_VER "1.3.60")
+set(PROJECT_VER "1.4.61")
 include("${CMAKE_CURRENT_LIST_DIR}/CMakeUserConfig.cmake" OPTIONAL)
 set(OTA_SUITE_DIR "${CMAKE_CURRENT_LIST_DIR}/external/ota-suite" CACHE PATH
     "Path to the reusable ota-suite package")
@@ -36,7 +36,7 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(EBCTester)
 
 option(EBCTESTER_PUBLISH_FIRMWARE "Publish firmware after each successful build" OFF)
-set(EBCTESTER_PUBLISH_DIR "" CACHE PATH "Existing firmware publication directory")
+set(EBCTESTER_PUBLISH_DIR "" CACHE PATH "Local publication directory; empty uses build staging for SFTP")
 set(EBCTESTER_PUBLISH_ORIGIN "" CACHE STRING "Firmware server origin (scheme, host, optional port)")
 set(EBCTESTER_PUBLISH_URL_PATH "" CACHE STRING "Firmware server directory, e.g. /BatteryTester")
 option(EBCTESTER_SFTP_UPLOAD "Upload published firmware to an SFTP server" OFF)
@@ -48,8 +48,12 @@ if(EBCTESTER_SFTP_UPLOAD AND NOT EBCTESTER_PUBLISH_FIRMWARE)
     message(FATAL_ERROR "SFTP upload requires EBCTESTER_PUBLISH_FIRMWARE.")
 endif()
 if(EBCTESTER_PUBLISH_FIRMWARE)
+    if(EBCTESTER_SFTP_UPLOAD AND EBCTESTER_PUBLISH_DIR STREQUAL "")
+        set(EBCTESTER_PUBLISH_DIR "${CMAKE_BINARY_DIR}/firmware-publication")
+        file(MAKE_DIRECTORY "${EBCTESTER_PUBLISH_DIR}")
+    endif()
     if(EBCTESTER_PUBLISH_DIR STREQUAL "" OR EBCTESTER_PUBLISH_ORIGIN STREQUAL "")
-        message(FATAL_ERROR "Firmware publication requires EBCTESTER_PUBLISH_DIR and EBCTESTER_PUBLISH_ORIGIN.")
+        message(FATAL_ERROR "Firmware publication requires EBCTESTER_PUBLISH_ORIGIN and either SFTP upload or EBCTESTER_PUBLISH_DIR.")
     endif()
     if(EBCTESTER_SFTP_UPLOAD)
         if(EBCTESTER_SFTP_HOST STREQUAL "" OR EBCTESTER_SFTP_USER STREQUAL ""

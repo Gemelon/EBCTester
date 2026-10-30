@@ -20,6 +20,9 @@ test("fresh checkouts use pinned packages and opt-in publication without private
   assert.match(source, /option\(EBCTESTER_PUBLISH_FIRMWARE[^\n]* OFF\)/);
   assert.match(source, /CMakeUserConfig\.cmake" OPTIONAL/);
   assert.match(source, /if\(EBCTESTER_PUBLISH_FIRMWARE\)/);
+  assert.match(source, /if\(EBCTESTER_SFTP_UPLOAD AND EBCTESTER_PUBLISH_DIR STREQUAL ""\)/);
+  assert.match(source, /set\(EBCTESTER_PUBLISH_DIR "\$\{CMAKE_BINARY_DIR\}\/firmware-publication"\)/);
+  assert.match(source, /file\(MAKE_DIRECTORY "\$\{EBCTESTER_PUBLISH_DIR\}"\)/);
   assert.doesNotMatch(source, /192\.168\.0\.236|J:/);
   const defaults = fs.readFileSync(path.join(root, "sdkconfig.defaults"), "utf8");
   assert.match(defaults, /https:\/\/updates\.example\.org/);

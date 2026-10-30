@@ -426,12 +426,12 @@ does not survive its startup window.
 The default manifest address is a placeholder. Set your HTTPS URL in
 menuconfig under **OTA Suite update checks**.
 
-Local/NAS publishing is disabled in a fresh checkout. To enable it, create the
+Firmware publishing is disabled in a fresh checkout. To enable SFTP, create the
 Git-ignored `CMakeUserConfig.cmake`:
 
 ```cmake
 set(EBCTESTER_PUBLISH_FIRMWARE ON)
-set(EBCTESTER_PUBLISH_DIR "D:/firmware-releases")
+set(EBCTESTER_PUBLISH_DIR "")
 set(EBCTESTER_PUBLISH_ORIGIN "https://updates.example.org")
 set(EBCTESTER_PUBLISH_URL_PATH "/BatteryTester")
 set(EBCTESTER_SFTP_UPLOAD ON)
@@ -441,11 +441,15 @@ set(EBCTESTER_SFTP_REMOTE_DIR "/public/firmware")
 ```
 
 After reconfiguration, successful builds publish a versioned image, the
-compatibility name, and finally an atomic `firmware.json`. The directory must
-already exist. Published versions cannot be replaced with different bytes:
+compatibility name, and finally an atomic `firmware.json`. With SFTP enabled
+and an empty `EBCTESTER_PUBLISH_DIR`, files are prepared automatically in
+`build/firmware-publication`; no NAS or network drive is needed.
+Published versions cannot be replaced with different bytes:
 **increase the version first**. Publication errors fail the step.
 
-SFTP is optional and runs after local publication. Install the OpenSSH client,
+SFTP is optional and runs after local preparation. For local-only publication,
+disable SFTP and set `EBCTESTER_PUBLISH_DIR` to an existing writable directory.
+Install the OpenSSH client,
 add the server's verified host key to `known_hosts`, and make the SSH key
 available through `ssh-agent` (or your default SSH key). Passwords are never
 stored in the project or passed on the command line. The remote destination
