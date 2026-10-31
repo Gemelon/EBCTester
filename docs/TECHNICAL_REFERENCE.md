@@ -20,32 +20,48 @@ currently accessible only to collaborators.
 
 ## EBC model selection, verification and limits
 
-Each 19-byte status frame carries the model identifier at byte index 16
-(zero-based), immediately before the checksum and `0xF8` terminator. The
-checksum is validated before that byte is used. The configured model is saved
-as the `model` byte in the `tester` NVS namespace through
+Each 19-byte status frame carries the raw model identifier at byte index 16
+(zero-based); the original software normalizes it with `raw % 100`. The XOR
+checksum covers bytes 1 through 16 and is validated before any payload is
+used. Firmware bytes 10 and 11 encode `B10 * 240 + B11`, but only when the
+status byte is at least 100. The latest valid version is cached for the
+connection. The configured model is saved as the `model` byte in the `tester`
+NVS namespace through
 `POST /api/tester/model` (`{"model":9}` or `{"model":16}`), protected by the
 same settings authorization and CSRF checks as other settings.
+EBC-A50L uses selection value `10`. The A40L value `16` remains as a legacy
+selection value; its protocol ident is decimal 10 (`0x0A`), not `0x10`.
 It is selected under **Administration > Settings > EBC tester**.
 No default model is assumed on first use or upgrade; selection is required
 before connecting or saving model-dependent plans and resistance settings.
 
-| Model | Ident | Max charge V | Max charge A | Max discharge V | Max discharge A | Max CP power |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| EBC-A20 | `0x09` | 18 V | 5 A | 30 V | 20 A | 85 W |
-| EBC-A40L | `0x10` | 5 V | 40 A | 5 V | 40 A | 200 W |
-| EBC-A50L | Unknown | 5 V | 50 A | 5 V | 50 A | 250 W |
-| Unknown identifier fallback | Any other byte | 5 V | 5 A | 5 V | 20 A | 85 W |
+| Ident (decimal / hex) | Firmware version | Detected model | Enabled |
+| --- | --- | --- | --- |
+| 5 / `0x05` | 302 | EBC-A05+ | No |
+| 5 / `0x05` | Other or unknown | EBC-A05 | No |
+| 6 / `0x06` | 310 | EBC-A10+ | No |
+| 6 / `0x06` | Other or unknown | EBC-A10H | No |
+| 9 / `0x09` | 311 | EBC-A20+ | No |
+| 9 / `0x09` | Other or unknown | EBC-A20 | Yes |
+| 10 / `0x0A` | 311 | EBC-A50L | Yes |
+| 10 / `0x0A` | Other known version | EBC-A40L | Yes |
+| 20 / `0x14` | 310 | EBD-M10 | No |
+| 20 / `0x14` | Other or unknown | EBD-A10H | No |
+| 25 / `0x19` | 310 / 315 / other | EBD-M03+ / EBD-M05 / EBD-M03 | No |
+| 38 / `0x26` | 310 / 311 / other | EBD-A100L / EBC-A100L / EBD-A100 | No |
 
-The A50L's manufacturer product page describes it as a 0–5 V, 50 A device;
-the manufacturer home page lists the A50L class as 0–5 V / 50 A / 250 W
-([product page](http://www.zketech.com/en/pd.jsp?id=30),
-[manufacturer home page](http://www.zketech.com/en/)). Its status-frame
-identifier is not published and remains unconfirmed. Its byte must first be
-captured and added to the model table. Unknown identifiers are rejected, so A50L cannot currently be
-selected or connected. The advertised current range does not verify the protocol's
-0.01 A setpoint resolution; test this on the physical A50L before relying on
-10 mA increments.
+Ident 10 without a cached firmware version is shown as
+**EBC-A40L/A50L (Version unknown)** and uses the conservative A40L limits
+until the version is available. The selector can distinguish A40L from A50L
+after the firmware version resolves the shared ident. Recognized but disabled
+models and unknown identifiers remain visible as telemetry, but cannot issue
+control commands. Unknown identifiers include their normalized ident and
+firmware version in the status display and warning log.
+
+The enabled A20 profile remains 18 V / 5 A charge, 30 V / 20 A discharge,
+85 W. The A40L profile is 5 V / 40 A in each direction, 200 W; A50L is
+5 V / 50 A in each direction, 250 W. The protocol's 0.01 A setpoint resolution
+has not been verified on physical A50L hardware.
 
 All manual charge/discharge requests and test-plan steps are checked against
 the saved model before queueing or starting. Constant-power requests must

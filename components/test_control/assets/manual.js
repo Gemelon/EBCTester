@@ -24,13 +24,22 @@
     const subtitle = document.querySelector("#tab-manual p[data-model-heading]");
     if (!subtitle) return;
     const base = I18n.t("text.dd59d095071c").replace("EBC-A20", "Unknown");
-    if (!link?.hasModel) {
+    if (!link?.hasDetectedModel && !link?.hasModel) {
       subtitle.textContent = base;
       return;
     }
-    const ident = `0x${Number(link.model).toString(16).padStart(2, "0").toUpperCase()}`;
-    const name = link.modelKnown
-      ? link.modelName : `Unknown (${ident})`;
+    const detected = Boolean(link.hasDetectedModel);
+    const model = detected ? link.detectedModel : link.model;
+    const ident = `0x${Number(model).toString(16).padStart(2, "0").toUpperCase()}`;
+    let name = detected ? (link.detectedModelName || "Unknown") : link.modelName;
+    if (!detected && !link.modelKnown) {
+      name = `Unknown (${ident})`;
+    } else if (detected && !link.detectedModelKnown) {
+      const version = link.detectedVersionKnown
+        ? `version V${Math.floor(link.detectedVersion / 100)}.${String(link.detectedVersion % 100).padStart(2, "0")}`
+        : "version unknown";
+      name = `Unknown device (ident ${ident}, ${version})`;
+    }
     subtitle.textContent = I18n.t("text.dd59d095071c").replace("EBC-A20", name);
   }
 
@@ -51,7 +60,9 @@
     const busy = submitting || !latestStatus || latestStatus.controlsBusy || link?.pending ||
       link?.active || latestStatus.plan?.state === "running";
     for (const form of ["man-charge-form", "man-discharge-form"]) {
-      for (const button of $(form).querySelectorAll("button")) button.disabled = busy || !link?.connected || !link?.hasFrame;
+      for (const button of $(form).querySelectorAll("button")) {
+        button.disabled = busy || !link?.connected || !link?.hasFrame || link?.controlEnabled === false;
+      }
     }
     const reason = submitting ? "" : startBlockReason(latestStatus);
     for (const id of ["man-hint-charge", "man-hint-discharge"]) {
@@ -120,7 +131,7 @@
       const settings = JSON.parse(await api("/api/tester/settings"));
       manual = settings.manual || {};
       $("man-charge-current").value = manual.chargeCurrent ?? 0.5;
-      $("man-charge-voltage").value = manual.chargeVoltage ?? 3.45;
+      $("man-charge-voltage").value = Number(manual.chargeVoltage ?? 3.45).toFixed(3);
       $("man-charge-cutoff").value = manual.chargeCutoff ?? 0.1;
       applyDischargeMode();
     } catch (error) {

@@ -134,6 +134,26 @@ test("the header shows the saved tester model while disconnected and preserves m
   assert.equal(indicator.className, "small text-white");
   assert.match(indicator.title, /Selected EBC-A40L/);
   assert.match(subtitle.textContent, /EBC-A40L/);
+  view.documentListeners["tester-status"]({ detail: { link: {
+    hasModel: true, model: 0x10, modelKnown: true, modelName: "EBC-A40L",
+    hasDetectedModel: true, detectedModel: 10, detectedModelName: "EBC-A50L",
+    detectedModelKnown: true, detectedModelEnabled: true, detectedVersionKnown: true,
+    detectedVersion: 311, detectedVersionPending: false,
+  } } });
+  assert.equal(indicator.textContent, "EBC-A50L");
+  assert.match(indicator.title, /Detected EBC-A50L/);
+  view.documentListeners["tester-status"]({ detail: { link: {
+    hasDetectedModel: true, detectedModel: 6, detectedModelName: "EBC-A10H",
+    detectedModelKnown: true, detectedModelEnabled: false,
+  } } });
+  assert.equal(indicator.textContent, "EBC-A10H");
+  assert.match(indicator.className, /text-bg-warning/);
+  assert.match(indicator.title, /control commands are disabled/);
+  view.documentListeners["tester-status"]({ detail: { link: {
+    hasDetectedModel: true, detectedModel: 99, detectedModelKnown: false,
+    detectedVersionKnown: true, detectedVersion: 302,
+  } } });
+  assert.equal(indicator.textContent, "Unknown device (ident 0x63, version V3.02)");
   const mismatch = "Tester mismatch: selected EBC-A40L, received EBC-A20. Connection closed.";
   view.documentListeners["tester-status"]({ detail: { link: {
     connected: false, hasModel: true, model: 0x10, modelKnown: true, modelName: "EBC-A40L",

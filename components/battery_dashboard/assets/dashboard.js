@@ -47,7 +47,7 @@
     function renderDetectedModel(link) {
       modelError.textContent = I18n.message(link?.error || "");
       modelError.className = `alert alert-danger${link?.error ? "" : " d-none"}`;
-      if (!link?.hasModel) {
+      if (!link?.hasDetectedModel && !link?.hasModel) {
         modelIndicator.className = "small text-white";
         modelIndicator.textContent = "Unknown";
         modelIndicator.title = "";
@@ -55,15 +55,28 @@
         updateModelHeading();
         return;
       }
-      const ident = `0x${Number(link.model).toString(16).padStart(2, "0").toUpperCase()}`;
-      const name = link.modelKnown
-        ? link.modelName : `Unknown (${ident})`;
-      modelIndicator.className = link.modelKnown
+      const detected = Boolean(link.hasDetectedModel);
+      const model = detected ? link.detectedModel : link.model;
+      const ident = `0x${Number(model).toString(16).padStart(2, "0").toUpperCase()}`;
+      const known = detected ? link.detectedModelKnown : link.modelKnown;
+      let name = detected ? (link.detectedModelName || "Unknown") : link.modelName;
+      if (!known) {
+        const version = link.detectedVersionKnown
+          ? `version V${Math.floor(link.detectedVersion / 100)}.${String(link.detectedVersion % 100).padStart(2, "0")}`
+          : "version unknown";
+        name = detected ? `Unknown device (ident ${ident}, ${version})` : `Unknown (${ident})`;
+      }
+      const supported = !detected || link.detectedModelEnabled;
+      modelIndicator.className = known && supported && !link.detectedVersionPending
         ? "small text-white" : "badge text-bg-warning text-dark";
       modelIndicator.textContent = name;
-      modelIndicator.title = link.modelKnown
-        ? `Selected ${name} (${ident})`
-        : `Unknown model identifier ${ident}; conservative limits are active.`;
+      modelIndicator.title = !known
+        ? `Unknown model identifier ${ident}; control commands are disabled.`
+        : !supported
+          ? `${name} is recognized but not supported; control commands are disabled.`
+          : link.detectedVersionPending
+            ? `${name}; control commands are disabled until its firmware version is identified.`
+            : detected ? `Detected ${name} (${ident})` : `Selected ${name} (${ident})`;
       modelName = name;
       updateModelHeading();
     }

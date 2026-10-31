@@ -46,6 +46,10 @@ static bool active_model_valid;
 static uint8_t expected_model;
 static bool accepting_frames;
 static bool model_mismatch;
+static bool active_version_known;
+static uint16_t active_version;
+static ebc_model_detection_t active_detection;
+static bool control_enabled;
 
 const char *ebc_link_mode_name(uint8_t mode)
 {
@@ -100,22 +104,29 @@ static void send_frame(uint8_t command, uint16_t p1, uint16_t p2, uint16_t p3)
     uart_write_bytes(TESTER_UART, frame, sizeof(frame));
 }
 
-static bool decode_frame(const uint8_t *buffer, ebc_frame_t *frame)
+bool ebc_frame_parse(const uint8_t *buffer, size_t length, ebc_frame_t *frame)
 {
+    if (buffer == NULL || frame == NULL || length != STATUS_FRAME_LENGTH ||
+        buffer[0] != FRAME_START || buffer[18] != FRAME_END) {
+        return false;
+    }
     uint8_t checksum = 0;
     for (int i = 1; i <= 16; ++i) {
         checksum ^= buffer[i];
     }
-    /* The EBC never sends bytes >= 0xF0 inside a frame, so such checksums lose the high nibble. */
-    const uint8_t received = buffer[17];
-    if (!(received == checksum || ((checksum & 0xF0) == 0xF0 && received == (checksum & 0x0F)))) {
-        ESP_LOGW(TAG, "Checksum mismatch: received 0x%02X, calculated 0x%02X", received, checksum);
+    if (buffer[17] != checksum) {
+        ESP_LOGW(TAG, "Checksum mismatch: received 0x%02X, calculated 0x%02X",
+                 buffer[17], checksum);
         return false;
     }
 #define VALUE(i) ((int)buffer[i] * 240 + buffer[(i) + 1])
     memset(frame, 0, sizeof(*frame));
     frame->mode = buffer[1];
-    frame->model = buffer[16]; /* Final payload byte, immediately before checksum and frame end. */
+    frame->model = (uint8_t)(buffer[16] % 100);
+    frame->version_known = frame->mode >= 100;
+    if (frame->version_known) {
+        frame->firmware_version = (uint16_t)VALUE(10);
+    }
     frame->auxiliary = (frame->mode >= 0x64 && frame->mode <= 0x66) ||
                        (frame->mode >= 0x6E && frame->mode <= 0x70);
     if (!frame->auxiliary) {
@@ -141,7 +152,7 @@ static bool decode_frame(const uint8_t *buffer, ebc_frame_t *frame)
 static void handle_frame(const uint8_t *buffer, int64_t now)
 {
     ebc_frame_t frame;
-    if (!decode_frame(buffer, &frame)) {
+    if (!ebc_frame_parse(buffer, STATUS_FRAME_LENGTH, &frame)) {
         xSemaphoreTake(lock, portMAX_DELAY);
         frames_bad++;
         xSemaphoreGive(lock);
@@ -151,15 +162,30 @@ static void handle_frame(const uint8_t *buffer, int64_t now)
     xSemaphoreTake(lock, portMAX_DELAY);
     frames_ok++;
     last_rx_us = now;
+    if (frame.version_known) {
+        active_version = frame.firmware_version;
+        active_version_known = true;
+    } else if (active_version_known) {
+        frame.version_known = true;
+        frame.firmware_version = active_version;
+    }
+    ebc_model_detection_t detection;
+    ebc_model_detect(frame.model, active_version_known, active_version, &detection);
     const bool disconnect_requested = pending_valid && pending_command == EBC_CMD_DISCONNECT;
-    if (disconnect_requested || (accepting_frames && frame.model != expected_model)) {
+    const bool selected_model_mismatch =
+        accepting_frames && detection.status == EBC_MODEL_SUPPORTED &&
+        !ebc_model_selection_matches(expected_model, frame.model,
+                                     active_version_known, active_version);
+    if (disconnect_requested || selected_model_mismatch) {
         const bool was_connected = connected;
         if (!disconnect_requested) {
             active_model = frame.model;
             active_model_valid = true;
+            active_detection = detection;
+            control_enabled = false;
             model_mismatch = true;
-            ESP_LOGE(TAG, "Tester mismatch: selected 0x%02X, received 0x%02X; disconnecting",
-                     expected_model, frame.model);
+            ESP_LOGE(TAG, "Tester mismatch: selected 0x%02X, received %s (ident 0x%02X); disconnecting",
+                     expected_model, detection.name, frame.model);
         }
         connected = false;
         has_frame = false;
@@ -176,15 +202,23 @@ static void handle_frame(const uint8_t *buffer, int64_t now)
         xSemaphoreGive(lock);
         return;
     }
+    model_changed = !active_model_valid || active_model != frame.model ||
+                    active_detection.status != detection.status ||
+                    active_detection.version_known != detection.version_known ||
+                    active_detection.version != detection.version ||
+                    strcmp(active_detection.name, detection.name) != 0;
     if (!connected) {
         connected = true;
-        ESP_LOGI(TAG, "Connected to EBC (model 0x%02X)", frame.model);
+        ESP_LOGI(TAG, "Connected to tester (ident 0x%02X)", frame.model);
     }
     if (!active_model_valid || active_model != frame.model) {
         active_model = frame.model;
         active_model_valid = true;
-        model_changed = true;
     }
+    active_detection = detection;
+    control_enabled = detection.status == EBC_MODEL_SUPPORTED &&
+                      ebc_model_selection_matches(expected_model, frame.model,
+                                                  active_version_known, active_version);
     if (!frame.auxiliary) {
         last_frame = frame;
         has_frame = true;
@@ -192,15 +226,22 @@ static void handle_frame(const uint8_t *buffer, int64_t now)
     xSemaphoreGive(lock);
 
     if (model_changed) {
-        ebc_model_limits_t limits;
-        ebc_model_get_limits(frame.model, &limits);
-        if (limits.known) {
-            ESP_LOGI(TAG, "Detected %s (ident 0x%02X)", limits.name, frame.model);
+        if (detection.status == EBC_MODEL_UNKNOWN) {
+            if (detection.version_known) {
+                ESP_LOGW(TAG, "Unknown device (ident 0x%02X, firmware V%u.%02u)",
+                         detection.ident, detection.version / 100, detection.version % 100);
+            } else {
+                ESP_LOGW(TAG, "Unknown device (ident 0x%02X, firmware version unknown)",
+                         detection.ident);
+            }
+        } else if (detection.status == EBC_MODEL_UNSUPPORTED) {
+            ESP_LOGW(TAG, "Detected %s (ident 0x%02X); controls disabled",
+                     detection.name, detection.ident);
         } else {
-            ESP_LOGW(TAG,
-                     "Unknown EBC ident 0x%02X; using conservative limits "
-                     "(charge 5 V/5 A, discharge 5 V/20 A/85 W)",
-                     frame.model);
+            ESP_LOGI(TAG, "Detected %s (ident 0x%02X)", detection.name, detection.ident);
+        }
+        if (detection.status == EBC_MODEL_VERSION_PENDING) {
+            ESP_LOGI(TAG, "Tester model variant is pending firmware version detection");
         }
     }
 
@@ -284,6 +325,8 @@ static void link_task(void *arg)
             connected = false;
             has_frame = false;
             accepting_frames = false;
+            active_version_known = false;
+            control_enabled = false;
             if (pending_valid) {
                 ESP_LOGW(TAG, "Discarding pending command 0x%02X after connection loss", pending_command);
                 pending_valid = false;
@@ -294,6 +337,8 @@ static void link_task(void *arg)
             now - last_connect_try_us >= CONNECT_RETRY_US) {
             last_connect_try_us = now;
             accepting_frames = true;
+            active_version_known = false;
+            active_version = 0;
             try_connect = true;
         }
         xSemaphoreGive(lock);
@@ -393,6 +438,14 @@ void ebc_link_get_status(ebc_link_status_t *status)
     status->has_model = active_model_valid;
     status->model = active_model;
     status->expected_model = expected_model;
+    status->model_known = active_model_valid && active_detection.known;
+    status->model_enabled = active_model_valid && active_detection.enabled;
+    status->model_version_known = active_model_valid && active_detection.version_known;
+    status->model_version_pending =
+        active_model_valid && active_detection.status == EBC_MODEL_VERSION_PENDING;
+    status->control_enabled = control_enabled;
+    status->firmware_version = active_detection.version;
+    status->model_name = active_model_valid ? active_detection.name : NULL;
     status->model_mismatch = model_mismatch;
     status->auto_connect = auto_connect;
     status->command_pending = pending_valid;
@@ -412,6 +465,10 @@ void ebc_link_set_expected_model(uint8_t model)
     if (expected_model != model) {
         expected_model = model;
         model_mismatch = false;
+        active_version_known = false;
+        active_version = 0;
+        control_enabled = false;
+        memset(&active_detection, 0, sizeof(active_detection));
         accepting_frames = false;
         active_model_valid = false;
         has_frame = false;
@@ -433,7 +490,8 @@ esp_err_t ebc_link_queue_command(uint8_t command, uint16_t p1, uint16_t p2, uint
     const bool priority = command == EBC_CMD_STOP || command == EBC_CMD_DISCONNECT;
     esp_err_t err = ESP_OK;
     xSemaphoreTake(lock, portMAX_DELAY);
-    if (!connected || !accepting_frames || model_mismatch || (pending_valid && !priority)) {
+    if (!connected || !accepting_frames || model_mismatch ||
+        (!priority && !control_enabled) || (pending_valid && !priority)) {
         err = ESP_ERR_INVALID_STATE;
     } else {
         pending_valid = true;
@@ -463,6 +521,9 @@ esp_err_t ebc_link_connect(void)
     if (!already) {
         model_mismatch = false;
         accepting_frames = true;
+        active_version_known = false;
+        active_version = 0;
+        control_enabled = false;
         active_model_valid = false;
     }
     last_connect_try_us = esp_timer_get_time();

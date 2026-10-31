@@ -194,7 +194,7 @@ void ensure_settings_loaded()
         const esp_err_t model_err = nvs_get_u8(handle, "model", &model);
         ebc_model_limits_t limits;
         ebc_model_get_limits(model, &limits);
-        if (model_err == ESP_OK && limits.known) {
+        if (model_err == ESP_OK && limits.known && limits.enabled) {
             settings.model = model;
         } else if (model_err != ESP_ERR_NVS_NOT_FOUND) {
             ESP_LOGW(TAG, "Stored tester model is invalid or unreadable; select a tester in Settings");
@@ -444,7 +444,9 @@ void on_frame(const ebc_frame_t *frame, void *)
     }
     std::lock_guard<std::recursive_mutex> guard(state_mutex);
     ensure_settings_loaded();
-    if (settings.model == 0 || frame->model != settings.model) {
+    if (settings.model == 0 ||
+        !ebc_model_selection_matches(settings.model, frame->model,
+                                     frame->version_known, frame->firmware_version)) {
         return;
     }
     if (resistance_test::busy()) {
@@ -689,7 +691,7 @@ std::string set_model(uint8_t model)
     ensure_settings_loaded();
     ebc_model_limits_t limits;
     ebc_model_get_limits(model, &limits);
-    if (!limits.known) {
+    if (!limits.known || !limits.enabled) {
         return "Unsupported tester model.";
     }
     if (model == settings.model) {

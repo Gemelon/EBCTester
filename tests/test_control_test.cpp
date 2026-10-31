@@ -121,6 +121,11 @@ int main()
     assert(set_model(0x10).empty());
     assert(persisted_model == 0x10 && mock_link.expected_model == 0x10);
     assert(!mock_link.connected && current_model_limits().max_discharge_current_a == 40);
+    assert(!set_model(6).empty());
+    assert(set_model(10).empty());
+    assert(current_model_limits().max_charge_current_a == 50);
+    assert(set_model(0x10).empty());
+    assert(current_model_limits().max_charge_current_a == 40);
     assert(set_plan(plan).empty());
     plan.steps[0].p1 = 4001;
     assert(!set_plan(plan).empty());
@@ -195,5 +200,14 @@ int main()
     assert(set_model(0x09).empty());
     assert(get_settings().model == 0x09 && persisted_model == 0x09);
     assert(connect().empty() && connect_calls == 1);
+    persisted_model = 6;
+    model_stored = true;
+    settings_loaded = false;
+    settings = {};
+    assert(get_settings().model == 0 && mock_link.expected_model == 0);
+    persisted_model = 0x10;
+    settings_loaded = false;
+    settings = {};
+    assert(get_settings().model == 0x10 && mock_link.expected_model == 0x10);
     puts("Tester control tests passed: offline model limits, exact boundaries, persistence/reload, unsupported models, storage failures, preserved plans and operation/recording locks.");
 }

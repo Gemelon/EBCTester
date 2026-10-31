@@ -34,6 +34,7 @@ TESTER = dict(model=0, connected=False, error="")
 MODELS = {
     9: ("EBC-A20", dict(chargeVoltage=18, chargeCurrent=5, dischargeVoltage=30, dischargeCurrent=20, power=85)),
     16: ("EBC-A40L", dict(chargeVoltage=5, chargeCurrent=40, dischargeVoltage=5, dischargeCurrent=40, power=200)),
+    10: ("EBC-A50L", dict(chargeVoltage=5, chargeCurrent=50, dischargeVoltage=5, dischargeCurrent=50, power=250)),
 }
 
 
@@ -113,6 +114,10 @@ class Handler(BaseHTTPRequestHandler):
                                                hasModel=TESTER["model"] != 0, modelKnown=TESTER["model"] in MODELS,
                                                modelName=model_name, limits=limits, error=TESTER["error"],
                                                detectedModel=9, hasDetectedModel=bool(TESTER["error"]) or TESTER["connected"],
+                                               detectedModelName="EBC-A20", detectedModelKnown=True,
+                                               detectedModelEnabled=True, detectedVersionKnown=False,
+                                               detectedVersionPending=False, detectedVersion=0,
+                                               controlEnabled=TESTER["connected"],
                                                modelMismatch=bool(TESTER["error"]),
                                                setpoint1=.5, setpoint2=2.5, setpoint3=0),
                                      recorder=dict(active=False, written=0),

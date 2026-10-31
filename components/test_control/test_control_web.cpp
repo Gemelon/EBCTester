@@ -204,6 +204,14 @@ esp_err_t status_handler(httpd_req_t *req)
     cJSON_AddNumberToObject(ebc, "model", settings.model);
     cJSON_AddNumberToObject(ebc, "detectedModel", link.model);
     cJSON_AddBoolToObject(ebc, "hasDetectedModel", link.has_model);
+    cJSON_AddStringToObject(ebc, "detectedModelName",
+                            link.model_name == nullptr ? "Unknown" : link.model_name);
+    cJSON_AddBoolToObject(ebc, "detectedModelKnown", link.model_known);
+    cJSON_AddBoolToObject(ebc, "detectedModelEnabled", link.model_enabled);
+    cJSON_AddBoolToObject(ebc, "detectedVersionKnown", link.model_version_known);
+    cJSON_AddBoolToObject(ebc, "detectedVersionPending", link.model_version_pending);
+    cJSON_AddNumberToObject(ebc, "detectedVersion", link.firmware_version);
+    cJSON_AddBoolToObject(ebc, "controlEnabled", link.control_enabled);
     cJSON_AddBoolToObject(ebc, "modelMismatch", link.model_mismatch);
     ebc_model_limits_t limits;
     ebc_model_get_limits(settings.model, &limits);
@@ -211,12 +219,10 @@ esp_err_t status_handler(httpd_req_t *req)
     cJSON_AddBoolToObject(ebc, "modelKnown", limits.known);
     std::string connection_error;
     if (link.model_mismatch) {
-        ebc_model_limits_t detected;
-        ebc_model_get_limits(link.model, &detected);
         char ident[16];
-        snprintf(ident, sizeof(ident), " (0x%02X)", link.model);
+        snprintf(ident, sizeof(ident), " (ident 0x%02X)", link.model);
         connection_error = "Tester mismatch: selected " + std::string(limits.name) + ", received " +
-            detected.name + (detected.known ? "" : ident) +
+            (link.model_name == nullptr ? "Unknown" : link.model_name) + ident +
             ". Connection closed. Select the correct tester in Settings and reconnect.";
     }
     cJSON_AddStringToObject(ebc, "error", connection_error.c_str());

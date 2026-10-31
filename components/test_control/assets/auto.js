@@ -38,6 +38,7 @@
     const link = latestStatus?.link;
     $("auto-start").disabled = submitting || !latestStatus || latestStatus.controlsBusy ||
       link?.active || link?.pending || !link?.connected || !link?.hasFrame ||
+      link?.controlEnabled === false ||
       latestStatus.plan?.state === "running" || latestStatus.plan?.state === "interrupted";
     let reason = "";
     if (latestStatus && !submitting) {

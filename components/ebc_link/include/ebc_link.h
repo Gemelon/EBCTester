@@ -5,6 +5,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include "esp_err.h"
 
@@ -26,8 +27,10 @@ extern "C" {
 /* One decoded 19-byte status frame. */
 typedef struct {
     uint8_t mode;
-    uint8_t model;
+    uint8_t model; /* normalized device ident (raw frame byte modulo 100) */
     bool auxiliary; /* auxiliary frames carry no measurement values */
+    bool version_known;
+    uint16_t firmware_version;
     float current_a;
     float voltage_v;
     float capacity_ah;
@@ -43,8 +46,15 @@ typedef struct {
     bool auto_connect;
     bool command_pending;
     bool model_mismatch;
+    bool model_known;
+    bool model_enabled;
+    bool model_version_known;
+    bool model_version_pending;
+    bool control_enabled;
     uint8_t model;
     uint8_t expected_model;
+    uint16_t firmware_version;
+    const char *model_name;
     ebc_frame_t frame; /* last measurement frame */
     uint32_t frames_ok;
     uint32_t frames_bad;
@@ -62,6 +72,8 @@ typedef struct {
 /* Configures UART1 (tester) and UART2 (dongle) and starts the receive task. */
 esp_err_t ebc_link_init(const ebc_link_listener_t *listener);
 void ebc_link_get_status(ebc_link_status_t *status);
+/* Parses and validates a complete status frame without UART or UI dependencies. */
+bool ebc_frame_parse(const uint8_t *buffer, size_t length, ebc_frame_t *frame);
 /* Zero requires a model selection before connecting. Changing it disconnects an idle link. */
 void ebc_link_set_expected_model(uint8_t model);
 /* Sends the command right after the next valid status frame (half-duplex link).

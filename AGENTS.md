@@ -34,6 +34,10 @@ success. If compilation or publication fails, fix the cause and retry with
 the same pending release number. Report unresolved failures explicitly.
 Do not flash hardware or start battery tests automatically.
 
+After each firmware version is successfully published, add a concise entry
+for that version to `CHANGELOG.md`. Include the release date and the most
+important user-visible changes, bug fixes, and any known limitations.
+
 ## MQTT / Home Assistant integration
 
 Optional feature. Nice to have, never a dependency. The SD card database

@@ -15,6 +15,8 @@ measurements on an SD card. Its local web interface lets you manage batteries,
 follow measurements, and view charts from a phone, even outside your home
 Wi-Fi network.
 
+See [CHANGELOG.md](CHANGELOG.md) for user-visible changes by firmware version.
+
 ## A look at the web interface
 
 **Set up a test, close the browser, and come back to the results.** The ESP32
@@ -163,21 +165,31 @@ Changing it is blocked during an operation, plan, or recording and disconnects
 an idle tester. Existing plans and parameters are preserved and checked against
 the selected limits when saved or started.
 
-On connection, each valid status frame's identifier must match the selection.
-A mismatch (including an unknown identifier) displays an error, disconnects
-the tester, discards pending commands, and blocks automatic reconnection.
-Correct the selection or attached device and click **Connect** to retry.
+Status-frame identifiers are normalized as the raw byte modulo 100. Firmware
+version is decoded from bytes 10 and 11 only for status bytes of at least 100,
+then cached for that connection. A mismatch between two supported selected
+models displays an error, disconnects the tester, discards pending commands,
+and blocks automatic reconnection. Recognized disabled models and unknown
+identifiers remain available as read-only telemetry; all control commands are
+blocked for them.
 
-| Model | Ident | Charge voltage | Charge current | Discharge voltage | Discharge current | Max. power |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| EBC-A20 | `0x09` | 18 V | 5 A | 30 V | 20 A | 85 W |
-| EBC-A40L | `0x10` | 5 V | 40 A | 5 V | 40 A | 200 W |
-| EBC-A50L | Not confirmed | 5 V | 50 A | 5 V | 50 A | 250 W |
+| Model | Ident (decimal / hex) | Firmware version | Enabled |
+| --- | --- | --- | --- |
+| EBC-A05+ / EBC-A05 | 5 / `0x05` | 302 / other | No |
+| EBC-A10+ / EBC-A10H | 6 / `0x06` | 310 / other | No |
+| EBC-A20+ / EBC-A20 | 9 / `0x09` | 311 / other | Only EBC-A20 |
+| EBC-A50L / EBC-A40L | 10 / `0x0A` | 311 / other | Yes |
+| EBD-M10 / EBD-A10H | 20 / `0x14` | 310 / other | No |
+| EBD-M03+ / EBD-M05 / EBD-M03 | 25 / `0x19` | 310 / 315 / other | No |
+| EBD-A100L / EBC-A100L / EBD-A100 | 38 / `0x26` | 310 / 311 / other | No |
 
-The manufacturer describes the A50L as a 0–5 V, 50 A, 250 W tester
-([product page](http://www.zketech.com/en/pd.jsp?id=30)). Its identifier byte
-has not yet been confirmed, so it cannot currently be selected or connected.
-Only EBC-A20 and EBC-A40L are selectable.
+EBC-A40L and EBC-A50L share ident 10 and are separated by firmware version.
+If version is not yet known, the UI shows **EBC-A40L/A50L (Version unknown)**
+and uses conservative A40L limits until the next version-bearing frame.
+EBC-A20 (18 V / 5 A charge, 30 V / 20 A discharge, 85 W), EBC-A40L
+(5 V / 40 A, 200 W), and EBC-A50L (5 V / 50 A, 250 W) remain enabled.
+The existing A40L settings value 16 is retained for compatibility; the actual
+protocol ident is decimal 10 (`0x0A`).
 
 The protocol encodes setpoints in two base-240 bytes, with current and voltage
 setpoints sent in 0.01-unit increments. The numeric range is sufficient for

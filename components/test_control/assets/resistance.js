@@ -88,7 +88,8 @@
   function controls() {
     const busy = sending || Boolean(status?.busy);
     $("res-start").disabled = busy || !loaded || !status || !tester || tester.controlsBusy ||
-      !tester.link?.connected || !tester.link?.hasFrame || !tester.databaseReady || !$("res-confirm").checked;
+      !tester.link?.connected || !tester.link?.hasFrame || tester.link?.controlEnabled === false ||
+      !tester.databaseReady || !$("res-confirm").checked;
     $("res-save").disabled = busy || !loaded;
     $("res-abort").disabled = !status?.busy;
     let reason = "";

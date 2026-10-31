@@ -3,7 +3,7 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-set(PROJECT_VER "1.4.61")
+set(PROJECT_VER "1.4.64")
 include("${CMAKE_CURRENT_LIST_DIR}/CMakeUserConfig.cmake" OPTIONAL)
 set(OTA_SUITE_DIR "${CMAKE_CURRENT_LIST_DIR}/external/ota-suite" CACHE PATH
     "Path to the reusable ota-suite package")
