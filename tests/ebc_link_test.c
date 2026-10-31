@@ -43,6 +43,9 @@ static uint8_t sent_command;
 static uint8_t last_received_model;
 static jmp_buf task_exit;
 static int reads_remaining;
+static const uint8_t *uart_input;
+static size_t uart_input_length, uart_input_offset, uart_chunk_size;
+static int64_t uart_read_advance_us;
 
 static SemaphoreHandle_t xSemaphoreCreateMutex(void) { return (void *)1; }
 static void xSemaphoreTake(SemaphoreHandle_t mutex, int wait) { (void)mutex; (void)wait; }
@@ -62,9 +65,17 @@ static int uart_write_bytes(int port, const void *data, size_t size)
 }
 static int uart_read_bytes(int port, void *data, size_t size, int wait)
 {
-    (void)port; (void)data; (void)size; (void)wait;
+    (void)port; (void)wait;
     if (reads_remaining-- == 0) longjmp(task_exit, 1);
-    return 0;
+    clock_us += uart_read_advance_us;
+    size_t count = uart_input_length - uart_input_offset;
+    if (count > size) count = size;
+    if (count > uart_chunk_size) count = uart_chunk_size;
+    if (count > 0) {
+        memcpy(data, uart_input + uart_input_offset, count);
+        uart_input_offset += count;
+    }
+    return (int)count;
 }
 static void uart_flush_input(int port) { (void)port; }
 static void uart_wait_tx_done(int port, int wait) { (void)port; (void)wait; }
@@ -195,6 +206,40 @@ static void test_real_status_frames(void)
     assert(!ebc_frame_parse(unknown, sizeof(unknown), &frame));
 }
 
+static void checksum_frame(uint8_t checksum, uint8_t wire_checksum, uint8_t frame[19])
+{
+    memset(frame, 0, 19);
+    frame[0] = 0xFA;
+    frame[1] = 0x0C;
+    frame[16] = 0x09;
+    uint8_t value = checksum ^ frame[1] ^ frame[16];
+    if (value >= 0xF0) {
+        frame[2] = 0x80;
+        value ^= 0x80;
+    }
+    frame[3] = value;
+    frame[17] = wire_checksum;
+    frame[18] = 0xF8;
+}
+
+static void test_checksum_variants(void)
+{
+    for (unsigned checksum = 0; checksum <= 255; ++checksum) {
+        for (unsigned wire = 0; wire <= 255; ++wire) {
+            uint8_t bytes[19];
+            checksum_frame((uint8_t)checksum, (uint8_t)wire, bytes);
+            ebc_frame_t frame;
+            const bool valid = wire == checksum ||
+                               (checksum >= 0xF0 && wire == (checksum & 0x0F));
+            assert(ebc_frame_parse(bytes, sizeof(bytes), &frame) == valid);
+            if (valid) {
+                assert(frame.mode == 0x0C && frame.model == 9 && !frame.auxiliary);
+                assert(frame.current_a == (bytes[2] * 240 + bytes[3]) * 0.01f);
+            }
+        }
+    }
+}
+
 static ebc_link_status_t status(void)
 {
     ebc_link_status_t result;
@@ -204,13 +249,55 @@ static ebc_link_status_t status(void)
 
 static void run_iteration(void)
 {
+    uart_input = NULL;
+    uart_input_length = uart_input_offset = 0;
+    uart_read_advance_us = 0;
     reads_remaining = 1;
     if (setjmp(task_exit) == 0) link_task(NULL);
+}
+
+static void test_uart_checksum_stream(void)
+{
+    uint8_t stream[19 * (256 + 16)];
+    size_t length = 0;
+    for (unsigned checksum = 0; checksum <= 255; ++checksum) {
+        checksum_frame((uint8_t)checksum, (uint8_t)checksum, stream + length);
+        length += 19;
+        if (checksum >= 0xF0) {
+            checksum_frame((uint8_t)checksum, (uint8_t)(checksum & 0x0F), stream + length);
+            length += 19;
+        }
+    }
+    const size_t chunks[] = {1, 7, 19, 64};
+    ebc_link_set_auto_connect(false);
+    assert(ebc_link_connect() == ESP_OK);
+    for (size_t index = 0; index < sizeof(chunks) / sizeof(chunks[0]); ++index) {
+        const unsigned before_frames = frame_count;
+        const unsigned before_lost = lost_count;
+        const uint32_t before_bad = status().frames_bad;
+        uart_input = stream;
+        uart_input_length = length;
+        uart_input_offset = 0;
+        uart_chunk_size = chunks[index];
+        uart_read_advance_us = 100000;
+        reads_remaining = (int)((length + uart_chunk_size - 1) / uart_chunk_size);
+        if (setjmp(task_exit) == 0) link_task(NULL);
+        assert(uart_input_offset == length);
+        assert(frame_count == before_frames + 272);
+        assert(status().connected && status().has_frame && status().frame.mode == 0x0C);
+        assert(status().frames_bad == before_bad && lost_count == before_lost);
+    }
+    uart_read_advance_us = 0;
+    clock_us += 6000000;
+    const unsigned before_lost = lost_count;
+    run_iteration();
+    assert(!status().connected && lost_count == before_lost + 1);
 }
 
 int main(void)
 {
     test_real_status_frames();
+    test_checksum_variants();
     const ebc_link_listener_t callbacks = {received_frame, connection_lost, tick, NULL};
     assert(ebc_link_init(&callbacks) == ESP_OK);
     assert(ebc_link_connect() == ESP_ERR_INVALID_STATE);
@@ -304,6 +391,7 @@ int main(void)
     run_iteration();
     assert(!status().connected && !status().has_frame);
     assert(sent_command == EBC_CMD_CONNECT);
-    puts("EBC link tests passed: selection, model limits, checksum, match, mismatch, auxiliary frames, pending command discard, retry lockout, disconnect, model change and timeout.");
+    test_uart_checksum_stream();
+    puts("EBC link tests passed: all 65536 checksum combinations, raw/folded UART streams and markers, connection continuity, selection, model limits, match, mismatch, auxiliary frames, pending command discard, retry lockout, disconnect, model change and timeout.");
     return 0;
 }

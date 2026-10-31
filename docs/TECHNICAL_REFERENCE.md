@@ -23,7 +23,12 @@ currently accessible only to collaborators.
 Each 19-byte status frame carries the raw model identifier at byte index 16
 (zero-based); the original software normalizes it with `raw % 100`. The XOR
 checksum covers bytes 1 through 16 and is validated before any payload is
-used. Firmware bytes 10 and 11 encode `B10 * 240 + B11`, but only when the
+used. EBC-A20 status frames may transmit XOR values `0xF0` through `0xFF`
+with the high nibble cleared (`0x00` through `0x0F`) to avoid frame markers.
+Both the raw XOR and this narrowly defined variant are accepted; all other
+checksum mismatches remain invalid. The checksum position is read as data,
+even when a raw checksum equals `0xFA` or `0xF8`.
+Firmware bytes 10 and 11 encode `B10 * 240 + B11`, but only when the
 status byte is at least 100. The latest valid version is cached for the
 connection. The configured model is saved as the `model` byte in the `tester`
 NVS namespace through
@@ -111,7 +116,9 @@ unchanged, and language changes use the current translated subtitle template.
 Run `python tests/ebc_link_test.py` in a host C/C++20 compiler environment to test
 the actual link, model and controller implementation with mocked UART, NVS,
 clock, recorder and task services.
-It covers checksum validation, matching/mismatching and auxiliary frames,
+It covers all 256 XOR checksum values and rejection of every invalid checksum
+byte, folded checksums, marker-valued checksums, chunked UART streams,
+connection continuity, matching/mismatching and auxiliary frames,
 pending-command discard, automatic retry lockout, explicit retries, selection
 changes, disconnects, timeouts, offline validation at exact model limits,
 selection persistence/reload, storage failures and active-operation locks.

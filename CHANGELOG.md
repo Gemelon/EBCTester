@@ -3,6 +3,24 @@
 
 # Changelog
 
+## [1.4.65] – 2026-10-31
+
+### Fixed
+
+- Accept the EBC-A20's folded status checksums (`0xF0`–`0xFF` transmitted as
+  `0x00`–`0x0F`), preventing false connection loss and interrupted recordings
+  at affected measurement values. Invalid checksums remain rejected.
+- Read raw marker-valued checksums without prematurely ending or restarting
+  a UART status frame.
+
+### Validation
+
+- Host tests cover all 65,536 checksum combinations, fragmented UART streams,
+  connection continuity and genuine connection timeouts. Physical battery
+  tests were not run automatically.
+- Manually tested on an EBC-A20: no further test interruptions and no
+  checksum warnings in the device log.
+
 ## [1.4.64] – 2026-10-31
 
 ### Changed

@@ -114,7 +114,10 @@ bool ebc_frame_parse(const uint8_t *buffer, size_t length, ebc_frame_t *frame)
     for (int i = 1; i <= 16; ++i) {
         checksum ^= buffer[i];
     }
-    if (buffer[17] != checksum) {
+    /* EBC-A20 may clear the high nibble of 0xF0..0xFF to avoid frame markers. */
+    const bool folded_checksum = (checksum & 0xF0) == 0xF0 &&
+                                 buffer[17] == (checksum & 0x0F);
+    if (buffer[17] != checksum && !folded_checksum) {
         ESP_LOGW(TAG, "Checksum mismatch: received 0x%02X, calculated 0x%02X",
                  buffer[17], checksum);
         return false;
@@ -283,7 +286,8 @@ static void link_task(void *arg)
         const int64_t now = esp_timer_get_time();
         for (int i = 0; i < received; ++i) {
             const uint8_t byte = chunk[i];
-            if (byte == FRAME_START) {
+            /* A raw XOR checksum may itself equal a frame marker. */
+            if (byte == FRAME_START && (!in_frame || length != STATUS_FRAME_LENGTH - 2)) {
                 frame[0] = byte;
                 length = 1;
                 in_frame = true;
@@ -301,7 +305,8 @@ static void link_task(void *arg)
                 continue;
             }
             frame[length++] = byte;
-            if (byte != FRAME_END) {
+            if (length < STATUS_FRAME_LENGTH &&
+                (byte != FRAME_END || length == STATUS_FRAME_LENGTH - 1)) {
                 continue;
             }
             in_frame = false;
