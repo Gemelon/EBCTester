@@ -17,9 +17,11 @@ if not compiler:
     raise SystemExit("Run in a host C/C++ developer shell or set CC and CXX.")
 with tempfile.TemporaryDirectory(prefix="ebctester-runs-") as temporary:
     work = Path(temporary)
-    includes = [sqlite, root / "components" / "battery_dashboard"]
+    includes = [sqlite, root / "components" / "battery_dashboard",
+                root / "components" / "test_control"]
     sources = [root / "tests" / "run_management_test.cpp",
-               root / "components" / "battery_dashboard" / "run_management.cpp"]
+               root / "components" / "battery_dashboard" / "run_management.cpp",
+               root / "components" / "test_control" / "battery_deletion.cpp"]
     if Path(compiler).name.lower() in ("cl", "cl.exe"):
         obj = work / "sqlite.obj"
         subprocess.run([compiler, "/nologo", "/c", "/O2", str(sqlite / "sqlite3.c"),

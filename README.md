@@ -48,6 +48,10 @@ redacted.
 Save battery labels, manufacturer details, nominal capacity, and notes on
 the SD card. Battery details are stored with each test run, helping you
 identify the cell or pack behind a set of measurements.
+**Delete battery**, next to **New battery**, removes the saved battery currently
+shown in the form after confirmation. Batteries with recorded test runs cannot
+be deleted; remove those runs in test-run management first. Recording blocks
+deletion, and existing MariaDB backups are unchanged.
 
 <p align="center">
   <a href="docs/images/battery-details.png">

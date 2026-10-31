@@ -5,6 +5,16 @@
 
 (() => {
   const $ = (id) => document.getElementById(id);
+  let displayedLabel = "", savedLabels = [], busy = false;
+
+  function updateDelete() {
+    for (const id of ["bat-save", "bat-save-db", "bat-new", "bat-load", "bat-refresh",
+      "bat-label", "bat-manufacturer", "bat-serial", "bat-date", "bat-capacity", "bat-notes", "bat-list"]) {
+      $(id).disabled = busy;
+    }
+    $("bat-delete").disabled = busy || !displayedLabel ||
+      $("bat-label").value.trim() !== displayedLabel || !savedLabels.includes(displayedLabel);
+  }
 
   function showMessage(text, kind = "info") {
     const box = $("bat-message");
@@ -27,6 +37,7 @@
   }
 
   function fill(battery) {
+    displayedLabel = battery.label || "";
     $("bat-label").value = battery.label || "";
     $("bat-manufacturer").value = battery.manufacturer || "";
     $("bat-serial").value = battery.serial || "";
@@ -34,6 +45,7 @@
     $("bat-capacity").value = battery.capacity > 0 ? battery.capacity : "";
     $("bat-notes").value = battery.notes || "";
     $("bat-notes-count").textContent = $("bat-notes").value.length;
+    updateDelete();
   }
 
   function collect() {
@@ -60,20 +72,24 @@
     const list = $("bat-list");
     try {
       const catalog = JSON.parse(await api("/api/tester/catalog"));
+      savedLabels = catalog.databaseReady ? catalog.batteries || [] : [];
       const selected = list.value;
       list.replaceChildren();
       for (const label of catalog.batteries || []) list.append(new Option(label, label, false, label === selected));
       if (!catalog.databaseReady) showMessage(I18n.t("text.56b2a2978734"), "warning");
     } catch (error) {
+      savedLabels = [];
       showMessage(I18n.f("text.368e46e190fa", {p0: error.message}), "danger");
     }
+    updateDelete();
   }
 
   async function post(body, reload) {
+    if (busy) return;
     showMessage("");
     try {
       showMessage(await api("/api/tester/battery", { method: "POST", body: JSON.stringify(body) }), "success");
-      if (reload) await loadSettings();
+      if (reload || body.action === "save" || body.action === "save_db") await loadSettings();
       await loadCatalog();
     } catch (error) {
       showMessage(error.message, "danger");
@@ -92,9 +108,33 @@
     void post({ action: "save_db", battery: collect() }, false);
   });
   $("bat-new").addEventListener("click", () => {
+    if (busy) return;
     fill({});
     showMessage(I18n.t("text.25023e5f547b"), "info");
     $("bat-label").focus();
+  });
+  $("bat-label").addEventListener("input", updateDelete);
+  $("bat-delete").addEventListener("click", async () => {
+    if ($("bat-delete").disabled) return;
+    const label = displayedLabel;
+    busy = true;
+    updateDelete();
+    try {
+      if (!confirm(I18n.f("battery.deleteConfirm", { p0: label }))) return;
+      const headers = await WebAuth.settingsHeaders();
+      if (headers === null) return;
+      showMessage(await api("/api/tester/battery", {
+        method: "POST", headers, body: JSON.stringify({ action: "delete_db", label }),
+      }), "success");
+      fill({});
+      await loadCatalog();
+      window.dispatchEvent(new CustomEvent("test-runs-changed", { detail: {} }));
+    } catch (error) {
+      showMessage(error.message, "danger");
+    } finally {
+      busy = false;
+      updateDelete();
+    }
   });
   $("bat-load").addEventListener("click", () => {
     if (!$("bat-list").value) {

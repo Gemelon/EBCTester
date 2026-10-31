@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "run_management.h"
+#include "battery_deletion.h"
 #include <cassert>
 #include <fstream>
 #include <iostream>
@@ -53,6 +54,15 @@ int main(int argc, char **argv)
             "('done','device',1,1,'2026-10-30 23:59:59','COMPLETED'),"
             "('active','device',2,1,'2026-10-31 00:00:00','RUNNING');");
     sql(db, file(root + "/components/battery_database/resistance_schema.sql"));
+    assert((delete_unused_battery(db, "Cell A") & 0xff) == SQLITE_CONSTRAINT);
+    assert((delete_unused_battery(db, "Cell B") & 0xff) == SQLITE_CONSTRAINT);
+    assert(delete_unused_battery(db, "missing") == SQLITE_NOTFOUND);
+    assert(delete_unused_battery(db, "Cell A' OR 1=1 --") == SQLITE_NOTFOUND);
+    sql(db, "INSERT INTO ebc_battery(label,created_at_utc) VALUES('Unused','2026-10-31');");
+    assert(delete_unused_battery(db, "unused") == SQLITE_OK);
+    assert(delete_unused_battery(db, "Unused") == SQLITE_NOTFOUND);
+    assert(number(db, "SELECT COUNT(*) FROM ebc_battery") == 2);
+    assert(number(db, "SELECT COUNT(*) FROM ebc_test_run") == 2);
     const std::string migration = file(root + "/components/battery_database/run_management_schema.sql");
     sql(db, "BEGIN IMMEDIATE;");
     sql(db, migration);

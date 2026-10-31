@@ -4,6 +4,8 @@
 
 #include "test_control.h"
 #include "test_control_internal.h"
+#include "battery_deletion.h"
+#include "battery_database.h"
 
 #include <cmath>
 #include <cstring>
@@ -849,6 +851,50 @@ std::string set_battery(const test_store::Battery &battery)
     settings.battery = battery;
     const std::string json = battery_to_json(battery);
     save_setting([&](nvs_handle_t handle) { return nvs_set_str(handle, "battery", json.c_str()); });
+    return "";
+}
+
+std::string delete_battery(const std::string &label)
+{
+    std::lock_guard<std::recursive_mutex> guard(state_mutex);
+    ensure_settings_loaded();
+    if (capturing || resistance_test::busy() || test_store::recorder_status().active ||
+        manual_start_deadline_us != 0 || plan_status.state == RunState::Running) {
+        return "The battery cannot be deleted during recording.";
+    }
+    if (label.empty() || label != settings.battery.label) {
+        return "The current battery changed. Reload it before deleting.";
+    }
+    int result = SQLITE_OK;
+    struct Context { const std::string &label; int &result; } context{label, result};
+    const esp_err_t err = battery_database_execute([](sqlite3 *database, void *arg) {
+        auto *context = static_cast<Context *>(arg);
+        context->result = delete_unused_battery(database, context->label.c_str());
+        if (context->result != SQLITE_OK) {
+            ESP_LOGW(TAG, "Cannot delete battery: SQLite %d (%s)",
+                     context->result, sqlite3_errmsg(database));
+            return ESP_FAIL;
+        }
+        return ESP_OK;
+    }, &context, pdMS_TO_TICKS(5000));
+    if ((result & 0xff) == SQLITE_CONSTRAINT) {
+        return "Battery has test runs. Delete them in test run management first.";
+    }
+    if (result == SQLITE_NOTFOUND) return "Battery not found in the SD database.";
+    if (err != ESP_OK) return "Could not delete battery from the SD database.";
+
+    settings.battery = {};
+    nvs_handle_t handle;
+    esp_err_t stored = open_nvs(NVS_READWRITE, &handle);
+    if (stored == ESP_OK) {
+        stored = nvs_set_str(handle, "battery", "{}");
+        if (stored == ESP_OK) stored = nvs_commit(handle);
+        nvs_close(handle);
+    }
+    if (stored != ESP_OK) {
+        ESP_LOGE(TAG, "Battery deleted but selection persistence failed: %s", esp_err_to_name(stored));
+        return "Battery deleted, but clearing the saved selection failed. Apply an empty battery before restarting.";
+    }
     return "";
 }
 

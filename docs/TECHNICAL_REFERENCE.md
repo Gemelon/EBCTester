@@ -508,6 +508,16 @@ implemented yet; UART2 is initialized and its input discarded.
 
 - **Battery**: label, manufacturer, serial, manufacturing date, nominal
   capacity, notes; stored in NVS and optionally in the SQLite database.
+  **Delete battery** sits immediately after **New battery** and targets the
+  saved battery displayed in the form, not a different saved-list selection.
+  Confirmation and settings authorization are required. The action is
+  `POST /api/tester/battery` with `{"action":"delete_db","label":"Battery label"}`.
+  Active recordings, pending starts, running plans and DCIR tests block deletion
+  under the controller state lock. SQLite foreign keys prevent deleting batteries
+  referenced by any test run; delete those runs in test-run management first.
+  Success clears the current battery in RAM and NVS and refreshes the catalog.
+  Persistence failures are reported explicitly even if the SD deletion succeeded.
+  Existing MariaDB backups are unchanged; no schema migration is needed.
 - **Manual**: live values, connect/disconnect, auto-connect, Stop, charging
   C-CV, discharging D-CC/D-CP.
   Connect/disconnect and all start buttons are blocked while a command is

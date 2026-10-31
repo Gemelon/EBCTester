@@ -395,6 +395,13 @@ esp_err_t battery_handler(httpd_req_t *req)
         }
         return send_result(req, set_battery(loaded), "Battery loaded from database.");
     }
+    if (action == "delete_db") {
+        if (!web_interface_authorize_settings_request(req)) return ESP_OK;
+        if (!valid_text(label, 64) || label.empty()) {
+            return send_text(req, "400 Bad Request", "Please select a battery.");
+        }
+        return send_result(req, delete_battery(label), "Battery deleted from the SD database.");
+    }
     if (action != "save" && action != "save_db") {
         return send_text(req, "400 Bad Request", "Unknown action.");
     }

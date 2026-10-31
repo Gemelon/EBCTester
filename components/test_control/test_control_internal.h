@@ -60,6 +60,7 @@ std::string start_charge(float current_a, float voltage_v, float cutoff_a);
 std::string start_discharge_cc(float current_a, float cutoff_v, uint16_t minutes);
 std::string start_discharge_cp(float power_w, float cutoff_v, uint16_t minutes);
 std::string set_battery(const test_store::Battery &battery);
+std::string delete_battery(const std::string &label);
 std::string set_plan(const test_store::Plan &plan);
 std::string start_plan();
 std::string abort_plan();

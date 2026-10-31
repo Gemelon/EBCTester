@@ -3,6 +3,27 @@
 
 # Changelog
 
+## [1.4.69] – 2026-10-31
+
+### Added
+
+- Add Delete battery immediately after New battery. Delete the saved battery
+  currently displayed in the form after confirmation and settings authorization.
+- Protect active recordings, pending starts, running plans and DCIR tests.
+  Batteries referenced by test runs cannot be deleted; remove those runs in
+  test-run management first.
+- Clear the current battery selection after deletion and refresh saved batteries.
+  Existing MariaDB backups remain unchanged; no database migration is needed.
+
+### Validation
+
+- Battery UI, test-run management and localization tests pass (20 tests).
+  Native SQLite tests verify referenced-battery protection, literal bound labels,
+  missing batteries and successful deletion without removing test runs.
+- Firmware build and publication succeeded; the downloaded image matches the
+  built image's size and SHA256. Physical device testing is pending.
+- Schema 3 backup and downgrade limitations documented for 1.4.67 remain unchanged.
+
 ## [1.4.68] – 2026-10-31
 
 ### Changed
