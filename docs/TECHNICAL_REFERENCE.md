@@ -50,6 +50,12 @@ before connecting or saving model-dependent plans and resistance settings.
 | 25 / `0x19` | 310 / 315 / other | EBD-M03+ / EBD-M05 / EBD-M03 | No |
 | 38 / `0x26` | 310 / 311 / other | EBD-A100L / EBC-A100L / EBD-A100 | No |
 
+Every model listed above is recognized by the firmware. Only EBC-A20,
+EBC-A40L, and EBC-A50L are enabled for selection and control. The remaining
+known models stay read-only pending confirmation of their functionality.
+Users who can test one of these models with EBCTester are encouraged to share
+their results so the model can be considered for enablement.
+
 Ident 10 without a cached firmware version is shown as
 **EBC-A40L/A50L (Version unknown)** and uses the conservative A40L limits
 until the version is available. The selector can distinguish A40L from A50L

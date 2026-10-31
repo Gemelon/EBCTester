@@ -173,6 +173,12 @@ and blocks automatic reconnection. Recognized disabled models and unknown
 identifiers remain available as read-only telemetry; all control commands are
 blocked for them.
 
+All ZKE models in the table below are recognized. Only EBC-A20, EBC-A40L, and
+EBC-A50L are currently selectable and enabled; the other known models remain
+read-only until their functionality has been confirmed. If you have one of
+these models and can verify its operation with EBCTester, please share your
+results so it can be considered for enablement.
+
 | Model | Ident (decimal / hex) | Firmware version | Enabled |
 | --- | --- | --- | --- |
 | EBC-A05+ / EBC-A05 | 5 / `0x05` | 302 / other | No |
@@ -252,9 +258,10 @@ can still be operated from a phone through its own Wi-Fi access point.
   button click and confirmation.
 
 **Current version:** [![Release](https://img.shields.io/github/v/release/Gemelon/EBCTester)](https://github.com/Gemelon/EBCTester/releases/latest), developed with ESP-IDF 6.0.1 for ESP32-S3.
-The EBC-A20 is the currently supported tester; support for all ZKE models
-is not claimed. Additional export formats and cross-battery analysis are
-possible extensions, not completed features.
+EBC-A20, EBC-A40L, and EBC-A50L are currently enabled for selection and
+control. Other models in the table are recognized but await functional
+verification before they can be enabled. Additional export formats and
+cross-battery analysis are possible extensions, not completed features.
 
 ## Architecture and reuse
 
