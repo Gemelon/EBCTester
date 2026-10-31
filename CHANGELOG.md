@@ -3,6 +3,20 @@
 
 # Changelog
 
+## [1.4.68] – 2026-10-31
+
+### Changed
+
+- Move Refresh list one position left, before Apply filters, in test-run
+  management. Button actions remain unchanged.
+
+### Validation
+
+- All 13 test-run management UI tests pass, including the toolbar order.
+- Firmware build and publication succeeded; the downloaded image matches
+  the built image's size and SHA256. Physical device testing is pending.
+- Schema 3 and the backup limitations documented for 1.4.67 remain unchanged.
+
 ## [1.4.67] – 2026-10-31
 
 ### Added

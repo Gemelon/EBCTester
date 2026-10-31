@@ -177,6 +177,12 @@ test("failed changes stay visible, preserve data, and are never silently retried
   assert.equal(view.events.length, 0);
 });
 
+test("refresh precedes apply and reset in the filter toolbar", () => {
+  const html = fs.readFileSync(path.join(root, "components", "battery_dashboard", "assets", "test_runs.html"), "utf8");
+  assert.deepEqual([...html.matchAll(/<button id="(runs-(?:refresh|apply|reset))"/g)].map(match => match[1]),
+    ["runs-refresh", "runs-apply", "runs-reset"]);
+});
+
 test("mutation routes require settings authorization and tab order follows device information", () => {
   const backend = fs.readFileSync(path.join(root, "components", "battery_dashboard", "run_management_web.cpp"), "utf8");
   assert.match(backend, /web_interface_authorize_settings_request\(req\)/);
