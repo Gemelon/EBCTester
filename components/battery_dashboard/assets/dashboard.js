@@ -217,7 +217,7 @@
       const battery = batteryById(run.batteryId);
       const state = (STATUS[run.status] || [run.status])[0];
       select.append(option(run.id,
-        `${formatDate(run.started)} · ${battery ? battery.label : "?"} · ${run.plan || I18n.t("text.b01429e91a75")} · ${state}`));
+        run.name || `${formatDate(run.started)} · ${battery ? battery.label : "?"} · ${run.plan || I18n.t("text.b01429e91a75")} · ${state}`));
     }
     if (preferred && runs.some((run) => run.id === preferred)) select.value = preferred;
     $("dash-load").disabled = !runs.length;
@@ -246,7 +246,7 @@
     status.className = `badge ${badge}`;
     status.textContent = label;
     $("dash-step").textContent = I18n.f("text.f5c7e02a3035", {p0: run.currentStep ?? "-", p1: run.cyclePass ?? "-"});
-    $("dash-run-title").textContent = I18n.f("text.0ee7dce1257d", {p0: run.plan || I18n.t("text.b01429e91a75"), p1: formatDate(run.started)}) +
+    $("dash-run-title").textContent = run.name || I18n.f("text.0ee7dce1257d", {p0: run.plan || I18n.t("text.b01429e91a75"), p1: formatDate(run.started)}) +
       (run.ended ? I18n.f("text.9fa0478ce441", {p0: formatDate(run.ended)}) : "");
   }
 
@@ -465,6 +465,18 @@
     $("dash-run").addEventListener("change", () => { $("dash-load").disabled = !$("dash-run").value; });
     $("dash-load").addEventListener("click", () => void loadRun($("dash-run").value));
     $("dash-refresh").addEventListener("click", () => void refreshCatalog());
+    window.addEventListener("test-runs-changed", async (event) => {
+      if (event.detail.action === "delete" && event.detail.id === currentRunId) {
+        clearTimeout(refreshTimer);
+        currentRunId = "";
+        for (const chart of Object.values(charts)) chart.destroy();
+        charts = {};
+        renderSummary({});
+        renderSegments([]);
+      }
+      await refreshCatalog();
+      if (event.detail.action === "rename" && event.detail.id === currentRunId) void loadRun(currentRunId);
+    });
     if (await refreshCatalog() && catalog.runs.length) await loadRun($("dash-run").value);
   }
 

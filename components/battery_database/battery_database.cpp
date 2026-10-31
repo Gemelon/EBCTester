@@ -26,6 +26,7 @@
 extern const char schema_sql_start[] asm("_binary_schema_sql_start");
 extern const char schema_sql_end[] asm("_binary_schema_sql_end");
 extern const char resistance_schema_start[] asm("_binary_resistance_schema_sql_start");
+extern const char run_management_schema_start[] asm("_binary_run_management_schema_sql_start");
 
 static const char *TAG = "battery_database";
 static constexpr TickType_t SD_LOCK_TIMEOUT = pdMS_TO_TICKS(1000);
@@ -283,8 +284,8 @@ static esp_err_t initialize_database_locked(void)
                      result, sqlite3_errmsg(database));
         }
     }
-    if (result == SQLITE_OK && schema_version > 2) {
-        ESP_LOGE(TAG, "Database schema version %d is newer than supported version 2",
+    if (result == SQLITE_OK && schema_version > 3) {
+        ESP_LOGE(TAG, "Database schema version %d is newer than supported version 3",
                  schema_version);
         result = SQLITE_ERROR;
     }
@@ -300,10 +301,11 @@ static esp_err_t initialize_database_locked(void)
         }
         if (result == SQLITE_OK) {
             result = sqlite3_exec(database, "COMMIT;", NULL, NULL, &error);
-        } else {
+        }
+        if (result != SQLITE_OK) {
             sqlite3_exec(database, "ROLLBACK;", NULL, NULL, NULL);
         }
-    } else if (result == SQLITE_OK && schema_version != 1 && schema_version != 2) {
+    } else if (result == SQLITE_OK && schema_version != 1 && schema_version != 2 && schema_version != 3) {
         ESP_LOGE(TAG, "Unsupported database schema version %d", schema_version);
         result = SQLITE_ERROR;
     }
@@ -315,13 +317,35 @@ static esp_err_t initialize_database_locked(void)
         }
         if (result == SQLITE_OK) {
             result = sqlite3_exec(database, "COMMIT;", NULL, NULL, &error);
-        } else {
+        }
+        if (result != SQLITE_OK) {
             ESP_LOGE(TAG, "DCIR migration failed: %s", error != NULL ? error : sqlite3_errmsg(database));
+            sqlite3_exec(database, "ROLLBACK;", NULL, NULL, NULL);
+        }
+        if (result == SQLITE_OK) schema_version = 2;
+    }
+    if (result == SQLITE_OK && schema_version < 3) {
+        ESP_LOGI(TAG, "Migrating SQLite schema to version 3 (test run names)");
+        result = sqlite3_exec(database, "BEGIN IMMEDIATE;", NULL, NULL, &error);
+        if (result == SQLITE_OK) {
+            result = sqlite3_exec(database, run_management_schema_start, NULL, NULL, &error);
+        }
+        if (result == SQLITE_OK) {
+            result = sqlite3_exec(database, "COMMIT;", NULL, NULL, &error);
+        }
+        if (result != SQLITE_OK) {
+            ESP_LOGE(TAG, "Test run migration failed: %s", error != NULL ? error : sqlite3_errmsg(database));
             sqlite3_exec(database, "ROLLBACK;", NULL, NULL, NULL);
         }
     }
     if (result == SQLITE_OK) {
         result = validate_schema(database);
+        if (result == SQLITE_OK) {
+            sqlite3_stmt *columns = NULL;
+            result = sqlite3_prepare_v2(database, "SELECT display_name FROM ebc_test_run LIMIT 0;",
+                                        -1, &columns, NULL);
+            sqlite3_finalize(columns);
+        }
         if (result != SQLITE_OK) {
             ESP_LOGE(TAG, "SQLite schema validation failed: %s",
                      sqlite3_errmsg(database));

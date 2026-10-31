@@ -1,0 +1,76 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+<section aria-labelledby="runs-title">
+  <h2 id="runs-title" class="h3" data-i18n="runs.title">Test run management</h2>
+  <p class="text-body-secondary" data-i18n="runs.description">Manage recorded test runs on the SD card. Running tests are protected.</p>
+  <div id="runs-message" class="alert d-none" role="status"></div>
+  <form id="runs-filter" class="row g-2 align-items-end mb-3">
+    <div class="col-md-3">
+      <label class="form-label" for="runs-search" data-i18n="runs.search">Search</label>
+      <input id="runs-search" class="form-control" type="search" maxlength="100">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="runs-battery" data-i18n="text.43787dab5fe9">Battery</label>
+      <select id="runs-battery" class="form-select"></select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="runs-status" data-i18n="runs.status">Status</label>
+      <select id="runs-status" class="form-select">
+        <option value="" data-i18n="runs.all">All</option>
+        <option value="RUNNING" data-i18n="text.f85fd2bc5619">Running</option>
+        <option value="COMPLETED" data-i18n="text.38ee859a969e">Completed</option>
+        <option value="STOPPED" data-i18n="text.641c1c76e38a">Stopped</option>
+        <option value="INTERRUPTED" data-i18n="text.d8135c8fc9ca">Interrupted</option>
+        <option value="ERROR" data-i18n="text.f6cc01cb7edb">Error</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="runs-from" data-i18n="runs.from">From date</label>
+      <input id="runs-from" type="date" class="form-control">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label" for="runs-to" data-i18n="runs.to">Through date</label>
+      <input id="runs-to" type="date" class="form-control">
+    </div>
+    <div class="col-12 d-flex gap-2">
+      <button id="runs-apply" class="btn btn-outline-primary" type="submit" data-i18n="runs.apply">Apply filters</button>
+      <button id="runs-refresh" class="btn btn-outline-secondary" type="button" data-i18n="text.46cab1548f3e">Refresh list</button>
+      <button id="runs-reset" class="btn btn-outline-secondary" type="button" data-i18n="runs.reset">Reset filters</button>
+    </div>
+  </form>
+  <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+    <button id="runs-rename" class="btn btn-primary" type="button" disabled data-i18n="runs.rename">Rename</button>
+    <button id="runs-delete" class="btn btn-danger" type="button" disabled data-i18n="runs.delete">Delete</button>
+    <span id="runs-selection" class="small text-body-secondary" aria-live="polite"></span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead><tr>
+        <th scope="col" data-i18n="runs.select">Select</th>
+        <th scope="col" data-i18n="runs.name">Name</th>
+        <th scope="col" data-i18n="text.43787dab5fe9">Battery</th>
+        <th scope="col" data-i18n="runs.date">Date</th>
+        <th scope="col" data-i18n="runs.plan">Test plan</th>
+        <th scope="col" data-i18n="runs.status">Status</th>
+      </tr></thead>
+      <tbody id="runs-rows"></tbody>
+    </table>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <button id="runs-previous" class="btn btn-outline-secondary" type="button" disabled data-i18n="runs.previous">Previous</button>
+    <span id="runs-page" aria-live="polite"></span>
+    <button id="runs-next" class="btn btn-outline-secondary" type="button" disabled data-i18n="runs.next">Next</button>
+  </div>
+  <p class="small text-body-secondary mt-3" data-i18n="runs.backup">Names and deletions apply to the SD database only. Existing MariaDB backups remain unchanged.</p>
+  <dialog id="runs-name-dialog" class="rounded border shadow">
+    <form id="runs-name-form">
+      <label for="runs-name" class="form-label" data-i18n="runs.name">Name</label>
+      <input id="runs-name" class="form-control" maxlength="400" autocomplete="off">
+      <p class="small text-body-secondary mt-2" data-i18n="runs.nameHelp">Up to 100 characters. Leave empty to restore the default name.</p>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary" type="submit" data-i18n="runs.save">Save</button>
+        <button id="runs-name-cancel" class="btn btn-secondary" type="button" data-i18n="runs.cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+</section>

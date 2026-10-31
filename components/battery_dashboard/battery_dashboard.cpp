@@ -29,6 +29,7 @@ extern const unsigned char brand_icon_start[] asm("_binary_brand_icon_png_start"
 extern const unsigned char brand_icon_end[] asm("_binary_brand_icon_png_end");
 
 static const char *TAG = "dashboard";
+esp_err_t run_management_init();
 
 namespace {
 
@@ -198,14 +199,14 @@ esp_err_t list_operation(sqlite3 *database, void *context)
                           NULL, battery_names, 5, batteries, false);
     if (result == SQLITE_OK) {
         static const char *const run_names[] = {"id", "batteryId", "plan", "started", "ended",
-                                                "status"};
-        char sql[320];
+                                                "status", "name"};
+        char sql[360];
         snprintf(sql, sizeof(sql),
                  "SELECT r.run_id, r.battery_id, p.plan_name, r.started_at_utc, r.ended_at_utc, "
-                 "r.status FROM ebc_test_run r LEFT JOIN ebc_test_plan p ON p.plan_id = r.plan_id "
+                 "r.status, r.display_name FROM ebc_test_run r LEFT JOIN ebc_test_plan p ON p.plan_id = r.plan_id "
                  "ORDER BY r.started_at_utc DESC LIMIT %d;",
                  MAX_LISTED_RUNS);
-        result = add_rows(database, sql, NULL, run_names, 6, runs, false);
+        result = add_rows(database, sql, NULL, run_names, 7, runs, false);
     }
     return sqlite_to_esp(database, result, "Run list");
 }
@@ -223,15 +224,15 @@ esp_err_t run_operation(sqlite3 *database, void *context)
     }
     static const char *const run_names[] = {
         "id", "batteryId", "batteryLabel", "manufacturer", "serial", "nominalAh", "plan",
-        "started", "ended", "status", "currentStep", "cyclePass", "firmware", "notes"};
+        "started", "ended", "status", "currentStep", "cyclePass", "firmware", "notes", "name"};
     int result = add_rows(
         database,
         "SELECT r.run_id, r.battery_id, b.label, b.manufacturer, b.serial_number, "
         "b.nominal_capacity_ah, p.plan_name, r.started_at_utc, r.ended_at_utc, r.status, "
-        "r.current_step, r.cycle_pass, r.firmware_version, r.notes FROM ebc_test_run r "
+        "r.current_step, r.cycle_pass, r.firmware_version, r.notes, r.display_name FROM ebc_test_run r "
         "LEFT JOIN ebc_battery b ON b.battery_id = r.battery_id "
         "LEFT JOIN ebc_test_plan p ON p.plan_id = r.plan_id WHERE r.run_id = ?1;",
-        run_id, run_names, 14, run, true);
+        run_id, run_names, 15, run, true);
     if (result == SQLITE_OK && cJSON_GetObjectItemCaseSensitive(run, "id") == NULL) {
         return ESP_ERR_NOT_FOUND;
     }
@@ -539,5 +540,5 @@ esp_err_t battery_dashboard_init(void)
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Cannot register dashboard UI: %s", esp_err_to_name(err));
     }
-    return err;
+    return err == ESP_OK ? run_management_init() : err;
 }

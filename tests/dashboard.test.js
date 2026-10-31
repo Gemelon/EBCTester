@@ -58,6 +58,7 @@ function page(runs = [], error = null) {
     },
     setTimeout(callback) { timers.push(callback); return timers.length; },
     clearTimeout() {},
+    addEventListener(name, listener) { documentListeners[name] = listener; },
     fetch: async (url, options) => {
       requests.push({ url, options });
       assert.equal(options.method, undefined, "the dashboard must only read data");
@@ -106,6 +107,26 @@ test("existing runs still load charts and schedule live refresh using GET only",
   await settle();
   assert.equal(view.charts.length, 6);
   assert.equal(view.requests.length, 5);
+});
+
+test("custom run names appear unchanged in the dashboard selection", async () => {
+  const name = "<b>Cell capacity check</b>";
+  const view = page([{ id: "named-run", batteryId: 1, status: "COMPLETED", name }]);
+  await settle();
+  assert.equal(view.element("dash-run").options[0].textContent, name);
+  assert.equal(view.element("dash-run").options[0].innerHTML, undefined);
+});
+
+test("management deletion clears the selected dashboard run and refreshes the catalog", async () => {
+  const view = page([{ id: "existing-run", batteryId: 1, status: "COMPLETED" }]);
+  await settle();
+  const before = view.requests.length;
+  await view.documentListeners["test-runs-changed"]({
+    detail: { id: "existing-run", action: "delete" },
+  });
+  assert.equal(view.element("dash-battery-label").textContent, "-");
+  assert.equal(view.requests.length, before + 1);
+  assert.equal(view.requests.at(-1).url, "/api/db/runs");
 });
 
 test("database errors remain visible without generating or deleting data", async () => {

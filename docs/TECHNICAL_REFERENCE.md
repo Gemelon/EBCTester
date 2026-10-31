@@ -645,12 +645,67 @@ and battery safety must still be verified.
 
 ## Update behavior
 
+### Test run management and schema upgrades
+
+**Administration → Test run management** appears immediately after device
+information. The SD database supplies the table; it is not limited to the
+dashboard's latest 300 runs. Pages contain 50 runs, newest first. Battery,
+status, local-calendar start/end dates and text search can be combined.
+The end date includes the entire selected day. Search covers custom names,
+battery labels, plan names, stored UTC dates, status codes and run IDs.
+SQLite's built-in case folding is ASCII-only; non-ASCII search text is matched
+literally.
+
+Select one row to rename or delete it. Running runs and the recorder's active
+run are protected in the UI and on the server. Changes use the existing
+settings authorization (including a password confirmation when configured)
+and CSRF protection. Names are trimmed, limited to 100 Unicode characters
+(400 UTF-8 bytes), and must not contain control characters. Empty names restore
+the existing date/battery/plan/status default. Custom names appear in the
+dashboard as well; run UUIDs, plans, batteries and measurements do not change.
+
+Deletion needs explicit confirmation and atomically removes the run, its
+measurements, segments, DCIR results and local sync progress. Batteries and
+plans remain. Both names and deletions are local SD metadata operations:
+existing MariaDB backups are unchanged, and custom names are not synchronized
+to MariaDB. There is no undo; back up the SD database before deleting important
+runs. Complete any desired MariaDB backup before deleting a run and avoid
+deletion during synchronization: a queued run removed locally can stop that
+sync with a not-found error, while an in-progress run may leave only the
+already transferred data remotely. The next sync cleans stale local progress
+and processes the remaining runs; deletion never guarantees a complete backup.
+
+Firmware 1.4.67 introduces SQLite schema 3 with nullable `display_name`.
+On the first successful SD mount after installation, the background database
+initializer applies missing migrations in transactions before publishing
+database readiness. Older runs retain null names and their previous display.
+Subsequent starts skip completed migrations. Migration failures roll back and
+are logged explicitly; the database is not exposed as ready.
+An installation without a mounted SD card migrates when the card becomes
+available. Back up the database before upgrading: older firmware supporting
+only schema 2 refuses schema 3, so downgrading requires a compatible database
+backup rather than modifying the live schema.
+
+Validation: `python tests/run_management_test.py` in a host C/C++ environment
+uses the configured firmware SQLite source. It exercises name constraints,
+active-run protection, filtering beyond 300 runs, cascading deletion and
+transaction rollback. `node --test tests/run_management.test.js
+tests/dashboard.test.js` covers table selection, confirmation, filters,
+pagination and dashboard compatibility.
+
+### Availability checks and installation
+
 - After WLAN becomes usable and every **six hours**, only `firmware.json` is
   checked. HTTPS waits for synchronized time. Reconnect checks are rate-limited
   to at most once per minute; overdue checks run on reconnection.
   **No automatic binary download, installation or OTA retry occurs.**
-- Browser status polling is read-only. **Check updates** sends authenticated,
-  CSRF-protected **POST `/api/updates/check`** with an empty body.
+- Opening the web UI triggers one CSRF-protected **POST `/api/updates/check`**
+  with an empty body when WLAN and the required HTTPS clock are ready.
+  It works without login when UI authentication is disabled and does not
+  request the settings password. An already running check is reused.
+  Subsequent status polling is read-only; failed requests are shown and are
+  not retried automatically. **Check updates** remains available for manual
+  retries. No firmware installation is triggered by opening the UI.
 - Status exposes check progress/errors, available version, notes, and last
   successful check (Unix seconds, or uptime seconds without a synchronized clock).
   These values reset on reboot. Failed checks invalidate the candidate but

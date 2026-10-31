@@ -33,7 +33,7 @@ const readyStatus = {
   updateLastSuccess: 1791535000, updateLastSuccessUptime: 10,
 };
 
-function createPage(status = readyStatus, confirmResult = true) {
+function createPage(status = readyStatus, confirmResult = true, checkOnOpen = false) {
   const elements = new Map();
   const requests = [];
   const timers = [];
@@ -96,6 +96,8 @@ function createPage(status = readyStatus, confirmResult = true) {
   vm.createContext(context);
   vm.runInContext(languageScript, context);
   vm.runInContext(script, context);
+  // Isolate manual-action tests from the separately tested page-open check.
+  if (!checkOnOpen) vm.runInContext("startupUpdateCheckAttempted = true;", context);
   return {
     element, requests, confirmations, redirects, context,
     async settle() { await new Promise(setImmediate); },
@@ -126,6 +128,67 @@ test("startup and repeated polling never automatically start OTA", async () => {
   assert.equal(page.element("ota-start").disabled, false);
   assert.equal(page.mutations().length, 0);
   assert.ok(page.requests.every((request) => request.url === "/api/status"));
+});
+
+test("opening the UI checks once without requiring settings authentication or installing", async () => {
+  const page = createPage({ ...readyStatus, settingsPasswordRequired: true }, true, true);
+  await page.settle();
+  for (let i = 0; i < 5; ++i) await page.poll();
+  const actions = page.mutations();
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].url, "/api/updates/check");
+  assert.equal(actions[0].options.headers["X-CSRF-Token"], "test-token");
+  assert.equal(actions[0].options.headers["X-Admin-Password"], undefined);
+  assert.equal(actions[0].options.body, undefined);
+  assert.equal(page.confirmations.length, 0);
+  assert.equal(page.element("settings-password-dialog").open, undefined);
+  assert.equal(page.element("ota-start").disabled, false);
+});
+
+for (const blocked of [
+  { connected: false }, { timeReady: false }, { configuring: true },
+  { otaBusy: true }, { updateConfigured: false },
+]) {
+  test(`page-open check waits for readiness: ${JSON.stringify(blocked)}`, async () => {
+    const page = createPage({ ...readyStatus, ...blocked }, true, true);
+    await page.settle();
+    assert.equal(page.mutations().length, 0);
+    await page.poll(readyStatus);
+    assert.equal(page.mutations().length, 1);
+    assert.equal(page.mutations()[0].url, "/api/updates/check");
+    await page.poll();
+    assert.equal(page.mutations().length, 1);
+  });
+}
+
+test("page-open check reuses an already running availability check", async () => {
+  const page = createPage({ ...readyStatus, updateChecking: true }, true, true);
+  await page.settle();
+  await page.poll(readyStatus);
+  assert.equal(page.mutations().length, 0);
+  assert.equal(page.element("ota-start").disabled, false);
+});
+
+test("page-open check allows configured HTTP without synchronized time", async () => {
+  const page = createPage({ ...readyStatus, otaInsecureHttp: true, timeReady: false }, true, true);
+  await page.settle();
+  assert.equal(page.mutations().length, 1);
+  assert.equal(page.mutations()[0].url, "/api/updates/check");
+});
+
+test("failed page-open check is reported and is not retried by polling", async () => {
+  const page = createPage(readyStatus, true, true);
+  page.setActionError("Check not ready.");
+  await page.settle();
+  assert.match(page.element("action-result").className, /alert-danger/);
+  await page.poll();
+  await page.poll();
+  assert.equal(page.mutations().length, 1);
+  page.setActionError(null);
+  page.element("update-check").listeners.click();
+  await page.settle();
+  assert.equal(page.mutations().length, 2);
+  assert.ok(page.mutations().every((action) => action.url === "/api/updates/check"));
 });
 
 test("OTA requires explicit confirmation and sends exactly one authenticated POST", async () => {

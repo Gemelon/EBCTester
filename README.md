@@ -298,6 +298,13 @@ English; explicitly requested UI translations remain available. See
 
 ## Quick start
 
+Recorded runs can be managed under **Administration → Test run management**:
+filter/search the table, select one completed run, then rename or delete it.
+Running tests are protected. Names and deletions affect only the SD database;
+existing MariaDB backups remain unchanged. See
+[test run management and schema upgrades](docs/TECHNICAL_REFERENCE.md#test-run-management-and-schema-upgrades)
+before installing firmware 1.4.67 or downgrading to an older version.
+
 No build environment needed: download `EBCTester-<version>-full-install.bin`
 from the [latest release](https://github.com/Gemelon/EBCTester/releases/latest)
 and flash it at address `0x0`. Instructions are in the release notes.
