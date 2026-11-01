@@ -366,7 +366,7 @@ and data before repartitioning.
 ### Board schematic and main components
 
 The diagram is a functional overview, not a pin-level drawing. The
-[complete circuit schematic](docs/EBCTester.pdf) is included as a PDF; the
+[complete circuit schematic](docs/EBCTester_Schematic.pdf) is included as a PDF; the
 [bill of materials](docs/EBCTester_BOM.md) lists all 22 line items and 47 components,
 including manufacturer part numbers and LCSC references (44 SMD, 3 THT).
 
