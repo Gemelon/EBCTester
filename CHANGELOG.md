@@ -3,6 +3,27 @@
 
 # Changelog
 
+## [1.4.71] – 2026-11-01
+
+### Included
+
+- Publish the current main-branch firmware for GitHub, including the
+  improvements added since 1.4.65: startup update checks, test-run management,
+  schema 3 migration, and protected battery deletion.
+- Firmware behavior is unchanged from 1.4.70; this release advances the version
+  for a distinct, immutable release image.
+
+### Limitations
+
+- Schema 3 databases cannot be opened by older firmware; retain a pre-update
+  backup if a downgrade may be needed. Physical device testing is pending.
+
+### Validation
+
+- ESP-IDF 6.0.1 full build and SFTP publication succeeded. The public image
+  matches the local image at 2,734,352 bytes and SHA256
+  `e1267cb4268d54f8c9dfb8fbed6a7f67b0a50d2636535e5d7f21f9ca9de24aea`.
+
 ## [1.4.70] – 2026-11-01
 
 ### Changed
