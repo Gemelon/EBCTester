@@ -1,8 +1,8 @@
 # EBCTester - Bill of Materials
 
-Board: EBCTester, revision 1
-Source: `KiCad/EBCTester.kicad_sch`, BOM generated 2026-11-01
-Supplier part numbers: [LCSC](https://www.lcsc.com)
+- Board: EBCTester, revision 1
+- Source: `KiCad/EBCTester.kicad_sch`, BOM generated 2026-11-01
+- Supplier part numbers: [LCSC](https://www.lcsc.com)
 
 **22 line items, 47 components** (44 SMD, 3 THT)
 
@@ -31,14 +31,23 @@ Supplier part numbers: [LCSC](https://www.lcsc.com)
 | 21 | 2 | R7, R8 | 4.7k | Resistor 4.7 k 1 % | 0402 | SMD | Vishay | RCC04024K70FKED | [C1858949](https://www.lcsc.com/product-detail/C1858949.html) |
 | 22 | 2 | R10, R11 | 5.1k | Resistor 5.1 k 1 % | 0402 | SMD | Vishay | CRCW04025K10FKTD | [C4333224](https://www.lcsc.com/product-detail/C4333224.html) |
 
-## Not included in the BOM
+## Additional parts (not assembled on the PCB)
 
-- **CR2032 coin cell** for BT1 (RTC backup) - not assembled, insert after delivery.
-- **microSD card** for J1.
-- **External antenna** with u.FL (IPEX) connector for U4 (ESP32-S3-WROOM-1**U** has no PCB antenna).
-- **Test points** TP1 (+4,6V-4,7V), TP2 (+3,3V), TP3 (19V), TP4 (+5V), TP5 (GND), TP6 (VBUS), TP7 (Boot), TP8 (Reset) - copper pads only, no part.
+These parts are needed for every board but are not soldered by the assembly service. Order one of each per assembled board.
+
+| # | Qty per board | Used with | Part | Description | Manufacturer | MPN | LCSC |
+|---:|---:|---|---|---|---|---|---|
+| A1 | 1 | U4 (ESP32-S3-WROOM-1U) | Antenna cable | IPEX1 (u.FL / MHF I) to SMA female bulkhead, 150 mm 1.13 mm coax, with nut and washers for panel mounting | kinghelm | KH-IPEX-SMA-W-150 | [C2683343](https://www.lcsc.com/product-detail/C2683343.html) |
+| A2 | 1 | A1 | 2.4 GHz antenna | Rubber duck antenna 2.4-2.5 GHz, 3 dBi, 50 Ohm, SMA male, foldable/swivel joint, approx. 105 x 13 mm | DreamLNK | W10-2.4G | [C381198](https://www.lcsc.com/product-detail/C381198.html) |
+| A3 | 1 | BT1 | CR2032 | 3 V lithium coin cell, 20 mm (RTC backup) - any brand | any | CR2032 | - (buy locally) |
+
+- **Antenna:** the ESP32-S3-WROOM-1**U** has no PCB antenna - Wi-Fi/Bluetooth will not work without an antenna. Mount the SMA bulkhead of A1 in the enclosure wall (hole approx. 6.5 mm), plug the IPEX end into the u.FL socket of U4 and screw the antenna A2 onto the SMA connector; the antenna can be folded/swiveled to point upwards. Use standard SMA (not RP-SMA) parts so the antenna and cable fit together. Alternative foldable antenna with higher gain (195 mm, 8 dBi): BAT WIRELESS BW2.4JWX195-13KJ ([C497018](https://www.lcsc.com/product-detail/C497018.html)). Other cable lengths of the same series: KH-IPEX-SMA-W-120 ([C2683342](https://www.lcsc.com/product-detail/C2683342.html)), KH-IPEX-SMA-W-200 ([C2683345](https://www.lcsc.com/product-detail/C2683345.html)).
+- **Ordering with JLCPCB:** A1 and A2 can be ordered at LCSC and shipped together with the assembled boards (combine the LCSC order with the JLCPCB order at checkout).
+- **CR2032:** lithium coin cells are dangerous goods for shipping and are often not sent internationally - buy them locally. Insert with "+" facing up.
+- **Not supplied:** microSD card for J1 (optional).
+- **Test points** TP1 (+4,6V-4,7V), TP2 (+3,3V), TP3 (19V), TP4 (+5V), TP5 (GND), TP6 (VBUS), TP7 (Boot), TP8 (Reset) are copper pads only, no part.
 
 ## Notes
 
-- Ready-to-upload assembly BOMs are maintained with the editable KiCad sources in the separate hardware project; they are not included in this repository.
+- Ready-to-upload BOM files for assembly services: [JLCPCB CSV](EBCTester_BOM_JLCPCB.csv) and [PCBWay XLSX](EBCTester_BOM_PCBWay.xlsx).
 - All part numbers were checked against LCSC on 2026-11-01. Stock and prices change - check availability before ordering.

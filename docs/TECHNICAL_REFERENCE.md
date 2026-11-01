@@ -11,7 +11,7 @@ see [README](../README.md) and [third-party notices](../THIRD_PARTY_NOTICES.md).
 
 The [complete circuit schematic (PDF)](EBCTester.pdf) is accompanied by this
 functional overview, which is not a pin-level drawing. Component references
-match the [bill of materials](BOM.md), which has 22 line items and 47
+match the [bill of materials](EBCTester_BOM.md), which has 22 line items and 47
 components (44 SMD, 3 THT).
 
 ```mermaid

@@ -367,7 +367,7 @@ and data before repartitioning.
 
 The diagram is a functional overview, not a pin-level drawing. The
 [complete circuit schematic](docs/EBCTester.pdf) is included as a PDF; the
-[bill of materials](docs/BOM.md) lists all 22 line items and 47 components,
+[bill of materials](docs/EBCTester_BOM.md) lists all 22 line items and 47 components,
 including manufacturer part numbers and LCSC references (44 SMD, 3 THT).
 
 ```mermaid
@@ -397,9 +397,10 @@ flowchart LR
 | Storage and clock | microSD socket; DS3231 RTC; CR2032 holder | Stores measurements and keeps time when main power is removed |
 | Serial and expansion | TXS0104E level shifter; 6-pin UART and 14-pin expansion headers | Connects serial signals and provides a reserved expansion header |
 
-The editable KiCad schematic, PCB layout, and assembly files are maintained
-with the separate hardware project and are not included here. The PDF and BOM
-in this repository are the published board-documentation snapshot.
+The editable KiCad schematic, PCB layout, and design files are maintained
+with the separate hardware project and are not included here. The PDF, BOM,
+and service-specific assembly BOMs in this repository are the published
+board-documentation snapshot.
 
 ### Default connections
 
