@@ -3,6 +3,21 @@
 
 # Changelog
 
+## [1.4.70] – 2026-11-01
+
+### Changed
+
+- Publish the merged main-branch firmware under a new version to avoid
+  overwriting the existing 1.4.69 release with different firmware bytes.
+- Test-run management and protected battery deletion remain unchanged.
+
+### Validation
+
+- Full firmware build and SFTP publication succeeded. The downloaded image
+  matches the built image and published manifest in size and SHA256.
+- Physical device testing is pending. Schema 3 backup and downgrade
+  limitations documented for 1.4.67 remain unchanged.
+
 ## [1.4.69] – 2026-10-31
 
 ### Added
