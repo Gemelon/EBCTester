@@ -363,13 +363,45 @@ portable defaults; an existing local `sdkconfig` takes priority.
 A changed partition table cannot be installed through OTA. Back up settings
 and data before repartitioning.
 
-### Default connections
+### Board schematic and main components
 
-The [EBCTester hardware schematic (PDF)](docs/EBCTester.pdf) documents the
-board wiring. The editable KiCad schematic, PCB layout, and bill of materials
-are maintained in a separate hardware repository that is still under
-development and is currently accessible only to collaborators. The PDF
-included here is a publicly available documentation snapshot.
+The diagram is a functional overview, not a pin-level drawing. The
+[complete circuit schematic](docs/EBCTester.pdf) is included as a PDF; the
+[bill of materials](docs/BOM.md) lists all 22 line items and 47 components,
+including manufacturer part numbers and LCSC references (44 SMD, 3 THT).
+
+```mermaid
+flowchart LR
+  P19["19 V input"] --> B5["U2: 19 V to 5 V buck"]
+  P19 -. "input clamp" .-> TVS["D3 input TVS"]
+  TVS --> GND["GND"]
+  B5 --> OR["D1/D2: Schottky power OR"]
+  USB["USB-C VBUS"] --> OR
+  OR --> V5["+5 V rail"]
+  V5 --> B33["U3: 5 V to 3.3 V buck"]
+  B33 --> MCU["U4: ESP32-S3"]
+  USB --> ESD["D4: USB ESD protection"]
+  ESD --> MCU
+  MCU --> SD["J1: microSD"]
+  MCU --> RTC["U1: RTC"]
+  RTC --> CELL["BT1: backup cell"]
+  MCU --> SHIFT["U5: UART level shifter"]
+  SHIFT --> UART["J4: UART connector"]
+  MCU --> EXP["J3: expansion connector"]
+```
+
+| Board section | Key components | Purpose |
+| --- | --- | --- |
+| Power | AP63205 19 V-to-5 V and AP63203 5 V-to-3.3 V converters; SS34 diodes; SMBJ20A TVS | Powers the board from the 19 V input or USB VBUS and protects the input |
+| Controller and USB | ESP32-S3-WROOM-1U-N16R8; USB-C receptacle; USBLC6-2SC6 | Runs the firmware and provides the USB connection with ESD protection |
+| Storage and clock | microSD socket; DS3231 RTC; CR2032 holder | Stores measurements and keeps time when main power is removed |
+| Serial and expansion | TXS0104E level shifter; 6-pin UART and 14-pin expansion headers | Connects serial signals and provides a reserved expansion header |
+
+The editable KiCad schematic, PCB layout, and assembly files are maintained
+with the separate hardware project and are not included here. The PDF and BOM
+in this repository are the published board-documentation snapshot.
+
+### Default connections
 
 | Connection | TX | RX | Settings |
 | --- | ---: | ---: | --- |

@@ -9,14 +9,44 @@ see [README](../README.md) and [third-party notices](../THIRD_PARTY_NOTICES.md).
 
 ## Hardware schematic
 
-See the [EBCTester schematic (PDF)](EBCTester.pdf) for the board wiring and
-the [default connections](../README.md#default-connections) for the firmware's
-default pin assignments. Verify that the configured pins match your hardware.
+The [complete circuit schematic (PDF)](EBCTester.pdf) is accompanied by this
+functional overview, which is not a pin-level drawing. Component references
+match the [bill of materials](BOM.md), which has 22 line items and 47
+components (44 SMD, 3 THT).
 
-The PDF is a publicly available documentation snapshot from a separate
-hardware repository containing the editable KiCad schematic, PCB layout,
-and bill of materials. That repository is still under development and is
-currently accessible only to collaborators.
+```mermaid
+flowchart LR
+  P19["19 V input"] --> B5["U2 AP63205: 19 V to 5 V"]
+  P19 -. "input clamp" .-> TVS["D3 SMBJ20A"]
+  TVS --> GND["GND"]
+  B5 --> OR["D1/D2 SS34 power OR"]
+  USB["USB-C VBUS"] --> OR
+  OR --> V5["+5 V rail"]
+  V5 --> B33["U3 AP63203: 5 V to 3.3 V"]
+  B33 --> MCU["U4 ESP32-S3-WROOM-1U-N16R8"]
+  USB --> ESD["D4 USBLC6-2SC6"]
+  ESD --> MCU
+  MCU --> SD["J1 microSD socket"]
+  MCU --> RTC["U1 DS3231 RTC"]
+  RTC --> CELL["BT1 CR2032 backup"]
+  MCU --> SHIFT["U5 TXS0104E"]
+  SHIFT --> UART["J4 6-pin UART header"]
+  MCU --> EXP["J3 14-pin expansion header"]
+```
+
+The 19 V input is stepped down to 5 V by U2; USB VBUS and the converter
+output are diode-ORed onto the 5 V rail. U3 derives 3.3 V for the ESP32-S3
+and other logic. D3 protects the 19 V input, while D4 protects USB data lines.
+The microSD socket stores measurements, and the DS3231 keeps time using the
+CR2032 backup cell. UART signals pass through the TXS0104E level shifter
+before reaching J4; J3 is a reserved expansion header whose pins are not yet
+assigned.
+
+Firmware pin assignments and the default UART/SD connections are listed in
+[Default connections](../README.md#default-connections). Verify that the
+configured pins match your hardware. Editable KiCad sources, the PCB layout,
+and assembly files are maintained with the separate hardware project and are
+not included in this repository.
 
 ## EBC model selection, verification and limits
 
