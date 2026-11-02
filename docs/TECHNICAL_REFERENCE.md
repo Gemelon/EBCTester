@@ -4,8 +4,11 @@
 # EBCTester technical reference
 
 Implementation details for firmware 1.4.61. Commands and file paths below
-are relative to the project root. For purpose, setup, safety and licensing,
-see [README](../README.md) and [third-party notices](../THIRD_PARTY_NOTICES.md).
+are relative to the project root. For operating instructions, see the
+[English User Manual](EBCTester_User_Manual_EN.pdf) or
+[German Benutzerhandbuch](EBCTester_Benutzerhandbuch_DE.pdf). For purpose,
+setup, safety and licensing, see [README](../README.md) and
+[third-party notices](../THIRD_PARTY_NOTICES.md).
 
 ## Hardware schematic
 

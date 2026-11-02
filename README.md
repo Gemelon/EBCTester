@@ -295,9 +295,11 @@ uses OTA Suite's web interface. OTA Suite itself needs neither EBCTester nor SD.
 | `ui_localization` | Additional SD language files |
 | `debug_log` | In-memory log ring buffer and the Debug tab |
 
-See the [technical reference](docs/TECHNICAL_REFERENCE.md) for endpoints,
-state transitions, and detailed parameters. Development content is always
-English; explicitly requested UI translations remain available. See
+See the [English User Manual](docs/EBCTester_User_Manual_EN.pdf) or the
+[German Benutzerhandbuch](docs/EBCTester_Benutzerhandbuch_DE.pdf) for operating
+instructions, and the [technical reference](docs/TECHNICAL_REFERENCE.md) for
+endpoints, state transitions, and detailed parameters. Development content is
+always English; explicitly requested UI translations remain available. See
 [AGENTS.md](AGENTS.md).
 
 ## Quick start
