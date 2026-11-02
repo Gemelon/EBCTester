@@ -15,6 +15,11 @@ measurements on an SD card. Its local web interface lets you manage batteries,
 follow measurements, and view charts from a phone, even outside your home
 Wi-Fi network.
 
+## User manuals
+
+[English User Manual (PDF)](docs/EBCTester_User_Manual_EN.pdf) ·
+[Benutzerhandbuch auf Deutsch (PDF)](docs/EBCTester_Benutzerhandbuch_DE.pdf)
+
 See [CHANGELOG.md](CHANGELOG.md) for user-visible changes by firmware version.
 
 ## A look at the web interface
@@ -295,11 +300,9 @@ uses OTA Suite's web interface. OTA Suite itself needs neither EBCTester nor SD.
 | `ui_localization` | Additional SD language files |
 | `debug_log` | In-memory log ring buffer and the Debug tab |
 
-See the [English User Manual](docs/EBCTester_User_Manual_EN.pdf) or the
-[German Benutzerhandbuch](docs/EBCTester_Benutzerhandbuch_DE.pdf) for operating
-instructions, and the [technical reference](docs/TECHNICAL_REFERENCE.md) for
-endpoints, state transitions, and detailed parameters. Development content is
-always English; explicitly requested UI translations remain available. See
+See the [technical reference](docs/TECHNICAL_REFERENCE.md) for endpoints,
+state transitions, and detailed parameters. Development content is always
+English; explicitly requested UI translations remain available. See
 [AGENTS.md](AGENTS.md).
 
 ## Quick start
