@@ -370,7 +370,8 @@ Existing `sdkconfig` selections take priority over defaults; legacy BatteryTeste
 settings are imported by Kconfig on the first rebuild.
 
 Connect to `BatteryTester-XXXXXX` using the password printed on the serial
-console, open **http://192.168.4.1**, log in as **admin** with the AP password,
+console, open **http://192.168.4.1**, log in as **admin** with the initial
+web password **ebctester** (or the password saved in Login Settings),
 and enter WLAN credentials. The protected AP remains a recovery path; channel
 changes can briefly interrupt AP access. The UI also displays the station IP.
 
@@ -861,16 +862,40 @@ Availability checks never contact the image URL.
 
 The shared web interface uses `/login` instead of the browser's Basic-auth
 dialog. `POST /api/auth/login` accepts JSON `username`/`password` (`admin` and the
-AP password) with `X-Web-Login: 1`. No CORS permission is granted. Invalid
+configured web password) with `X-Web-Login: 1`. The initial password is
+`ebctester`, set by `CONFIG_OTA_SUITE_WEB_PASSWORD` in `sdkconfig` and
+`sdkconfig.defaults`. It is independent of the Wi-Fi/AP password. Existing
+devices without a saved web password use this default after updating.
+No CORS permission is granted. Invalid
 credentials do not create sessions; failed password checks impose a one-second
 retry interval without blocking a server task.
 
-**Administration → Settings → Login duration** selects 1 or 7 days. The default
-is 1 day. `POST /api/auth/settings` accepts `{"sessionDays":1}` or
-`{"sessionDays":7}` and persists the value in NVS namespace `web_auth`, key
-`session_days`. Writes and commits must succeed before the runtime value changes.
-The choice applies to subsequent logins, not already issued sessions.
-`GET /api/status` exposes `sessionDays` and `settingsPasswordRequired`.
+**Administration → Settings → Login Settings** selects 1 or 7 days (default:
+1 day), changes the login password, and enables/disables browser login (default:
+enabled). `POST /api/auth/settings` accepts `sessionDays` (1 or 7), optional
+boolean `loginEnabled`, and optional string `password`. Missing/empty passwords
+keep the current password; a new password must be 8-63 printable ASCII
+characters without leading or trailing spaces, compatible with the
+settings-confirmation HTTP header.
+The form also requires matching password repetition and confirmation with the
+current password. The new password is never returned by `/api/status`.
+
+The versioned settings blob in NVS namespace `web_auth`, key `settings`,
+stores password, duration and login policy together. It takes precedence over
+the configured initial password and survives restarts and firmware updates.
+Legacy `session_days` is read if no blob exists, preserving the previous
+duration. Writes and commits must succeed before runtime settings change;
+storage errors are reported without applying changes. Duration changes apply
+to subsequent logins, not already issued sessions. Password or login-policy
+changes invalidate all existing sessions and the UI reloads.
+`GET /api/status` exposes `sessionDays`, `loginEnabled` and
+`settingsPasswordRequired`, never the password.
+
+With browser login disabled, status, extension assets and controls are
+accessible without a session cookie. `/login` redirects to `/` and the logout
+button is hidden. Anyone on the network can operate the device in this mode.
+CSRF tokens remain required for mutations, and settings-password confirmation
+is independent of the browser-login switch.
 
 Each browser login gets a random 256-bit opaque `ota_session` cookie with
 `Path=/`, `HttpOnly`, `SameSite=Lax` and `Max-Age` of exactly 86400 or 604800
@@ -883,9 +908,10 @@ Requests and polling never extend expiry. Sessions live in RAM: device restart,
 expiry, or `POST /api/auth/logout` invalidates them. Closing/reopening a browser
 does not invalidate a persistent cookie, unless the browser clears it.
 
-Protected APIs require the cookie and respond with HTTP 401 after expiry.
+With browser login enabled, protected APIs require the cookie and respond
+with HTTP 401 after expiry.
 The UI returns to `/login` without replaying a failed action. All existing
-mutation routes still require `X-CSRF-Token` from authenticated `/api/status`.
+mutation routes still require `X-CSRF-Token` from `/api/status`.
 Only the login document/script, bundled CSS and language assets are public;
 device status, extension assets, SD language files and all controls remain protected.
 The login page uses built-in English/German, not protected SD catalogs.
@@ -893,12 +919,15 @@ Existing Basic-auth API clients must switch to cookie login and CSRF tokens.
 
 `CONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD` in **OTA Suite web interface**
 defaults to `y` (also set in `sdkconfig.defaults`). When enabled, every device
-settings save requires `X-Admin-Password` in addition to the session and CSRF
-token. The UI opens a masked password dialog when Save is pressed; the password
+settings save requires `X-Admin-Password` in addition to CSRF and a session
+when browser login is enabled. Disabling browser login does not remove this
+password check. The header must contain the currently configured login password,
+including when changing the password itself.
+The UI opens a masked password dialog when Save is pressed; the password
 is neither stored in browser storage nor reused for another save. A canceled
 dialog sends no mutation; a wrong/missing password returns HTTP 403 and cannot
-write or apply settings. The password remains the AP/admin password, not the
-Wi-Fi station, MQTT broker or MariaDB password.
+write or apply settings. The password is not the AP, Wi-Fi station, MQTT broker
+or MariaDB password.
 
 Protected saves are `/api/network`, `/api/auth/settings`, `/api/debug/settings`,
 `/api/mariadb/settings`, and `/api/mqtt/settings` (when MQTT is compiled in).
@@ -907,7 +936,8 @@ use `await WebAuth.settingsHeaders()` and cancel the save if it returns `null`.
 Extensions must use this helper and the server-side settings guard for future
 settings routes. Start/stop/abort, OTA, connection tests, database sync, SD file
 operations, and browser-only language selection retain their existing behavior.
-Turning the option off removes only the extra password check, never login/CSRF.
+Turning the build option off removes only the extra password check, not CSRF
+or the independently configured browser-login policy.
 Authentication has no effect on running tests or SD recording.
 
 Host validation: `node --test tests\web_interface.test.js tests\web_auth_ui.test.js tests\ui_languages_test.js`
@@ -915,7 +945,8 @@ and `python tests\web_auth_test.py`. The latter requires a host C compiler
 (`CC`, `cl` from a Visual Studio developer shell, or `cc`) and restored managed
 cJSON dependencies. It executes the real C authentication/session code with
 mocked HTTP, NVS, clock and random services, with the build option both on and
-off, testing expiry boundaries, password/CSRF checks, NVS failures, logout,
+off, testing expiry boundaries, optional browser login, password changes and
+session revocation, password/CSRF checks, legacy NVS migration, failed saves, logout,
 restart, malformed inputs and session capacity. No hardware is accessed.
 
 ### Transport and firmware security
@@ -924,8 +955,11 @@ Local administration uses cookie authentication over **HTTP**: trusted LAN or
 protected AP only, never expose port 80 to the Internet. HTTP does not encrypt
 WLAN credentials/admin passwords or session cookies. The cookie deliberately
 cannot use `Secure` on the current HTTP-only server. Persistent cookies do not
-make HTTP secure; use a trusted isolated network. AP password grants administration and is
-printed on serial; protect physical access. NVS is not encrypted by default.
+make HTTP secure; use a trusted isolated network. Change the shared initial
+web password `ebctester` on first use. The AP password is printed on serial;
+protect physical access. Disabling browser login grants network users access
+to data and controls but keeps settings-password confirmation enabled by default.
+NVS is not encrypted by default.
 Consider HTTPS administration, flash/NVS encryption, Secure Boot and signed
 images for production. SHA256 protects against accidental corruption, **not**
 replacement of both manifest and image over HTTP. HTTP test mode explicitly

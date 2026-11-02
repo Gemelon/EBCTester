@@ -3,6 +3,34 @@
 
 # Changelog
 
+## [1.4.72] – 2026-11-02
+
+### Changed
+
+- Replace Login duration with Login Settings: change the web password, keep
+  daily/weekly sessions, or disable browser login independently of settings
+  password confirmation.
+- Default the initial web password to `ebctester` through
+  `CONFIG_OTA_SUITE_WEB_PASSWORD`. Saved passwords survive restarts and updates;
+  the setup AP password is unchanged.
+- Persist login settings together and invalidate sessions after password or
+  login-policy changes. Settings saves still require the current login password
+  when browser login is disabled.
+
+### Limitations
+
+- Existing devices without a saved web password use `ebctester` after updating;
+  change this shared default on first use. Disabling login opens data and
+  controls to network users. HTTP is unencrypted; physical device testing is pending.
+
+### Validation
+
+- 94 host UI/localization tests and both C authentication configurations passed.
+  Browser checks verified password confirmation with login disabled.
+- ESP-IDF 6.0.1 full build and SFTP publication succeeded. The public image and
+  manifest match the build at 2,739,408 bytes and SHA256
+  `d1e7d5b055e2035a6603369126d64ef31d36c43a9e2eb7fafa524f2cd0a1d84f`.
+
 ## [1.4.71] – 2026-11-01
 
 ### Included

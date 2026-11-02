@@ -424,10 +424,11 @@ unsupported. The optional WS2812 LED defaults to GPIO 48; some boards need 38.
 
 ### First access and daily operation
 
-1. Start the device and read the AP/admin password from the serial log.
+1. Start the device and read the setup AP password from the serial log.
    Without a configured password, a random one is generated once.
 2. Connect a phone or computer to `BatteryTester-XXXXXX`.
-3. Open `http://192.168.4.1` and log in as `admin` with the AP password.
+3. Open `http://192.168.4.1` and log in as `admin` with the initial web password
+   `ebctester` (`CONFIG_OTA_SUITE_WEB_PASSWORD` in `sdkconfig`).
 4. Optionally configure home Wi-Fi. Local operation and recording do not
    require that connection.
 5. Insert a FAT32 card, check database readiness, create a battery, and connect
@@ -437,19 +438,32 @@ The **Battery tester** section contains Measurements, Battery, Manual,
 Automatic, and Internal resistance. **Administration** contains Device
 information, SD card, Updates, and Settings.
 
-Under **Administration → Settings → Login duration**, choose **Daily (24 hours)**
+Under **Administration → Settings → Login Settings**, choose **Daily (24 hours)**
 or **Weekly (7 days)**. Daily is the default. The duration starts at login,
 does not renew with activity, and applies to new logins after saving. The browser
 remembers the session across browser restarts unless cookies are cleared.
 A device restart or **Log out** ends the session; recording and test plans continue
 independently of browser login.
 
-Saving device settings asks for the AP/admin password by default, including
-Wi-Fi, login duration, debug logging, MariaDB and MQTT settings. Canceling the
+Change the login password here using 8-63 printable ASCII characters without
+leading or trailing spaces; leave
+the password fields empty to keep it. The saved password survives restarts
+and firmware updates and is independent of the setup AP password. Existing
+devices without a saved web password also start with `ebctester` after updating.
+Change this shared default on first use.
+
+Uncheck **Require browser login** to open the interface without logging in.
+Anyone on the network can then view data and use the controls. Settings changes
+still require the configured login password. Password changes and toggling
+login invalidate existing sessions; the interface reloads automatically.
+
+Saving device settings asks for the configured login password by default, including
+Wi-Fi, login settings, debug logging, MariaDB and MQTT settings. Canceling the
 prompt or entering an incorrect password does not save changes. Disable this
 additional confirmation at build time with
 `CONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD=n` under **OTA Suite web interface**
-in `menuconfig`. Login and CSRF protection remain mandatory. Test controls,
+in `menuconfig`. CSRF protection remains mandatory, as does a valid session
+when browser login is enabled. Test controls,
 OTA actions, SD operations, and the browser-only language selection do not
 require this additional password.
 

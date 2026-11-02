@@ -21,7 +21,7 @@ const languages = {
 
 const readyStatus = {
   version: "1.0", project: "EBCTester", csrfToken: "test-token",
-  sessionDays: 1, settingsPasswordRequired: false,
+  sessionDays: 1, loginEnabled: true, settingsPasswordRequired: false,
   ssid: "Test-WLAN", apSsid: "BatteryTester-123456", ip: "192.168.1.42",
   connected: true, configuring: false, timeReady: true,
   otaConfigured: true, bootConfirmed: true, otaReady: true, otaBusy: false,
@@ -415,10 +415,84 @@ test("daily/weekly setting is loaded once and does not overwrite unsaved edits",
   await page.settle();
   const action = page.mutations()[0];
   assert.equal(action.url, "/api/auth/settings");
-  assert.deepEqual(JSON.parse(action.options.body), { sessionDays: 1 });
+  assert.deepEqual(JSON.parse(action.options.body), { sessionDays: 1, loginEnabled: true });
   assert.equal(action.options.headers["X-CSRF-Token"], "test-token");
   assert.equal(action.options.headers["X-Admin-Password"], undefined);
 });
+
+test("disabled browser login still prompts for the current password when changing login settings", async () => {
+  const page = createPage({ ...readyStatus, loginEnabled: false, settingsPasswordRequired: true });
+  await page.settle();
+  assert.equal(page.element("logout").hidden, true);
+  assert.equal(page.element("logout").disabled, true);
+  assert.equal(page.element("login-enabled").checked, false);
+  assert.equal(page.element("session-days").disabled, true);
+  page.element("login-enabled").checked = true;
+  page.element("login-enabled").listeners.change();
+  assert.equal(page.element("session-days").disabled, false);
+  page.element("login-new-password").value = "new-login-password";
+  page.element("login-confirm-password").value = "new-login-password";
+  await page.poll({ ...readyStatus, loginEnabled: false, settingsPasswordRequired: true });
+  assert.equal(page.element("login-enabled").checked, true);
+  assert.equal(page.element("login-new-password").value, "new-login-password");
+  page.element("login-settings-form").listeners.submit({ preventDefault() {} });
+  await page.settle();
+  assert.equal(page.mutations().length, 0);
+  page.element("settings-admin-password").value = "current-login-password";
+  page.element("settings-password-form").onsubmit({ preventDefault() {} });
+  await page.settle();
+  assert.equal(page.mutations().length, 1);
+  assert.equal(page.mutations()[0].options.headers["X-Admin-Password"], "current-login-password");
+  assert.deepEqual(JSON.parse(page.mutations()[0].options.body), {
+    sessionDays: 1, loginEnabled: true, password: "new-login-password",
+  });
+  assert.equal(page.element("login-new-password").value, "");
+  assert.equal(page.element("login-confirm-password").value, "");
+  assert.deepEqual(page.redirects, ["/"]);
+});
+
+for (const outcome of ["cancel", "failure", "success"]) {
+  test(`password change ${outcome} retains settings confirmation independently of browser login`, async () => {
+    const page = createPage({ ...readyStatus, settingsPasswordRequired: true });
+    await page.settle();
+    page.element("login-enabled").checked = false;
+    page.element("login-new-password").value = "replacement-password";
+    page.element("login-confirm-password").value = "replacement-password";
+    if (outcome === "failure") page.setActionError("Could not save login settings.");
+    page.element("login-settings-form").listeners.submit({ preventDefault() {} });
+    await page.settle();
+    if (outcome === "cancel") page.element("settings-password-cancel").onclick();
+    else {
+      page.element("settings-admin-password").value = "old-password";
+      page.element("settings-password-form").onsubmit({ preventDefault() {} });
+    }
+    await page.settle();
+    assert.equal(page.mutations().length, outcome === "cancel" ? 0 : 1);
+    assert.equal(page.element("login-new-password").value, outcome === "success" ? "" : "replacement-password");
+    assert.equal(page.element("login-confirm-password").value, outcome === "success" ? "" : "replacement-password");
+    assert.deepEqual(page.redirects, outcome === "success" ? ["/"] : []);
+    if (outcome === "failure") assert.match(page.element("action-result").textContent, /konnten nicht gespeichert/);
+  });
+}
+
+for (const [password, confirmation] of [
+  ["short", "short"], ["long-enough", "different"], ["", "different"],
+  ["1234567\n", "1234567\n"], ["1234567ä", "1234567ä"],
+  [" leading-space", " leading-space"], ["trailing-space ", "trailing-space "],
+  ["x".repeat(64), "x".repeat(64)],
+]) {
+  test(`invalid password edit is rejected before requesting confirmation: ${JSON.stringify(password)}`, async () => {
+    const page = createPage({ ...readyStatus, settingsPasswordRequired: true });
+    await page.settle();
+    page.element("login-new-password").value = password;
+    page.element("login-confirm-password").value = confirmation;
+    page.element("login-settings-form").listeners.submit({ preventDefault() {} });
+    await page.settle();
+    assert.equal(page.mutations().length, 0);
+    assert.notEqual(page.element("settings-password-dialog").open, true);
+    assert.match(page.element("action-result").textContent, /ASCII/);
+  });
+}
 
 test("settings save waits for a masked password dialog and clears its password afterward", async () => {
   const page = createPage({ ...readyStatus, settingsPasswordRequired: true });

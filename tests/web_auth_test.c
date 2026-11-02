@@ -20,6 +20,7 @@
 #define HTTP_POST 1
 #define NVS_READONLY 0
 #define NVS_READWRITE 1
+#define CONFIG_OTA_SUITE_WEB_PASSWORD "test-admin-password"
 
 typedef int esp_err_t;
 typedef int nvs_handle_t;
@@ -48,13 +49,15 @@ typedef struct {
 static int64_t clock_us = 5000000;
 static unsigned random_sequence;
 static uint8_t stored_days;
-static uint8_t pending_days;
+static unsigned char stored_settings[128];
+static unsigned char pending_settings[128];
+static size_t stored_settings_size;
+static size_t pending_settings_size;
 static bool storage_failure;
 static httpd_uri_t registered[5];
 static size_t registered_count;
 
 static int64_t esp_timer_get_time(void) { return clock_us; }
-static const char *network_manager_admin_password(void) { return "test-admin-password"; }
 static const char *esp_err_to_name(esp_err_t err) { (void)err; return "mock storage error"; }
 static void esp_fill_random(void *data, size_t size)
 {
@@ -65,27 +68,42 @@ static esp_err_t nvs_open(const char *name, int mode, nvs_handle_t *handle)
 {
     assert(strcmp(name, "web_auth") == 0);
     *handle = 1;
-    return mode == NVS_READONLY && stored_days == 0 ? ESP_ERR_NVS_NOT_FOUND : ESP_OK;
+    return mode == NVS_READONLY && stored_days == 0 && stored_settings_size == 0 ?
+           ESP_ERR_NVS_NOT_FOUND : ESP_OK;
 }
 static esp_err_t nvs_get_u8(nvs_handle_t handle, const char *key, uint8_t *value)
 {
     (void)handle;
     assert(strcmp(key, "session_days") == 0);
+    if (stored_days == 0) return ESP_ERR_NVS_NOT_FOUND;
     *value = stored_days;
     return ESP_OK;
 }
-static esp_err_t nvs_set_u8(nvs_handle_t handle, const char *key, uint8_t value)
+static esp_err_t nvs_get_blob(nvs_handle_t handle, const char *key, void *value, size_t *size)
 {
     (void)handle;
-    assert(strcmp(key, "session_days") == 0);
-    pending_days = value;
+    assert(strcmp(key, "settings") == 0);
+    if (stored_settings_size == 0) return ESP_ERR_NVS_NOT_FOUND;
+    assert(*size >= stored_settings_size);
+    memcpy(value, stored_settings, stored_settings_size);
+    *size = stored_settings_size;
+    return ESP_OK;
+}
+static esp_err_t nvs_set_blob(nvs_handle_t handle, const char *key, const void *value, size_t size)
+{
+    (void)handle;
+    assert(strcmp(key, "settings") == 0);
+    assert(size <= sizeof(pending_settings));
+    memcpy(pending_settings, value, size);
+    pending_settings_size = size;
     return ESP_OK;
 }
 static esp_err_t nvs_commit(nvs_handle_t handle)
 {
     (void)handle;
     if (storage_failure) return ESP_FAIL;
-    stored_days = pending_days;
+    memcpy(stored_settings, pending_settings, pending_settings_size);
+    stored_settings_size = pending_settings_size;
     return ESP_OK;
 }
 static void nvs_close(nvs_handle_t handle) { (void)handle; }
@@ -174,6 +192,14 @@ int main(void)
 {
     assert(web_auth_init() == ESP_OK);
     assert(web_auth_session_days() == 1);
+    assert(web_auth_login_enabled());
+    assert(strcmp(settings.password, CONFIG_OTA_SUITE_WEB_PASSWORD) == 0);
+    stored_days = 7;
+    assert(web_auth_init() == ESP_OK);
+    assert(web_auth_session_days() == 7);
+    assert(web_auth_login_enabled());
+    stored_days = 0;
+    assert(web_auth_init() == ESP_OK);
     assert(web_auth_register(NULL) == ESP_OK);
     assert(registered_count == 5);
     assert(strlen(web_auth_csrf_token()) == 32);
@@ -223,7 +249,7 @@ int main(void)
     strcpy(req.status, "200 OK");
     assert(settings_handler(&req) == ESP_OK);
     assert(strcmp(req.status, "200 OK") == 0);
-    assert(web_auth_session_days() == 7 && stored_days == 7);
+    assert(web_auth_session_days() == 7 && stored_settings_size == sizeof(settings));
     req = request("/api/auth/settings", "{\"sessionDays\":1}", cookie);
     req.csrf = "invalid";
     req.password = "test-admin-password";
@@ -233,7 +259,14 @@ int main(void)
 
     const char *invalid[] = {"{}", "{\"sessionDays\":0}", "{\"sessionDays\":2}",
         "{\"sessionDays\":7.5}", "{\"sessionDays\":\"7\"}", "{\"sessionDays\":null}",
-        "{\"sessionDays\":7}garbage", "{\"sessionDays\":7,\"x\":\"\\u0000\"}"};
+        "{\"sessionDays\":7}garbage", "{\"sessionDays\":7,\"x\":\"\\u0000\"}",
+        "{\"sessionDays\":7,\"loginEnabled\":0}", "{\"sessionDays\":7,\"loginEnabled\":null}",
+        "{\"sessionDays\":7,\"password\":false}", "{\"sessionDays\":7,\"password\":\"short\"}",
+        "{\"sessionDays\":7,\"password\":\"1234567\\n\"}",
+        "{\"sessionDays\":7,\"password\":\" leading-space\"}",
+        "{\"sessionDays\":7,\"password\":\"trailing-space \"}",
+        "{\"sessionDays\":7,\"password\":\"1234567\\u00e4\"}",
+        "{\"sessionDays\":7,\"password\":\"1234567890123456789012345678901234567890123456789012345678901234\"}"};
     for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); ++i) {
         req = request("/api/auth/settings", invalid[i], cookie);
         req.password = "test-admin-password";
@@ -246,7 +279,8 @@ int main(void)
     req.password = "test-admin-password";
     settings_handler(&req);
     assert(strcmp(req.status, "500 Internal Server Error") == 0);
-    assert(web_auth_session_days() == 7 && stored_days == 7);
+    assert(web_auth_session_days() == 7);
+    assert(stored_settings[1] == 7);
     storage_failure = false;
 
     const int64_t weekly_login_at = clock_us;
@@ -274,6 +308,98 @@ int main(void)
     req = request("/api/status", NULL, cookie);
     assert(!web_interface_authorize_request(&req, false));
 
+    req = login("{\"username\":\"admin\",\"password\":\"test-admin-password\"}");
+    strcpy(cookie, req.cookie);
+    req = request("/api/auth/settings", "{\"sessionDays\":7,\"loginEnabled\":false,\"password\":\"\"}", cookie);
+    req.password = "test-admin-password";
+    settings_handler(&req);
+    assert(strcmp(req.status, "200 OK") == 0);
+    assert(!web_auth_login_enabled());
+    req = request("/api/status", NULL, cookie);
+    assert(request_session(&req) == NULL);
+    assert(strcmp(settings.password, CONFIG_OTA_SUITE_WEB_PASSWORD) == 0);
+    assert(web_auth_init() == ESP_OK);
+    assert(!web_auth_login_enabled());
+    req = request("/", NULL, NULL);
+    assert(web_interface_authorize_request(&req, false));
+    req = request("/api/status", NULL, NULL);
+    assert(web_interface_authorize_request(&req, false));
+    req = request("/login", NULL, NULL);
+    asset_handler(&req);
+    assert(strcmp(req.status, "303 See Other") == 0 && strcmp(req.location, "/") == 0);
+    req = request("/api/tester/stop", "", NULL);
+    req.csrf = NULL;
+    assert(!web_interface_authorize_request(&req, true));
+    req.csrf = web_auth_csrf_token();
+    assert(web_interface_authorize_request(&req, true));
+
+    req = request("/api/auth/settings", "{\"sessionDays\":1,\"password\":\"new-admin-password\"}", NULL);
+#ifdef CONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD
+    settings_handler(&req);
+    assert(strcmp(req.status, "403 Forbidden") == 0);
+    req.password = "wrong";
+    settings_handler(&req);
+    assert(strcmp(req.status, "403 Forbidden") == 0);
+    clock_us += 1000000;
+#endif
+    req.password = "test-admin-password";
+    strcpy(req.status, "200 OK");
+    settings_handler(&req);
+    assert(strcmp(req.status, "200 OK") == 0);
+    assert(!web_auth_login_enabled());
+    assert(strcmp(settings.password, "new-admin-password") == 0);
+    assert(web_auth_init() == ESP_OK);
+    assert(strcmp(settings.password, "new-admin-password") == 0);
+    req = login("{\"username\":\"admin\",\"password\":\"test-admin-password\"}");
+    assert(strcmp(req.status, "403 Forbidden") == 0);
+    clock_us += 1000000;
+    req = login("{\"username\":\"admin\",\"password\":\"new-admin-password\"}");
+    assert(strcmp(req.status, "200 OK") == 0);
+    strcpy(cookie, req.cookie);
+
+    storage_failure = true;
+    req = request("/api/auth/settings",
+                  "{\"sessionDays\":7,\"loginEnabled\":true,\"password\":\"another-password\"}", NULL);
+    req.password = "new-admin-password";
+    settings_handler(&req);
+    assert(strcmp(req.status, "500 Internal Server Error") == 0);
+    assert(!web_auth_login_enabled() && web_auth_session_days() == 1);
+    assert(strcmp(settings.password, "new-admin-password") == 0);
+    storage_failure = false;
+    assert(web_auth_init() == ESP_OK);
+    assert(!web_auth_login_enabled() && web_auth_session_days() == 1);
+    assert(strcmp(settings.password, "new-admin-password") == 0);
+
+    req = login("{\"username\":\"admin\",\"password\":\"new-admin-password\"}");
+    assert(strcmp(req.status, "200 OK") == 0);
+    strcpy(cookie, req.cookie);
+    req = request("/api/auth/settings", "{\"sessionDays\":1,\"loginEnabled\":true}", NULL);
+    req.password = "new-admin-password";
+    settings_handler(&req);
+    assert(strcmp(req.status, "200 OK") == 0);
+    assert(web_auth_login_enabled());
+    req = request("/", NULL, NULL);
+    assert(!web_interface_authorize_request(&req, false));
+    req = request("/api/status", NULL, cookie);
+    assert(!web_interface_authorize_request(&req, false));
+    req = login("{\"username\":\"admin\",\"password\":\"new-admin-password\"}");
+    assert(strcmp(req.status, "200 OK") == 0);
+    strcpy(cookie, req.cookie);
+    req = request("/api/auth/settings",
+                  "{\"sessionDays\":1,\"password\":\"changed-again-password\"}", cookie);
+    req.password = "new-admin-password";
+    settings_handler(&req);
+    assert(strcmp(req.status, "200 OK") == 0);
+    req = request("/api/status", NULL, cookie);
+    assert(!web_interface_authorize_request(&req, false));
+    assert(web_auth_init() == ESP_OK);
+    assert(web_auth_login_enabled());
+    assert(strcmp(settings.password, "changed-again-password") == 0);
+    assert(valid_password("12345678"));
+    assert(valid_password("1234 678"));
+    assert(valid_password("1234\"\\78"));
+    assert(valid_password("123456789012345678901234567890123456789012345678901234567890123"));
+
     req = request("/api/auth/login", "{\"username\":\"admin\",\"password\":\"test-admin-password\"}", NULL);
     req.marker = NULL;
     login_handler(&req);
@@ -283,10 +409,11 @@ int main(void)
     req = login("{\"username\":\"admin\",\"password\":\"test-admin-password\"}junk");
     assert(strcmp(req.status, "403 Forbidden") == 0);
 
-    req = login("{\"username\":\"admin\",\"password\":\"test-admin-password\"}");
+    req = login("{\"username\":\"admin\",\"password\":\"changed-again-password\"}");
+    assert(strcmp(req.status, "200 OK") == 0);
     strcpy(cookie, req.cookie);
     assert(web_auth_init() == ESP_OK);
-    assert(web_auth_session_days() == 7);
+    assert(web_auth_session_days() == 1);
     req = request("/api/status", NULL, cookie);
     assert(!web_interface_authorize_request(&req, false));
 
@@ -302,8 +429,17 @@ int main(void)
     assert(!web_session_find(table, "ota_session=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef; ota_session=short", 101));
     assert(!web_session_find(table, "ota_session=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 86500));
     assert(web_session_create(table, token, 86500, 7));
+    stored_settings_size--;
+    assert(web_auth_init() == ESP_ERR_INVALID_STATE);
+    stored_settings_size++;
+    stored_settings[2] = 2;
+    assert(web_auth_init() == ESP_ERR_INVALID_STATE);
+    stored_settings[2] = 1;
+    stored_settings[stored_settings_size - 1] = 'x';
+    assert(web_auth_init() == ESP_ERR_INVALID_STATE);
+    stored_settings_size = 0;
     stored_days = 3;
     assert(web_auth_init() == ESP_ERR_INVALID_STATE);
-    puts("Authentication tests passed: daily/weekly expiry, cookies, CSRF, password guards, NVS, logout, restart.");
+    puts("Authentication tests passed: expiry, CSRF, password changes, optional login, NVS migration, failed saves, restart.");
     return 0;
 }
