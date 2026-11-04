@@ -14,8 +14,9 @@ setup, safety and licensing, see [README](../README.md) and
 
 The [complete circuit schematic (PDF)](EBCTester_Schematic.pdf) is accompanied by this
 functional overview, which is not a pin-level drawing. Component references
-match the [bill of materials](EBCTester_BOM.md), which has 22 line items and 47
-components (44 SMD, 3 THT).
+match the [bill of materials](EBCTester_BOM.md), which has 26 line items and 57
+components (53 SMD, 4 THT). PCB layout and assembled-board renderings are in the
+[README hardware overview](../README.md#pcb-views).
 
 ```mermaid
 flowchart LR
@@ -49,7 +50,8 @@ Firmware pin assignments and the default UART/SD connections are listed in
 [Default connections](../README.md#default-connections). Verify that the
 configured pins match your hardware. Editable KiCad sources, the PCB layout,
 and assembly files are maintained with the separate hardware project and are
-not included in this repository.
+not included in this repository; the schematic, BOM, and board-image snapshot
+are included here.
 
 ## EBC model selection, verification and limits
 

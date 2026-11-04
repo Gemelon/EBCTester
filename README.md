@@ -372,8 +372,8 @@ and data before repartitioning.
 
 The diagram is a functional overview, not a pin-level drawing. The
 [complete circuit schematic](docs/EBCTester_Schematic.pdf) is included as a PDF; the
-[bill of materials](docs/EBCTester_BOM.md) lists all 22 line items and 47 components,
-including manufacturer part numbers and LCSC references (44 SMD, 3 THT).
+[bill of materials](docs/EBCTester_BOM.md) lists all 26 line items and 57 components,
+including manufacturer part numbers and LCSC references (53 SMD, 4 THT).
 
 ```mermaid
 flowchart LR
@@ -402,10 +402,29 @@ flowchart LR
 | Storage and clock | microSD socket; DS3231 RTC; CR2032 holder | Stores measurements and keeps time when main power is removed |
 | Serial and expansion | TXS0104E level shifter; 6-pin UART and 14-pin expansion headers | Connects serial signals and provides a reserved expansion header |
 
+### PCB views
+
+These KiCad renderings show the board layout and assembled-board previews; they
+are design views, not photographs of a manufactured board. Click an image to
+open it at full size.
+
+<p align="center">
+  <a href="docs/images/pcb-assembled.png">
+    <img src="docs/images/pcb-assembled.png" alt="Top view rendering of the assembled EBCTester PCB" width="640">
+  </a>
+</p>
+
+<p align="center">
+  <a href="docs/images/pcb-layout.png"><img src="docs/images/pcb-layout.png" alt="PCB layout view showing tracks, pads, and component labels" width="320"></a>
+  <a href="docs/images/pcb-3d-top.png"><img src="docs/images/pcb-3d-top.png" alt="Three-dimensional top view of the assembled EBCTester PCB" width="320"></a>
+  <a href="docs/images/pcb-3d-angle-1.png"><img src="docs/images/pcb-3d-angle-1.png" alt="Angled three-dimensional view of the EBCTester PCB" width="320"></a>
+  <a href="docs/images/pcb-3d-angle-2.png"><img src="docs/images/pcb-3d-angle-2.png" alt="Second angled three-dimensional view of the EBCTester PCB" width="320"></a>
+</p>
+
 The editable KiCad schematic, PCB layout, and design files are maintained
 with the separate hardware project and are not included here. The PDF, BOM,
-and service-specific assembly BOMs in this repository are the published
-board-documentation snapshot.
+images, and service-specific assembly BOMs in this repository are the
+published board-documentation snapshot.
 
 ### Default connections
 
