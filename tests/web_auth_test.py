@@ -32,11 +32,11 @@ with tempfile.TemporaryDirectory(prefix="ebctester-auth-") as temporary:
             command = [compiler, "/nologo", "/std:c11", "/D_CRT_SECURE_NO_WARNINGS",
                        f"/I{work}", f"/I{cjson}", *sources, f"/Fe:{executable}"]
             if require_password:
-                command.insert(1, "/DCONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD=1")
+                command.insert(1, "/DTEST_REQUIRE_SETTINGS_PASSWORD=1")
         else:
             command = [compiler, "-std=c11", "-Wall", "-Wextra", f"-I{work}", f"-I{cjson}",
                        *sources, "-o", str(executable)]
             if require_password:
-                command.insert(1, "-DCONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD=1")
+                command.insert(1, "-DTEST_REQUIRE_SETTINGS_PASSWORD=1")
         subprocess.run(command, cwd=work, check=True)
         subprocess.run([str(executable)], cwd=work, check=True)

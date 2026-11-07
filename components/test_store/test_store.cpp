@@ -14,6 +14,7 @@
 #include <mutex>
 
 #include "battery_database.h"
+#include "ebc_config.h"
 #include "esp_app_desc.h"
 #include "esp_log.h"
 #include "esp_random.h"
@@ -25,7 +26,7 @@ namespace test_store {
 namespace {
 
 const char *TAG = "test_store";
-constexpr char DEVICE_ID[] = CONFIG_TEST_STORE_DEVICE_ID;
+char DEVICE_ID[EBC_CONFIG_DEVICE_ID_MAX];
 constexpr time_t VALID_TIME_THRESHOLD = 1700000000;
 constexpr TickType_t SYNC_TIMEOUT = pdMS_TO_TICKS(8000);
 constexpr TickType_t WRITER_TIMEOUT = pdMS_TO_TICKS(15000);
@@ -1038,6 +1039,8 @@ RecorderStatus recorder_status()
 extern "C" esp_err_t test_store_init(void)
 {
     using namespace test_store;
+    if (!ebc_config_is_active()) return ESP_ERR_INVALID_STATE;
+    memcpy(DEVICE_ID, ebc_config_get()->tester.device_id, sizeof(DEVICE_ID));
     if (writer_task_handle != nullptr) {
         return ESP_ERR_INVALID_STATE;
     }

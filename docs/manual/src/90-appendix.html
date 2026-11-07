@@ -1,0 +1,46 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+<h2 class="chapter appendix">Appendix A – Language files</h2>
+<p>Additional user-interface languages are loaded from the folder <code>/languages</code> on the SD card. A complete
+template is <code>sd_card/languages/en-custom.json</code> in the repository; a partial Filipino (Tagalog) example is
+<code>fil.json</code>.</p>
+<ol class="steps">
+  <li>Copy the template, for example as <code>fr.json</code>.</li>
+  <li>Set <code>"code": "fr"</code> and <code>"name": "Français"</code>.</li>
+  <li>Translate only the values in <code>"strings"</code>; keep all keys unchanged.</li>
+  <li>Keep placeholders such as <code>{p0}</code>, <code>%u</code>, <code>%s</code> (printf placeholders in the same order).</li>
+  <li>Save as UTF-8 without BOM, upload to <code>/languages/fr.json</code> (for example in the SD card tab), click <span class="ui">Reload languages</span> and select the language in the header.</li>
+</ol>
+<pre>{
+  "version": 1,
+  "code": "fr",
+  "name": "Français",
+  "strings": {
+    "language.title": "Langue",
+    "...": "..."
+  }
+}</pre>
+<p>Missing keys fall back to English. Files named <code>en.json</code> or <code>de.json</code> replace the built-in texts
+while present. Limits: max. 16 files, 128 KB per file, 1024 entries, 4096 bytes per value, 80 bytes for the name.
+Language codes use lower-case letters, digits and hyphens (max. 24 characters), for example <code>fr</code>,
+<code>en-gb</code>.<only maker> Loading languages from SD requires the option <span class="ui">Load additional
+languages from SD</span> in Maker Settings and an active configuration.</only></p>
+
+<h2 class="chapter appendix">Appendix B – Glossary</h2>
+<dl class="glossary">
+  <dt>AP</dt><dd>Access point – the device's own Wi-Fi network for setup and fallback access.</dd>
+  <dt>C-CV</dt><dd>Charging with constant current, then constant voltage (CC/CV).</dd>
+  <dt>ConfigAktive</dt><dd>Stored switch that enables the hardware configuration. When off, only the access point and the web interface run.</dd>
+  <dt>CSRF</dt><dd>Cross-site request forgery; the token protects against requests from foreign web pages.</dd>
+  <dt>D-CC / D-CP</dt><dd>Discharging with constant current / constant power.</dd>
+  <dt>DCIR</dt><dd>Direct-current internal resistance, measured with a load pulse.</dd>
+  <dt>FactoryMode</dt><dd>Firmware mode of the original board (GPIO 47 high): ready to use with the firmware defaults.</dd>
+  <dt>Frame</dt><dd>One message between EBCTester and the tester.</dd>
+  <dt>MakerMode</dt><dd>Firmware mode of self-built devices (GPIO 47 low or open): hardware configured in Maker Settings.</dd>
+  <dt>NVS</dt><dd>Non-volatile storage in the ESP32 flash for settings.</dd>
+  <dt>OTA</dt><dd>Over-the-air – firmware update over Wi-Fi.</dd>
+  <dt>Segment</dt><dd>Section of a test run with one operating mode.</dd>
+  <dt>SNTP</dt><dd>Simple Network Time Protocol – time synchronisation over the Internet.</dd>
+  <dt>SOC</dt><dd>State of charge in percent.</dd>
+  <dt>Test run</dt><dd>Recording of one manual operation, plan or DCIR test with all its measurements.</dd>
+</dl>

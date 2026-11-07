@@ -251,10 +251,10 @@ falls back to English. Translations are assigned using `textContent` and
 safe attribute setters, never inserted as HTML or executed as scripts.
 
 English/German resources and the browser runtime are bundled in the shared
-`ota-suite/components/web_interface` component. This project enables
-`CONFIG_OTA_SUITE_WEB_SD_LANGUAGES=y` and registers `ui_localization` before
-starting the server. The shared web component also works standalone with
-that option disabled. SD language reads hold the same storage lock as SQLite;
+`ota-suite/components/web_interface` component. This project seeds the
+SD-language setting from SDK defaults and passes its NVS value to the shared
+web component. `ui_localization` is registered only with active configuration.
+SD language reads hold the same storage lock as SQLite;
 no card is formatted and the database schema is unchanged.
 
 Validation: `node tests\ui_languages_test.js` checks catalog coverage, English
@@ -482,9 +482,10 @@ The dashboard is read-only. Demo-data generation and run deletion are not
 available; their former POST endpoints are no longer registered. Existing
 stored runs, including previously generated demo data, remain unchanged.
 
-The tab order is set with `CONFIG_OTA_SUITE_WEB_TAB_ORDER` in
-`sdkconfig.defaults` (`dashboard,battery,manual,auto,resistance,overview,sd-card,updates,settings`);
-the first tab opens on page load.
+The tab order and primary tabs come from NVS; SDK configuration is used only
+to seed a new configuration. Maker devices can edit them in **Maker Settings**.
+The first configured available tab opens on page load. Inactive Maker devices
+open Maker Settings first regardless of the stored tab order.
 
 The header and browser title use the firmware project name **EBCTester**.
 The top menu splits tabs into **Battery tester** (Measurements, Battery, Manual,
@@ -500,6 +501,52 @@ are shown in amber.
 All endpoints require web login; POST endpoints also require the CSRF token.
 Each request opens the database under the shared SD lock and closes it again;
 503 means the card or database is not ready or busy.
+
+## Configurable physical LED groups
+
+**Settings > LED function groups** is available in both MakerMode and
+FactoryMode. The WS2812 chain contains two board LEDs followed by optional
+extensions, with 1-16 configured LEDs. Defaults: LED1 = Tester mode + OTA;
+LED2 = Message frame status. Select a normal group and optional OTA override
+independently for each LED; Off + OTA provides a dedicated update indicator.
+Inactive chain positions are driven off. Lowering the count preserves the
+hidden assignments, so increasing it restores them.
+
+| Group | State | Output |
+| --- | --- | --- |
+| Tester mode | Disconnected | Off |
+| Tester mode | Connected, idle | Green |
+| Tester mode | Manual operation active | Blue |
+| Tester mode | Automatic plan running, including waits | Orange |
+| Message frame status | No valid or invalid message for more than 5 s | Off |
+| Message frame status | Receiving | Dark green |
+| Message frame status | Each valid message | One bright green flash |
+| Message frame status | Latest message invalid, unknown/unsupported tester, or model mismatch | Orange |
+| OTA | Downloading | Pulsing blue |
+| OTA | Verifying | Pulsing yellow |
+| OTA | Verified, restarting | Steady green |
+| OTA | Failed | Blinking red |
+
+OTA takes priority only on opted-in LEDs and returns to the normal group when
+the OTA state becomes idle. Silence takes priority over a remembered
+communication error. A later valid message clears an invalid-frame error;
+model mismatch remains until the link is corrected.
+
+`GET /api/leds/settings` returns `count`, `maxCount`, `hardwareEnabled`, the
+`groups` catalog, and 16 `leds` assignments. `POST /api/leds/settings` accepts
+`count` (integer 1-16) and exactly 16 `{group, ota}` objects, with stable group
+IDs `off`, `tester`, and `frames`, and a boolean `ota`. POST requires the
+standard settings authorization and CSRF token. The versioned configuration
+is stored separately in NVS namespace `leds`, key `config`, preserving
+existing hardware configuration without a schema migration. A full NVS reset
+also clears LED assignments.
+
+The reusable `ota-suite/status_led` driver accepts a normal-renderer callback
+and handles WS2812 output and selective OTA priority, without depending on
+tester internals. EBCTester's group catalog and policy provide normal colors;
+new groups add stable IDs without changing existing assignments. The LED task
+refreshes every 50 ms and replays counted valid frames as 100 ms flashes with
+100 ms dark-green gaps. No UART, recording, or OTA callbacks wait for LED output.
 
 ## MariaDB backup
 
@@ -544,6 +591,10 @@ implemented yet; UART2 is initialized and its input discarded.
 
 - **Battery**: label, manufacturer, serial, manufacturing date, nominal
   capacity, notes; stored in NVS and optionally in the SQLite database.
+  Renaming a saved battery is done by changing its label in the form and
+  pressing **Apply and save to database**. The request includes
+  `previousLabel`, updates the existing row in `ebc_battery`, and keeps the
+  `battery_id`, so linked test runs stay associated with the renamed battery.
   **Delete battery** sits immediately after **New battery** and targets the
   saved battery displayed in the form, not a different saved-list selection.
   Confirmation and settings authorization are required. The action is
@@ -566,8 +617,8 @@ implemented yet; UART2 is initialized and its input discarded.
   a running plan is marked "Interrupted" and must be reset.
 
 Active tests are recorded as test runs with segments; each measurement is the
-average of `CONFIG_TEST_CONTROL_AVERAGING_LENGTH` frames (default 20 ≈ 20 s).
-The device id is `CONFIG_TEST_STORE_DEVICE_ID`.
+average of the NVS `tester.averaging_length` frames (default 20 ≈ 20 s).
+The device ID is NVS `tester.device_id`. SDK values seed both on first start.
 
 API (login required, POST with CSRF token): `GET /api/tester/status`,
 `/api/tester/settings`, `/api/tester/catalog`; `POST /api/tester/battery`,
@@ -868,9 +919,10 @@ Availability checks never contact the image URL.
 The shared web interface uses `/login` instead of the browser's Basic-auth
 dialog. `POST /api/auth/login` accepts JSON `username`/`password` (`admin` and the
 configured web password) with `X-Web-Login: 1`. The initial password is
-`ebctester`, set by `CONFIG_OTA_SUITE_WEB_PASSWORD` in `sdkconfig` and
-`sdkconfig.defaults`. It is independent of the Wi-Fi/AP password. Existing
-devices without a saved web password use this default after updating.
+`ebctester`, seeded from SDK defaults into the central `ebc_cfg/config` blob.
+It is independent of the Wi-Fi/AP password. The central blob also stores login
+enabled/disabled and the session duration; the shared authentication component
+persists changes through an application callback, not a second password store.
 No CORS permission is granted. Invalid
 credentials do not create sessions; failed password checks impose a one-second
 retry interval without blocking a server task.
@@ -922,8 +974,8 @@ device status, extension assets, SD language files and all controls remain prote
 The login page uses built-in English/German, not protected SD catalogs.
 Existing Basic-auth API clients must switch to cookie login and CSRF tokens.
 
-`CONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD` in **OTA Suite web interface**
-defaults to `y` (also set in `sdkconfig.defaults`). When enabled, every device
+The NVS `ota.settings_require_password` setting defaults to enabled from SDK
+configuration and is editable in Maker Settings. When enabled, every device
 settings save requires `X-Admin-Password` in addition to CSRF and a session
 when browser login is enabled. Disabling browser login does not remove this
 password check. The header must contain the currently configured login password,
@@ -935,7 +987,7 @@ write or apply settings. The password is not the AP, Wi-Fi station, MQTT broker
 or MariaDB password.
 
 Protected saves are `/api/network`, `/api/auth/settings`, `/api/debug/settings`,
-`/api/mariadb/settings`, and `/api/mqtt/settings` (when MQTT is compiled in).
+`/api/mariadb/settings`, `/api/mqtt/settings`, `/api/maker/config`, and `/api/config/reset`.
 They use `web_interface_authorize_settings_request()`. Extension settings UIs
 use `await WebAuth.settingsHeaders()` and cancel the save if it returns `null`.
 Extensions must use this helper and the server-side settings guard for future

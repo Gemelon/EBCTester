@@ -12,7 +12,6 @@
 #include "cJSON.h"
 #include "esp_log.h"
 
-#if CONFIG_EBCTESTER_HA_MQTT_ENABLE
 #include "esp_event.h"
 #include "esp_mac.h"
 #include "esp_netif.h"
@@ -24,11 +23,9 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
-#endif
 
 static const char *TAG = "ha_mqtt";
 
-#if CONFIG_EBCTESTER_HA_MQTT_ENABLE
 
 #define INITIAL_RETRY_US (1LL * 1000 * 1000)
 #define MAX_RETRY_US (60LL * 1000 * 1000)
@@ -592,7 +589,6 @@ void ha_mqtt_settings_defaults(ha_mqtt_settings_t *settings)
     }
 
     memset(settings, 0, sizeof(*settings));
-    settings->enabled = CONFIG_EBCTESTER_HA_MQTT_ENABLE;
     settings->port = 1883;
     settings->measurement_interval_seconds = 20;
     snprintf(settings->topic_prefix, sizeof(settings->topic_prefix), "ebctester");
@@ -861,50 +857,3 @@ esp_err_t ha_mqtt_publish_measurement(const ha_mqtt_measurement_t *measurement)
     }
     return err;
 }
-
-#else
-
-void ha_mqtt_settings_defaults(ha_mqtt_settings_t *settings)
-{
-    if (settings == NULL) {
-        return;
-    }
-    memset(settings, 0, sizeof(*settings));
-    settings->port = 1883;
-    settings->measurement_interval_seconds = 20;
-    snprintf(settings->topic_prefix, sizeof(settings->topic_prefix), "ebctester");
-}
-
-esp_err_t ha_mqtt_start(const ha_mqtt_settings_t *settings)
-{
-    if (settings == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    if (settings->enabled) {
-        ESP_LOGE(TAG, "MQTT is disabled in the firmware configuration");
-        return ESP_ERR_NOT_SUPPORTED;
-    }
-    return ESP_OK;
-}
-
-esp_err_t ha_mqtt_stop(void)
-{
-    return ESP_OK;
-}
-
-esp_err_t ha_mqtt_get_status(ha_mqtt_status_t *status)
-{
-    if (status == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    status->state = HA_MQTT_STATE_DISABLED;
-    snprintf(status->message, sizeof(status->message), "MQTT support is not included in this firmware");
-    return ESP_OK;
-}
-
-esp_err_t ha_mqtt_publish_measurement(const ha_mqtt_measurement_t *measurement)
-{
-    return measurement == NULL ? ESP_ERR_INVALID_ARG : ESP_ERR_NOT_SUPPORTED;
-}
-
-#endif

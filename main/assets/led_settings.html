@@ -1,0 +1,17 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+<div class="card shadow-sm">
+  <div class="card-body">
+    <h3 class="h5" data-i18n="leds.title">LED function groups</h3>
+    <p class="small text-body-secondary" data-i18n="leds.description">Assign each WS2812 LED a normal function group. Enable OTA to override that LED during firmware updates. Two LEDs are on the board; extensions follow them in chain order.</p>
+    <div id="led-settings-message" class="alert d-none" role="status"></div>
+    <div id="led-settings-inactive" class="alert alert-warning d-none" data-i18n="leds.inactive">LED hardware is disabled or the device configuration is inactive. Assignments will be used when LED hardware is enabled.</div>
+    <form id="led-settings-form">
+      <label for="led-settings-count" class="form-label" data-i18n="leds.count">Total LED count (including extensions)</label>
+      <input id="led-settings-count" type="number" class="form-control mb-3" min="1" max="16" step="1" required disabled>
+      <div id="led-settings-assignments"></div>
+      <p class="small text-body-secondary" data-i18n="leds.legend">Tester mode: off = disconnected; green = connected and idle; blue = manual operation; orange = automatic plan. Message frame status: off after 5 seconds without messages; dark green = receiving; bright green = valid-message flash; orange = communication error. OTA: pulsing blue = downloading; pulsing yellow = verifying; steady green = restarting; blinking red = failed.</p>
+      <button id="led-settings-save" class="btn btn-primary" type="submit" disabled data-i18n="leds.save">Save LED settings</button>
+    </form>
+  </div>
+</div>

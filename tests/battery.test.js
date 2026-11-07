@@ -79,6 +79,55 @@ test("delete targets the displayed battery, not the saved-list selection, and cl
   assert.equal(view.events[0].type, "test-runs-changed");
 });
 
+test("save to database sends previousLabel only when renaming the displayed battery", async () => {
+  const view = page(); await settle();
+  view.element("bat-label").value = "Renamed";
+  await view.click("bat-save-db");
+  await settle();
+  assert.deepEqual(JSON.parse(view.actions()[0].options.body), {
+    action: "save_db",
+    previousLabel: "Current",
+    battery: { label: "Renamed", manufacturer: "", serial: "", date: "", notes: "", capacity: 0 },
+  });
+
+  const unchanged = page(); await settle();
+  await unchanged.click("bat-save-db");
+  await settle();
+  assert.deepEqual(JSON.parse(unchanged.actions()[0].options.body), {
+    action: "save_db",
+    battery: { label: "Current", manufacturer: "", serial: "", date: "", notes: "", capacity: 0 },
+  });
+
+  const unsaved = page({ labels: ["Other"] }); await settle();
+  unsaved.element("bat-label").value = "New label";
+  await unsaved.click("bat-save-db");
+  await settle();
+  assert.equal(Object.hasOwn(JSON.parse(unsaved.actions()[0].options.body), "previousLabel"), false);
+});
+
+test("creating a battery after New does not send a previous label", async () => {
+  const view = page(); await settle();
+  view.click("bat-new");
+  view.element("bat-label").value = "LiFePO4 104";
+  await view.click("bat-save-db");
+  await settle();
+
+  assert.deepEqual(JSON.parse(view.actions()[0].options.body), {
+    action: "save_db",
+    battery: { label: "LiFePO4 104", manufacturer: "", serial: "", date: "", notes: "", capacity: 0 },
+  });
+});
+
+test("save_db handler optionally renames previousLabel before saving the database entry", () => {
+  const web = fs.readFileSync(path.join(root, "components", "test_control", "test_control_web.cpp"), "utf8");
+  const handler = web.slice(web.indexOf("esp_err_t battery_handler"), web.indexOf("esp_err_t catalog_handler"));
+  const rename = handler.indexOf("rename_battery(previous_label, battery.label)");
+  const save = handler.indexOf("test_store::save_battery(battery)");
+  assert.match(handler, /get_string\(root, "previousLabel"\)/);
+  assert.match(handler, /if \(!previous_label\.empty\(\)\)/);
+  assert.ok(rename >= 0 && save > rename);
+});
+
 test("new or unsaved batteries and modified labels cannot be deleted", async () => {
   for (const options of [{ label: "" }, { label: "Unsaved" }, { databaseReady: false }]) {
     const view = page(options); await settle();

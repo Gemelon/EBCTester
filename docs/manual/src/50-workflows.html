@@ -1,0 +1,76 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+<h2 class="chapter">Typical workflows</h2>
+
+<h3>Measuring the capacity of a battery</h3>
+<ol class="steps">
+  <li><b>Battery:</b> enter the battery data and click <span class="ui">Apply and save to database</span> (or load a saved battery and click <span class="ui">Apply</span>).</li>
+  <li><b>Plan:</b> in <span class="ui">Automatic</span>, load or create a plan: charge (C-CV) – wait – discharge (D-CC) – wait – optionally charge to storage level.</li>
+  <li><b>Connect:</b> in <span class="ui">Manual</span>, click <span class="ui">Connect</span> (or enable automatic connection). The RX indicator in the header turns green.</li>
+  <li><b>Start:</b> in <span class="ui">Automatic</span>, click <span class="ui">Start plan</span>. You can now close the browser.</li>
+  <li><b>Follow:</b> open <span class="ui">Measurements</span> at any time. The capacity of the discharge segment in the segment timeline is the measured capacity.</li>
+  <li><b>Finish:</b> when the plan is complete, the run status changes to <i>Completed</i>. Give the run a meaningful name in <span class="ui">Test run management</span> if you like.</li>
+</ol>
+
+<h3>Measuring internal resistance at 50 % state of charge</h3>
+<ol class="steps">
+  <li>Apply the battery as above and connect it with four-wire sensing.</li>
+  <li>In <span class="ui">Internal resistance</span>, select <span class="ui">Automatic preparation and measurement</span>, enter the usable capacity (ideally the result of a capacity test), the charge parameters and target SOC = 50 %.</li>
+  <li>Set the pulse current (for example 0.2 C to 1 C, within the battery's limits), check the protection limits, save, tick the confirmation and start.</li>
+  <li>After completion compare the three results. Repeat measurements under the same conditions (temperature, SOC, rest time) to compare batteries.</li>
+</ol>
+
+<h3>Backing up your data</h3>
+<ul>
+  <li><b>Simple:</b> download <code>ebc_a20.db</code> in <span class="ui">SD card</span> when no test is running. The file can be opened with any SQLite tool (for example "DB Browser for SQLite").</li>
+  <li><b>Automatic:</b> set up the MariaDB backup. Delete runs on the SD card only after verifying that they have been transferred.</li>
+</ul>
+
+<only maker>
+<h3>Changing the hardware of a Maker device</h3>
+<ol class="steps">
+  <li>Stop all tests and wait until the recording has finished.</li>
+  <li>Open <span class="ui">Maker Settings</span>, untick <span class="ui">ConfigAktive</span> and click <span class="ui">Save and restart</span>. The device restarts without driving any hardware pin.</li>
+  <li>Switch the device off and change the wiring.</li>
+  <li>Switch it on, enter the new pin assignment, tick ConfigAktive and save again.</li>
+</ol>
+</only>
+
+<h2 class="chapter">Troubleshooting</h2>
+<table>
+  <thead><tr><th style="width:27%">Problem</th><th style="width:30%">Possible cause</th><th>Remedy</th></tr></thead>
+  <tbody>
+  <tr><td>Access point <code>BatteryTester-…</code> not visible</td><td>No antenna, device not powered or still starting</td><td>Check the antenna and power; wait 10–20 s after power-on.</td></tr>
+  <tr><td>AP password unknown</td><td>Randomly generated at first start, or changed<only maker> in Maker Settings</only></td><td>Read a generated password from the start-up log over USB (serial terminal, press RESET). Otherwise use <span class="ui">Erase all settings over USB</span> below.</td></tr>
+  <tr><td>Login password not accepted</td><td>Password was changed; or the default is still active</td><td>Try <code>ebctester</code> (default until a password is saved, and after a device reset). A forgotten password can only be reset over USB, see below.</td></tr>
+  <tr><td>Page does not load at 192.168.4.1</td><td>Phone switched back to mobile data or another network</td><td>Disable mobile data while connected to the AP; check the Wi-Fi connection.</td></tr>
+  <tr><td>Login keeps returning to the login page</td><td>Session expired or device restarted; browser blocks cookies</td><td>Log in again; allow cookies for the device address.</td></tr>
+  <tr><td>Login refused although the password is correct</td><td>Maximum of 8 simultaneous sessions reached</td><td>Log out in other browsers or restart the device.</td></tr>
+  <tr><td>Battery tester section missing; only Settings and Device information shown</td><td>Configuration inactive<only factory> – for example because JP1 was changed and the device started in MakerMode</only><only maker> (ConfigAktive off, or a stored configuration failed the pin checks)</only></td>
+      <td><only factory>Check that JP1 is in its delivered state (pads 1–2 bridged), then run <span class="ui">Settings → Device reset → Reset device configuration</span>.</only><only maker>Open Maker Settings, check the pins, tick ConfigAktive and save. The debug log or USB console shows the reason.</only></td></tr>
+  <only maker><tr><td>"Invalid configuration" when saving Maker Settings</td><td>Pin used twice, reserved or not output-capable; required pin set to −1; password too short</td><td>Check the rules in <a href="#ref:Activation and validation">Activation and validation</a>.</td></tr>
+  <tr><td>Device starts in FactoryMode although it is a Maker build</td><td>GPIO 47 is pulled high by the circuit</td><td>Leave GPIO 47 open or tie it to GND, then reset the device configuration.</td></tr></only>
+  <tr><td>RX indicator stays grey</td><td>Tester not connected or wiring wrong</td><td>Click <span class="ui">Connect</span>; check TX/RX crossing and GND; check that the tester is switched on.<only maker> Check the tester UART pins in Maker Settings.</only></td></tr>
+  <tr><td>"Tester mismatch" error</td><td>Selected model differs from the connected one</td><td>Select the right model in <span class="ui">Settings → EBC tester</span>, then <span class="ui">Connect</span>.</td></tr>
+  <tr><td>Start buttons disabled</td><td>See the yellow hint below the button</td><td>Typical: not connected, waiting for first message, plan running, command pending.</td></tr>
+  <tr><td>"Database not ready"</td><td>No card, card not FAT32, card full or defective<only maker>, wrong SD pins or bus mode</only></td><td>Insert a FAT32 card; check the <span class="ui">SD card</span> tab. exFAT cards must be reformatted to FAT32 on a PC.</td></tr>
+  <tr><td>Times shown as uptime instead of date</td><td>Clock not synchronised (no Internet)</td><td>Connect the device to Wi-Fi with Internet access.</td></tr>
+  <tr><td>Plan shows "Interrupted"</td><td>Power failure or restart during the plan</td><td>Check the battery, click <span class="ui">Reset status</span>, restart the plan if needed.</td></tr>
+  <tr><td>DCIR result "invalid"</td><td>Sample too late, voltage drop too small, no current</td><td>Increase the pulse current, check four-wire sensing and the timing tolerance.</td></tr>
+  <tr><td>Update check fails</td><td>No Internet, clock not yet synchronised, server unreachable</td><td>Wait a few minutes after connecting; retry with <span class="ui">Check for updates</span>.</td></tr>
+  <tr><td>Settings are not saved</td><td>Login password wrong or dialog cancelled</td><td>Enter the current login password (not the access-point password) in the confirmation dialog.</td></tr>
+  <tr><td>Reset or configuration change refused</td><td>A test, plan, recording or update is running</td><td>Stop the test and wait until the recording has finished.</td></tr>
+  <tr><td>Language file not offered</td><td>Wrong folder, invalid JSON or wrong code</td><td>Place it in <code>/languages</code>, check the warning shown in the header, click <span class="ui">Reload languages</span>.</td></tr>
+  </tbody>
+</table>
+
+<h4>Erase all settings over USB</h4>
+<p>If neither the login password nor the access-point password is known, the settings memory can be erased with
+a PC. Firmware and SD card data are kept; all settings return to the state of the first start:</p>
+<pre>esptool.py --chip esp32s3 --port COM5 erase_region 0x9000 0x6000</pre>
+<p>Replace <code>COM5</code> with the serial port of the device. If the port is not found, start the device in
+download mode (hold BOOT, press and release RESET, release BOOT) and press RESET after erasing.</p>
+
+<p>If the problem persists, enable the debug log, reproduce the problem and download the log. When reporting a
+problem on GitHub, include <only maker>your hardware and Maker Settings, </only>the firmware version, steps to
+reproduce and the log – but never passwords or private data.</p>

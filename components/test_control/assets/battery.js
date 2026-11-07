@@ -101,11 +101,16 @@
     void post({ action: "save", battery: collect() }, false);
   });
   $("bat-save-db").addEventListener("click", () => {
-    if (!$("bat-label").value.trim()) {
+    const battery = collect();
+    if (!battery.label) {
       showMessage(I18n.t("text.c4bed19989ed"), "warning");
       return;
     }
-    void post({ action: "save_db", battery: collect() }, false);
+    const body = { action: "save_db", battery };
+    if (displayedLabel && savedLabels.includes(displayedLabel) && displayedLabel !== battery.label) {
+      body.previousLabel = displayedLabel;
+    }
+    void post(body, false);
   });
   $("bat-new").addEventListener("click", () => {
     if (busy) return;

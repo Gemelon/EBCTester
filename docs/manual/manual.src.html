@@ -1,0 +1,46 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+<!-- Single source for the Factory and Maker manuals. Build with build.py. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EBCTester – {{TITLE}}</title>
+<link rel="stylesheet" href="manual.css">
+</head>
+<body>
+<span class="meta-edition"><only factory>Factory Edition</only><only maker>Maker Edition</only></span>
+<span class="meta-fw">1.99.3</span>
+
+<section class="cover">
+  <div class="logo"><img src="../images/readme-logo.png" alt="EBCTester"></div>
+  <h1>User Manual</h1>
+  <div class="edition-tag"><only factory>Factory Edition – original EBCTester board</only><only maker>Maker Edition – self-built devices</only></div>
+  <p class="subtitle">Battery testing with ZKE EBC testers – stand-alone, recorded on SD,
+    operated from the browser</p>
+  <table>
+    <tr><td>Firmware</td><td>1.99.3 (V2 beta, 5 November 2026)</td></tr>
+    <tr><td>Hardware</td><td><only factory>EBCTester board, schematic revision 1, PCB marking B1.1</only><only maker>Any ESP32-S3 with 16 MB flash; reference design: EBCTester board, schematic revision 1</only></td></tr>
+    <tr><td>Firmware mode</td><td><only factory>FactoryMode (GPIO 47 high)</only><only maker>MakerMode (GPIO 47 low or open)</only></td></tr>
+    <tr><td>Supported testers</td><td>ZKE EBC-A20, EBC-A40L, EBC-A50L</td></tr>
+    <tr><td>Document</td><td>Edition November 2026, English</td></tr>
+    <tr><td>Project</td><td>github.com/Gemelon/EBCTester</td></tr>
+  </table>
+  <p class="legal">© 2026 Thomas Stoll. Software and documentation licensed under the Apache License 2.0.
+    EBCTester is an independent hobby project and not a product of, or supported by, ZKETECH.</p>
+</section>
+
+<section class="toc">
+  <h2>Contents</h2>
+  <!--TOC-->
+</section>
+
+<!--#include "10-intro.html"-->
+<!--#include "20-setup.html"-->
+<!--#include "30-tester.html"-->
+<!--#include "40-admin.html"-->
+<!--#include "50-workflows.html"-->
+<!--#include "60-reference.html"-->
+<!--#include "90-appendix.html"-->
+</body>
+</html>

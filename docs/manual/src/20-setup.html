@@ -1,0 +1,220 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+<only factory>
+<h2 class="chapter">Setting up</h2>
+
+<h3>Connecting the hardware</h3>
+<figure class="w50">
+  <img src="../images/pcb-3d-top.png" alt="EBCTester board">
+  <figcaption>EBCTester board (rendering from the production data)</figcaption>
+</figure>
+<p>The connectors are on the edges of the board: J4 for the tester at the bottom of the right edge, the
+expansion connector J3 above it, the microSD socket J1 at the top left and the USB-C socket J2 on the left
+edge. The LEDs are on the left side, the BOOT and RESET buttons in the bottom left corner and the CR2032
+holder in the middle. The antenna socket (u.FL) is on the ESP32 module U4 at the top of the board.</p>
+<ol class="steps">
+  <li><b>Antenna.</b> Mount the SMA socket of the antenna cable in the housing, plug its small u.FL plug onto the socket of the ESP32 module and screw on the antenna. Without an antenna Wi-Fi does not work.</li>
+  <li><b>microSD card.</b> Insert a FAT32-formatted card. The card is never formatted automatically; a new, empty database is created on it at first use.</li>
+  <li><b>Tester connection.</b> Connect J4 to the tester's serial interface (pin assignment in <a href="#ref:Connectors">Connectors</a>). The board's TX line goes to the tester's RX line and vice versa. With the EBC-A20, J4 can also supply the board from the tester's 19 V adapter.</li>
+  <li><b>Power.</b> Power the board either through J4 (19 V) or through USB-C. Both may be connected at the same time.</li>
+</ol>
+<div class="caution"><b>Caution</b>The pin order of the cable on the tester side differs between tester models
+(the EBC-A40L uses a different connector, and TX/RX have been reported swapped compared with the A20 cable).
+Check the pinout with a multimeter before connecting. The A40L and A50L are mains-powered and do not supply
+19 V – power the board through USB-C in that case.</div>
+<div class="note"><b>Note</b>Leave solder jumper JP1 in its delivered state (pads 1–2 bridged). It tells the
+firmware that it runs on an original board. Changing it has an effect only after a device reset and turns the
+device into a Maker device that has to be configured by hand.</div>
+</only>
+
+<only maker>
+<h2 class="chapter">Building and first start</h2>
+
+<h3>Hardware requirements</h3>
+<p>The firmware does not depend on a particular board. All pins are configured in the browser after the
+first start. Your hardware must, however, meet the following requirements:</p>
+<table>
+  <thead><tr><th>Item</th><th>Requirement</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Microcontroller</td><td>ESP32-S3 with 16 MB flash. Octal PSRAM (N16R8) is optional but recommended. Modules with the "U" suffix need an external 2.4 GHz antenna.</td></tr>
+  <tr><td class="k">Tester UART</td><td>One TX and one RX pin, connected through a 3.3 V ↔ 5 V level shifter (for example TXS0104E) to the tester's TTL port. TX of the ESP32 goes to RX of the tester and vice versa.</td></tr>
+  <tr><td class="k">Dongle UART</td><td>A second TX/RX pair is required by the configuration (reserved for a future PC dongle bridge). It can be left unconnected, but the pins must be free.</td></tr>
+  <tr><td class="k">SD card</td><td>4-bit SDMMC (CLK, CMD, D0–D3) or SPI (MISO, MOSI, CS, CLK); 10 kΩ pull-ups to 3.3 V on CMD and D0–D3 (SDMMC) or MISO/MOSI/CS (SPI). Card detect is optional and must be <b>high</b> when a card is inserted.</td></tr>
+  <tr><td class="k">Status LED</td><td>Optional WS2812 (GRB) on any output-capable GPIO.</td></tr>
+  <tr><td class="k">GPIO 47</td><td>Leave it open or tie it to GND. A high level selects FactoryMode (see <a href="#ref:Factory and Maker devices">Factory and Maker devices</a>).</td></tr>
+  </tbody>
+</table>
+<p>The following pins cannot be used for the peripherals: GPIO 26–32 (internal flash), GPIO 33–37 (octal
+PSRAM), GPIO 19/20 (native USB), GPIO 43/44 (serial console). Avoid the strapping pins 0, 3, 45 and 46. Details
+are given in <a href="#ref:Pins and wiring rules">Pins and wiring rules</a>.</p>
+<div class="tip"><b>Tip</b>The original EBCTester board is a complete reference design. Its circuit, bill of
+materials and pin assignment are documented in Part II and can be copied for your own build.</div>
+
+<h3>Installing the firmware</h3>
+<p>Each GitHub release contains a file <code>EBCTester-&lt;version&gt;-full-install.bin</code> with bootloader,
+partition table and application. Flash it once over USB at address <code>0x0</code>, for example with
+Espressif's esptool:</p>
+<pre>esptool.py --chip esp32s3 --port COM5 write_flash 0x0 EBCTester-1.99.3-full-install.bin</pre>
+<p>If the board is not recognised, start it in download mode: hold BOOT, press and release RESET, release BOOT.
+Later updates are installed over Wi-Fi (see <a href="#ref:Updates">Updates</a>). To build the firmware
+yourself, see <a href="#ref:Building from source">Building from source</a>.</p>
+<div class="note"><b>Note</b>Release images contain no pin assignment that you would have to match: on a
+Maker device the hardware configuration is entered in the browser. The values offered at the first start are
+the defaults of the original board.</div>
+</only>
+
+<h3>First start and login</h3>
+<only maker><p>At the first start the firmware samples GPIO 47 and, with the pin low or open, selects
+<b>MakerMode</b> with an <b>inactive</b> configuration. No UART, SD card, LED or other hardware output is
+driven; only the Wi-Fi access point and the web interface run.</p></only>
+<p>On first start the device opens its own Wi-Fi access point. Its name is <code>BatteryTester-XXXXXX</code>,
+where <code>XXXXXX</code> is unique to the device. EBCTester uses two separate passwords:</p>
+<table>
+  <thead><tr><th>Password</th><th>Used for</th><th>Initial value</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Access-point password</td><td>Connecting to the Wi-Fi network <code>BatteryTester-XXXXXX</code></td>
+      <td>Set when the firmware was built; the standard firmware uses <code>ebctester</code>. If the firmware was built without one, a random password is generated at the first start and shown in the start-up log.<only maker> Can be changed in Maker Settings.</only></td></tr>
+  <tr><td class="k">Login password</td><td>Logging in to the web interface (user <code>admin</code>) and confirming every settings change</td>
+      <td><code>ebctester</code></td></tr>
+  </tbody>
+</table>
+<p>To read a generated access-point password, connect the device to a PC by USB-C, open a serial terminal
+(for example the ESP-IDF monitor or PuTTY) and press RESET. The line <code>Generated setup AP password</code>
+shows the password; it stays the same after restarts.</p>
+<ol class="steps">
+  <li>Connect your phone or PC to the Wi-Fi network <code>BatteryTester-XXXXXX</code> using the access-point password.</li>
+  <li>Open <code>http://192.168.4.1</code> in the browser.</li>
+  <li>Log in with user name <code>admin</code> and the login password – on a new device <code>ebctester</code>. The login page labels this field <span class="ui">Admin password</span>.</li>
+  <li>Change the login password right away under <span class="ui">Administration → Settings → Login Settings</span><only maker> or in Maker Settings</only> (see <a href="#ref:Login Settings">Login Settings</a>).</li>
+</ol>
+<figure class="w50">
+  <img src="../images/manual/login.png" alt="Login page">
+  <figcaption>Login page</figcaption>
+</figure>
+<div class="caution"><b>Caution</b><code>ebctester</code> is the same on every device and is published in this
+manual. Change it on first use. A device reset (see <a href="#ref:Device reset">Device reset</a>) restores this
+initial password.</div>
+<p>A login is valid for 24 hours or 7 days, depending on the setting. It is not extended by activity and ends
+when the device restarts or you click <span class="ui">Log out</span>. Running tests and recording are not
+affected by logging in or out. The login can also be switched off completely (see
+<a href="#ref:Login Settings">Login Settings</a>).</p>
+
+<only maker>
+<h3>Configuring and activating the hardware</h3>
+<p>While the configuration is inactive, the web interface shows only three tabs:
+<span class="ui">Maker Settings</span> (opened first), <span class="ui">Settings</span> and
+<span class="ui">Device information</span>, plus <span class="ui">Updates</span> and – if enabled –
+<span class="ui">Debug</span>. The Battery tester section is not available yet.</p>
+<figure>
+  <img src="../images/manual/maker-inactive.png" alt="Maker device with inactive configuration">
+  <figcaption>A new Maker device: only the access point and the web interface are running</figcaption>
+</figure>
+<ol class="steps">
+  <li>Open <span class="ui">Maker Settings</span> and enter the GPIO numbers of your wiring: tester UART, dongle UART, SD bus and its pins, card detect and the status LED. Use <code>-1</code> for pins that are not connected. All fields are described in <a href="#ref:Maker Settings reference">Maker Settings reference</a>.</li>
+  <li>Set a personal access-point password and web (login) password. Leave the password fields empty to keep the current passwords.</li>
+  <li>Review the network and update options (time server, firmware manifest URL) and the recording settings.</li>
+  <li>Tick <span class="ui">Configuration active (ConfigAktive)</span>.</li>
+  <li>Click <span class="ui">Save and restart</span>, confirm the restart and enter the current login password in the confirmation dialog.</li>
+  <li>The device checks the configuration and restarts. Reconnect to the access point if necessary and log in again. The full interface with the Battery tester section is now available.</li>
+</ol>
+<p>When the configuration is saved with ConfigAktive ticked, the firmware checks that every required pin is
+a valid, output-capable GPIO, that no pin is used twice and that no reserved pin (flash, PSRAM, USB, console)
+is used. If a check fails, nothing is saved and the message <i>Invalid configuration. Check passwords, GPIO
+assignments, reserved pins and selected SD bus.</i> is shown.</p>
+<div class="tip"><b>Tip</b>You can save the configuration without ticking ConfigAktive. The device then
+restarts and stays inactive – useful to store passwords and Wi-Fi credentials before the wiring is finished.</div>
+<div class="caution"><b>Caution</b>Saving the hardware configuration is blocked while a test, plan or
+recording is running or a firmware update is in progress. Stop the test and wait until the recording has
+finished first.</div>
+</only>
+
+<h3>Connecting to your home Wi-Fi (optional)</h3>
+<p>EBCTester works completely without home Wi-Fi. Connecting it to your network is still useful: you can reach
+it from every device in the house, the clock is synchronised from the Internet (needed for correct date/time
+stamps and for update checks) and optional services such as MariaDB and MQTT become possible.</p>
+<ol class="steps">
+  <li>Go to <span class="ui">Administration → Settings → Configure Wi-Fi</span>.</li>
+  <li>Enter the network name (SSID) and password and click <span class="ui">Save</span>. Confirm with the login password when asked.</li>
+  <li>The device connects; its new IP address is shown under <span class="ui">Device information → Wi-Fi IP</span>. Your router also lists it.</li>
+</ol>
+<p>The protected access point remains active as a fallback, so you can always reach the device at
+<code>http://192.168.4.1</code>, even when the home network is out of range. Changing the Wi-Fi channel may
+briefly interrupt the access-point connection.</p>
+<only maker><div class="note"><b>Note</b>While the configuration is inactive, the device runs the access point
+only. Wi-Fi credentials can already be saved; the device connects to your network after the configuration
+has been activated.</div></only>
+
+<h3>Selecting the tester model</h3>
+<p>Before the first connection you must tell EBCTester which tester you use – there is no default. Go to
+<span class="ui">Administration → Settings → EBC tester</span>, select the model and click
+<span class="ui">Save tester model</span>.</p>
+<figure class="w80">
+  <img src="../images/manual/settings-tester.png" alt="Selecting the tester model">
+  <figcaption>Selecting the tester model</figcaption>
+</figure>
+<p>The selected model and its limits apply immediately, even without a connected tester, so you can prepare
+plans and parameters in advance. The model can only be changed while no operation, plan or recording is
+active. If the connected tester reports a different supported model, EBCTester shows an error, disconnects and
+does not reconnect automatically until you correct the selection or click <span class="ui">Connect</span> again.</p>
+
+<h3>LEDs</h3>
+<only factory>
+<table>
+  <thead><tr><th>LED</th><th>Display</th><th>Meaning</th></tr></thead>
+  <tbody>
+  <tr><td class="k">D6 – power</td><td>green, steady</td><td>The 3.3 V supply is OK. If D6 stays dark, check the 19 V or USB supply.</td></tr>
+  <tr><td class="k" rowspan="5">LED1 – status</td><td>slow colour cycle</td><td>Normal operation</td></tr>
+  <tr><td>blue, pulsing</td><td>Firmware update is being downloaded</td></tr>
+  <tr><td>yellow, pulsing</td><td>Downloaded firmware is being verified</td></tr>
+  <tr><td>green, steady</td><td>Update verified, device is about to restart</td></tr>
+  <tr><td>red, blinking</td><td>Firmware update failed</td></tr>
+  <tr><td class="k">LED2</td><td>off</td><td>Not used by firmware 1.99.3 (reserved for a tester activity indicator)</td></tr>
+  </tbody>
+</table>
+<p>The header of the web interface shows the communication with the tester (see
+<a href="#ref:The web interface at a glance">The web interface at a glance</a>).</p>
+</only>
+<only maker>
+<p>If a WS2812 status LED is configured and enabled, it shows the device and update state. While the
+configuration is inactive, the LED stays off.</p>
+<table>
+  <thead><tr><th>Display</th><th>Meaning</th></tr></thead>
+  <tbody>
+  <tr><td>off</td><td>No LED configured, LED disabled or configuration inactive</td></tr>
+  <tr><td>slow colour cycle</td><td>Normal operation</td></tr>
+  <tr><td>blue, pulsing</td><td>Firmware update is being downloaded</td></tr>
+  <tr><td>yellow, pulsing</td><td>Downloaded firmware is being verified</td></tr>
+  <tr><td>green, steady</td><td>Update verified, device is about to restart</td></tr>
+  <tr><td>red, blinking</td><td>Firmware update failed</td></tr>
+  </tbody>
+</table>
+</only>
+
+<h3>The web interface at a glance</h3>
+<figure>
+  <img src="../images/manual/header.png" alt="Header bar">
+  <figcaption>Header bar</figcaption>
+</figure>
+<p>The header bar is always visible. From left to right it contains:</p>
+<table>
+  <tbody>
+  <tr><td class="k">Logo</td><td>Returns to the start page.</td></tr>
+  <tr><td class="k">Model</td><td>The selected tester model (for example EBC-A20). It turns into a warning if the connected tester does not match or is unknown.</td></tr>
+  <tr><td class="k">Battery tester / Administration</td><td>Switches between the two sections of the interface. Each section remembers its last open tab.</td></tr>
+  <tr><td class="k">RX indicator</td><td>Green while the tester is connected, with a short flash for every valid message received from the tester. Grey = tester not connected, amber = the browser cannot reach the device.</td></tr>
+  <tr><td class="k">Log out</td><td>Ends the browser session. Hidden when browser login is switched off.</td></tr>
+  <tr><td class="k">Language</td><td>English, Deutsch and any languages loaded from the SD card. The choice is stored in the browser; switching reloads the page (unsaved form entries are lost, a running test is not affected).</td></tr>
+  </tbody>
+</table>
+<table>
+  <thead><tr><th>Section</th><th>Tabs</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Battery tester</td><td>Measurements · Battery · Manual · Automatic · Internal resistance</td></tr>
+  <tr><td class="k">Administration</td><td>Device information · Test run management · SD card · Updates · Settings · Debug (only when enabled)<only maker> · Maker Settings</only></td></tr>
+  </tbody>
+</table>
+<p>Numeric input fields are checked as soon as you leave them. A red message below the field explains the
+allowed range; start and save buttons stay disabled until all fields are valid. When a start button is
+disabled for another reason (for example tester not connected), a yellow note below it tells you why.</p>
+<div class="note"><b>Note</b>The screenshots in this manual were created with simulated example data: an
+EBC-A20 testing a 50 Ah LiFePO4 cell. They show example settings, not recommendations for your battery.</div>

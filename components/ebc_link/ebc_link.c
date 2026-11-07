@@ -14,7 +14,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
-#include "sdkconfig.h"
+#include "ebc_config.h"
 
 #define TESTER_UART UART_NUM_1
 #define DONGLE_UART UART_NUM_2
@@ -40,6 +40,8 @@ static ebc_frame_t last_frame;
 static uint32_t frames_ok;
 static uint32_t frames_bad;
 static int64_t last_rx_us;
+static int64_t last_bad_rx_us;
+static bool last_message_invalid;
 static int64_t last_connect_try_us;
 static uint8_t active_model;
 static bool active_model_valid;
@@ -158,6 +160,8 @@ static void handle_frame(const uint8_t *buffer, int64_t now)
     if (!ebc_frame_parse(buffer, STATUS_FRAME_LENGTH, &frame)) {
         xSemaphoreTake(lock, portMAX_DELAY);
         frames_bad++;
+        last_bad_rx_us = now;
+        last_message_invalid = true;
         xSemaphoreGive(lock);
         return;
     }
@@ -165,6 +169,7 @@ static void handle_frame(const uint8_t *buffer, int64_t now)
     xSemaphoreTake(lock, portMAX_DELAY);
     frames_ok++;
     last_rx_us = now;
+    last_message_invalid = false;
     if (frame.version_known) {
         active_version = frame.firmware_version;
         active_version_known = true;
@@ -300,6 +305,8 @@ static void link_task(void *arg)
                 in_frame = false;
                 xSemaphoreTake(lock, portMAX_DELAY);
                 frames_bad++;
+                last_bad_rx_us = now;
+                last_message_invalid = true;
                 xSemaphoreGive(lock);
                 ESP_LOGW(TAG, "Frame too long; discarded");
                 continue;
@@ -313,6 +320,8 @@ static void link_task(void *arg)
             if (length != STATUS_FRAME_LENGTH) {
                 xSemaphoreTake(lock, portMAX_DELAY);
                 frames_bad++;
+                last_bad_rx_us = now;
+                last_message_invalid = true;
                 xSemaphoreGive(lock);
                 ESP_LOGW(TAG, "Frame length %u is invalid; discarded", (unsigned)length);
                 continue;
@@ -401,6 +410,11 @@ static esp_err_t configure_uart(uart_port_t port, int tx, int rx, int baud)
 
 esp_err_t ebc_link_init(const ebc_link_listener_t *link_listener)
 {
+    const ebc_config_t *cfg = ebc_config_get();
+    if (cfg == NULL || !ebc_config_is_active()) {
+        ESP_LOGW(TAG, "UART initialization refused: device configuration is inactive");
+        return ESP_ERR_INVALID_STATE;
+    }
     if (lock != NULL) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -411,11 +425,11 @@ esp_err_t ebc_link_init(const ebc_link_listener_t *link_listener)
     if (link_listener != NULL) {
         listener = *link_listener;
     }
-    esp_err_t err = configure_uart(TESTER_UART, CONFIG_EBC_TESTER_UART_TX_GPIO,
-                                   CONFIG_EBC_TESTER_UART_RX_GPIO, CONFIG_EBC_TESTER_UART_BAUD);
+    esp_err_t err = configure_uart(TESTER_UART, cfg->tester.tester_uart.tx_gpio,
+                                   cfg->tester.tester_uart.rx_gpio, cfg->tester.tester_uart.baud);
     if (err == ESP_OK) {
-        err = configure_uart(DONGLE_UART, CONFIG_EBC_DONGLE_UART_TX_GPIO, CONFIG_EBC_DONGLE_UART_RX_GPIO,
-                             CONFIG_EBC_DONGLE_UART_BAUD);
+        err = configure_uart(DONGLE_UART, cfg->tester.dongle_uart.tx_gpio, cfg->tester.dongle_uart.rx_gpio,
+                             cfg->tester.dongle_uart.baud);
     }
     if (err != ESP_OK) {
         return err;
@@ -433,6 +447,8 @@ esp_err_t ebc_link_init(const ebc_link_listener_t *link_listener)
 void ebc_link_get_status(ebc_link_status_t *status)
 {
     memset(status, 0, sizeof(*status));
+    status->last_frame_age_ms = UINT32_MAX;
+    status->last_invalid_frame_age_ms = UINT32_MAX;
     if (lock == NULL) {
         return;
     }
@@ -458,6 +474,8 @@ void ebc_link_get_status(ebc_link_status_t *status)
     status->frames_ok = frames_ok;
     status->frames_bad = frames_bad;
     status->last_frame_age_ms = last_rx_us > 0 ? (uint32_t)((now - last_rx_us) / 1000) : UINT32_MAX;
+    status->last_invalid_frame_age_ms = last_bad_rx_us > 0 ? (uint32_t)((now - last_bad_rx_us) / 1000) : UINT32_MAX;
+    status->last_message_invalid = last_message_invalid;
     xSemaphoreGive(lock);
 }
 

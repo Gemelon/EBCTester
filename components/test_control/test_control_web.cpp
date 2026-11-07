@@ -368,6 +368,7 @@ esp_err_t battery_handler(httpd_req_t *req)
     }
     const std::string action = get_string(root, "action");
     const std::string label = get_string(root, "label");
+    const std::string previous_label = get_string(root, "previousLabel");
     test_store::Battery battery;
     const cJSON *data = cJSON_GetObjectItemCaseSensitive(root, "battery");
     if (cJSON_IsObject(data)) {
@@ -414,6 +415,15 @@ esp_err_t battery_handler(httpd_req_t *req)
     if (action == "save_db") {
         if (battery.label.empty()) {
             return send_text(req, "400 Bad Request", "A label is required for the database.");
+        }
+        if (!valid_text(previous_label, 64)) {
+            return send_text(req, "400 Bad Request", "Invalid previous battery label.");
+        }
+        if (!previous_label.empty()) {
+            const std::string rename_error = rename_battery(previous_label, battery.label);
+            if (!rename_error.empty()) {
+                return send_result(req, rename_error, "Battery renamed.");
+            }
         }
         if (test_store::save_battery(battery) != ESP_OK) {
             return send_text(req, "503 Service Unavailable", "Could not save to SD database.");

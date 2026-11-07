@@ -9,6 +9,7 @@
 
 #include "ebc_link.h"
 #include "ebc_model.h"
+#include "ebc_config.h"
 
 #define ESP_LOGI(...) ((void)0)
 #define ESP_LOGW(...) ((void)0)
@@ -24,12 +25,10 @@
 #define UART_HW_FLOWCTRL_DISABLE 0
 #define UART_SCLK_DEFAULT 0
 #define UART_PIN_NO_CHANGE -1
-#define CONFIG_EBC_TESTER_UART_TX_GPIO 1
-#define CONFIG_EBC_TESTER_UART_RX_GPIO 2
-#define CONFIG_EBC_TESTER_UART_BAUD 9600
-#define CONFIG_EBC_DONGLE_UART_TX_GPIO 3
-#define CONFIG_EBC_DONGLE_UART_RX_GPIO 4
-#define CONFIG_EBC_DONGLE_UART_BAUD 9600
+static ebc_config_t mock_config;
+static bool mock_config_active = true;
+const ebc_config_t *ebc_config_get(void) { return &mock_config; }
+bool ebc_config_is_active(void) { return mock_config_active; }
 
 typedef int uart_port_t;
 typedef void *SemaphoreHandle_t;
@@ -299,6 +298,12 @@ int main(void)
     test_real_status_frames();
     test_checksum_variants();
     const ebc_link_listener_t callbacks = {received_frame, connection_lost, tick, NULL};
+    mock_config.tester.tester_uart = (ebc_uart_config_t){17, 18, 9600};
+    mock_config.tester.dongle_uart = (ebc_uart_config_t){8, 9, 9600};
+    mock_config_active = false;
+    assert(ebc_link_init(&callbacks) == ESP_ERR_INVALID_STATE && lock == NULL);
+    assert(status().last_frame_age_ms == UINT32_MAX && status().last_invalid_frame_age_ms == UINT32_MAX);
+    mock_config_active = true;
     assert(ebc_link_init(&callbacks) == ESP_OK);
     assert(ebc_link_connect() == ESP_ERR_INVALID_STATE);
     receive(0x09, 0, true);
@@ -323,8 +328,10 @@ int main(void)
     assert(ebc_link_connect() == ESP_OK && sent_command == EBC_CMD_CONNECT);
     receive(0x10, 0, false);
     assert(!status().connected && !status().model_mismatch && frame_count == 0);
+    assert(status().last_message_invalid);
     receive(0x09, 0, true);
     assert(status().connected && status().has_frame && frame_count == 1);
+    assert(!status().last_message_invalid);
     assert(ebc_link_queue_command(EBC_CMD_CHARGE_CV, 50, 345, 10) == ESP_OK);
     receive(0x09, 0, true);
     assert(sent_command == EBC_CMD_CHARGE_CV && frame_count == 2);

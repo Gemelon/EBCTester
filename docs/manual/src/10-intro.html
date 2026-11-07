@@ -1,0 +1,154 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+<section class="part-page">
+  <h1 class="part-title">Part I – Operating Manual</h1>
+  <only factory><p>This part explains how to set up and use an EBCTester with the original board:
+    connecting the tester, logging in, entering batteries, running manual tests, test plans and
+    internal-resistance measurements, and reviewing and managing the recorded data. No programming or
+    electronics knowledge is needed – the device is ready to use as delivered.</p></only>
+  <only maker><p>This part explains how to bring a self-built EBCTester into operation and use it from
+    day to day: wiring requirements, installing the firmware, configuring the hardware in
+    Maker Settings, activating the configuration, and then running tests and managing the recorded
+    data.</p></only>
+</section>
+
+<h2 class="chapter">Introduction</h2>
+
+<h3>What EBCTester does</h3>
+<p>ZKE (ZKETECH) EBC battery testers are popular, affordable instruments for charging and discharging
+batteries with constant current, constant power or constant voltage and for measuring capacity.
+Normally they are controlled by the manufacturer's Windows software, which means a PC has to stay
+connected for the whole test – often for days.</p>
+<p><b>EBCTester replaces that PC.</b> A small controller with an ESP32-S3 microcontroller is connected to
+the tester's serial interface. It controls the tester, runs complete test plans on its own and records
+every measurement in a database on a microSD card. You operate it with any web browser – from a phone,
+a tablet or a PC – either through your home Wi-Fi or through the device's own Wi-Fi access point.
+You can close the browser at any time: the test continues and keeps being recorded.</p>
+
+<figure class="w80">
+<svg viewBox="0 0 620 210" xmlns="http://www.w3.org/2000/svg" font-family="Inter, DejaVu Sans, sans-serif" font-size="10">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1e4d3a"/></marker></defs>
+  <rect x="10" y="78" width="88" height="50" rx="6" fill="#fdf6e3" stroke="#d39b1c"/>
+  <text x="54" y="99" text-anchor="middle" font-weight="700">Battery</text>
+  <text x="54" y="114" text-anchor="middle" fill="#4f5e56">cell or pack</text>
+  <rect x="140" y="70" width="120" height="66" rx="6" fill="#eaf3fb" stroke="#3a7dc0"/>
+  <text x="200" y="92" text-anchor="middle" font-weight="700">ZKE EBC tester</text>
+  <text x="200" y="107" text-anchor="middle" fill="#4f5e56">A20 / A40L / A50L</text>
+  <text x="200" y="122" text-anchor="middle" fill="#4f5e56">charge · discharge</text>
+  <rect x="306" y="56" width="138" height="94" rx="6" fill="#eaf6ef" stroke="#2d7a57" stroke-width="1.5"/>
+  <text x="375" y="76" text-anchor="middle" font-weight="700"><only factory>EBCTester board</only><only maker>EBCTester (own build)</only></text>
+  <text x="375" y="91" text-anchor="middle" fill="#4f5e56">ESP32-S3</text>
+  <text x="375" y="106" text-anchor="middle" fill="#4f5e56">test plans · recording</text>
+  <text x="375" y="121" text-anchor="middle" fill="#4f5e56">web server</text>
+  <rect x="331" y="128" width="88" height="15" rx="4" fill="#fff" stroke="#2d7a57"/>
+  <text x="375" y="139" text-anchor="middle" font-size="9">microSD (SQLite)</text>
+  <rect x="496" y="12" width="114" height="44" rx="6" fill="#fff" stroke="#1e4d3a"/>
+  <text x="553" y="31" text-anchor="middle" font-weight="700">Phone / PC</text>
+  <text x="553" y="46" text-anchor="middle" fill="#4f5e56">web browser</text>
+  <rect x="496" y="86" width="114" height="34" rx="6" fill="#fff" stroke="#8a978f" stroke-dasharray="4 3"/>
+  <text x="553" y="107" text-anchor="middle" fill="#4f5e56">MariaDB (optional)</text>
+  <rect x="496" y="150" width="114" height="34" rx="6" fill="#fff" stroke="#8a978f" stroke-dasharray="4 3"/>
+  <text x="553" y="171" text-anchor="middle" fill="#4f5e56">Home Assistant (optional)</text>
+  <line x1="140" y1="103" x2="100" y2="103" stroke="#1e4d3a" stroke-width="1.4" marker-end="url(#ar)" marker-start="url(#ar)"/>
+  <text x="120" y="96" text-anchor="middle" font-size="8.5" fill="#4f5e56">power</text>
+  <line x1="262" y1="103" x2="304" y2="103" stroke="#1e4d3a" stroke-width="1.4" marker-end="url(#ar)" marker-start="url(#ar)"/>
+  <text x="283" y="96" text-anchor="middle" font-size="8.5" fill="#4f5e56">UART</text>
+  <text x="283" y="117" text-anchor="middle" font-size="8.5" fill="#4f5e56">5 V TTL</text>
+  <line x1="446" y1="78" x2="494" y2="40" stroke="#1e4d3a" stroke-width="1.4" marker-end="url(#ar)" marker-start="url(#ar)"/>
+  <text x="458" y="52" font-size="8.5" fill="#4f5e56">Wi-Fi</text>
+  <line x1="446" y1="103" x2="494" y2="103" stroke="#8a978f" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+  <line x1="446" y1="128" x2="494" y2="165" stroke="#8a978f" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+  <text x="310" y="200" text-anchor="middle" font-size="8.5" fill="#6b7a72">Solid lines: required. Dashed: optional network services.</text>
+</svg>
+<figcaption>System overview</figcaption>
+</figure>
+
+<h3>Main features</h3>
+<ul>
+  <li><b>No PC needed during a test.</b> Manual operations and automatic test plans run on the ESP32-S3.</li>
+  <li><b>Offline recording.</b> All measurements go into an SQLite database on a FAT32 microSD card. Recording needs a ready SD card, not an Internet connection.</li>
+  <li><b>Browser interface.</b> Charts, battery records, test control and administration. Everything, including the chart library, is served by the device itself; no cloud service and no Internet access are required.</li>
+  <li><b>Test plans</b> with up to 10 steps: constant-current discharge, constant-power discharge, CC/CV charge, wait and repeat.</li>
+  <li><b>Internal resistance (DCIR)</b> by a load-pulse test with three separate results (by default after 1, 5 and 10 seconds), optionally with automatic preparation to a target state of charge.</li>
+  <li><b>Test-run management:</b> search, filter, rename and delete recorded runs.</li>
+  <li><b>Optional</b> backup to a MariaDB server (for example on a NAS), Home Assistant integration via MQTT and a live debug log.</li>
+  <li><b>Manual firmware updates</b> over Wi-Fi: new versions are announced, but only installed after you confirm.</li>
+  <li><b>Languages:</b> English and German built in; additional languages can be loaded from the SD card.</li>
+  <only maker><li><b>Maker Settings:</b> all hardware-related settings (UART and SD pins, LED, network and update defaults) are configured in the browser and stored on the device – no rebuild of the firmware is needed for your own wiring.</li></only>
+</ul>
+
+<h3>Factory and Maker devices</h3>
+<p>The same firmware runs on the original EBCTester board and on self-built devices. At the very first
+start it decides which of two modes applies, based on the level of GPIO 47:</p>
+<table>
+  <thead><tr><th>Mode</th><th>Detected when</th><th>Behaviour</th></tr></thead>
+  <tbody>
+  <tr><td class="k"><span class="badge factory">FactoryMode</span></td><td>GPIO 47 is pulled high (original board: solder jumper JP1 closed to 3.3 V, as delivered)</td>
+      <td>Starts immediately with the pin assignment of the original board. All functions are available at once.</td></tr>
+  <tr><td class="k"><span class="badge maker">MakerMode</span></td><td>GPIO 47 is low or not connected</td>
+      <td>Starts with all hardware outputs switched off. Only the Wi-Fi access point and the web interface run until the maker has entered and activated the hardware configuration in <span class="ui">Maker Settings</span>.</td></tr>
+  </tbody>
+</table>
+<only factory><p>This manual describes the <b>Factory Edition</b>. If you have built your own device, use the
+<b>Maker Edition</b> of this manual instead – it also covers the configuration of your hardware and contains a
+detailed technical reference.</p></only>
+<only maker><p>This manual describes the <b>Maker Edition</b>. Owners of an original EBCTester board in its
+delivered state use the Factory Edition. The operation of the battery-tester functions is identical in both
+editions; the Maker Edition additionally covers the hardware configuration and contains the detailed
+technical reference.</p></only>
+<p>The mode is detected only once and then stored. It is detected again only after the device
+configuration has been reset (see <a href="#ref:Device reset">Device reset</a>).</p>
+
+<h3>Supported testers</h3>
+<p>The firmware recognises a range of ZKE models by the identifier in their status messages. Only the models
+marked "enabled" can be controlled; all others are shown as read-only telemetry until their operation has
+been confirmed.</p>
+<table>
+  <thead><tr><th>Model</th><th>Max. charge</th><th>Max. discharge</th><th>Max. power</th><th>Status</th></tr></thead>
+  <tbody>
+  <tr><td>EBC-A20</td><td>18 V / 5 A</td><td>30 V / 20 A</td><td>85 W</td><td>enabled</td></tr>
+  <tr><td>EBC-A40L</td><td>5 V / 40 A</td><td>5 V / 40 A</td><td>200 W</td><td>enabled</td></tr>
+  <tr><td>EBC-A50L</td><td>5 V / 50 A</td><td>5 V / 50 A</td><td>250 W</td><td>enabled</td></tr>
+  <tr><td>EBC-A05(+), EBC-A10(+/H), EBC-A20+, EBD-M10, EBD-A10H, EBD-M03(+), EBD-M05, EBD-A100(L), EBC-A100L</td><td colspan="3">recognised</td><td>read-only</td></tr>
+  </tbody>
+</table>
+<p>These limits are enforced for every manual command, every plan step and every internal-resistance
+parameter. The A40L and A50L are low-voltage testers (max. 5 V): use them only with single lithium cells and
+settings that suit the cell. EBCTester has no battery-chemistry selection – the values you enter must be
+right for your battery.</p>
+<div class="note"><b>Note</b>If you own one of the read-only models and can test it with EBCTester, please
+share your results via the GitHub project so the model can be enabled.</div>
+
+<h3>What you need</h3>
+<ul>
+<only factory>
+  <li>An EBCTester board with installed firmware (as delivered).</li>
+  <li>A supported ZKE tester and a cable from the board's 6-pin connector J4 to the tester's serial (TTL) port.</li>
+  <li>Power: the 19 V supply of the EBC-A20 (through J4) or a USB-C power supply.</li>
+  <li>A 2.4 GHz antenna (the ESP32-S3-WROOM-1U module has no on-board antenna).</li>
+</only>
+<only maker>
+  <li>An ESP32-S3 module or board with <b>16 MB flash</b> (for example ESP32-S3-WROOM-1(U)-N16R8 or an ESP32-S3-DevKitC-1 N16R8). The partition table does not fit smaller flash sizes.</li>
+  <li>A bidirectional <b>3.3 V ↔ 5 V level shifter</b> for the tester UART (the tester uses 5 V TTL; ESP32 pins are not 5 V tolerant).</li>
+  <li>A microSD socket wired for 4-bit SDMMC or SPI, with 10 kΩ pull-ups on the data and command lines.</li>
+  <li>Optionally a WS2812 RGB LED as status indicator.</li>
+  <li>A supported ZKE tester, a suitable cable and a 5 V or USB supply for the ESP32.</li>
+  <li>A PC with a USB cable for the first installation of the firmware.</li>
+</only>
+  <li>A microSD card formatted as FAT32 (exFAT is not supported). 4–32 GB is ideal.</li>
+  <only factory><li>A CR2032 coin cell for the real-time clock (optional).</li></only>
+  <li>A phone, tablet or computer with a current web browser.</li>
+</ul>
+
+<h3>Safety information</h3>
+<div class="warning"><b>Warning</b>Batteries store a lot of energy. Wrong settings, damaged cells or poor
+connections can cause overheating, fire or explosion. Lithium batteries in particular must never be charged
+above their maximum voltage or discharged below their minimum voltage.</div>
+<ul>
+  <li>Enter charge voltages, currents and cut-off values that match the battery's data sheet. EBCTester only checks the limits of the tester, not those of your battery.</li>
+  <li>The software does not replace hardware protection (BMS, fuse, temperature monitoring). Long tests are not automatically safe to leave unattended.</li>
+  <li>If the serial connection is lost, EBCTester cannot guarantee that the tester stops. Check the tester locally after any connection error.</li>
+  <li>Use cables and connectors rated for the test current, and keep the test setup on a non-flammable surface.</li>
+  <li>The web interface uses unencrypted HTTP. Use it only in your own trusted network or through the device's protected access point – never expose it to the Internet.</li>
+  <only maker><li>Wrong pin assignments can damage your hardware, for example when an output is configured on a pin that is driven by another circuit. Check every GPIO in Maker Settings against your wiring before activating the configuration.</li></only>
+</ul>
