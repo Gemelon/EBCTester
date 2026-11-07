@@ -3,6 +3,9 @@
 
 # Changelog
 
+> **V2 development branch:** This is a preliminary, evolving version and is
+> not suitable for production use. Use the latest V1 release for production.
+
 ## [1.99.17] – 2026-11-07
 
 ### Changed
