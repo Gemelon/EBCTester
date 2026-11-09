@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "driver/gpio.h"
 #include "bootloader_random.h"
@@ -39,6 +40,9 @@ static void load_defaults(ebc_config_t *cfg)
     memset(cfg, 0, sizeof(*cfg));
     cfg->ota.session_days = 1;
     cfg->ota.login_enabled = 1;
+    cfg->rtc.int_gpio = CONFIG_EBCTESTER_RTC_INT_GPIO;
+    cfg->rtc.sda_gpio = CONFIG_EBCTESTER_I2C_SDA_GPIO;
+    cfg->rtc.scl_gpio = CONFIG_EBCTESTER_I2C_SCL_GPIO;
     cfg->tester.tester_uart = (ebc_uart_config_t){
         CONFIG_EBC_TESTER_UART_TX_GPIO, CONFIG_EBC_TESTER_UART_RX_GPIO, CONFIG_EBC_TESTER_UART_BAUD};
     cfg->tester.dongle_uart = (ebc_uart_config_t){
@@ -177,6 +181,7 @@ esp_err_t ebc_config_validate(const ebc_config_t *cfg, bool active)
         cfg->ota.led_gpio, cfg->sd.card_detect_gpio, cfg->sd.clk_gpio, cfg->sd.cmd_gpio,
         cfg->sd.d0_gpio, cfg->sd.d1_gpio, cfg->sd.d2_gpio, cfg->sd.d3_gpio,
         cfg->sd.spi_miso_gpio, cfg->sd.spi_mosi_gpio, cfg->sd.spi_cs_gpio, cfg->sd.spi_clk_gpio,
+        cfg->rtc.int_gpio, cfg->rtc.sda_gpio, cfg->rtc.scl_gpio,
     };
     for (size_t i = 0; i < sizeof(pins); ++i) {
         if (pins[i] != -1 && !GPIO_IS_VALID_GPIO(pins[i])) {
@@ -197,7 +202,7 @@ esp_err_t ebc_config_validate(const ebc_config_t *cfg, bool active)
         cfg->sd.sdmmc_freq_khz < 400 || cfg->sd.sdmmc_freq_khz > 20000 ||
         cfg->sd.spi_freq_khz < 400 || cfg->sd.spi_freq_khz > 20000 ||
         (cfg->sd.bus != SD_BUS_SDMMC_4BIT && cfg->sd.bus != SD_BUS_SPI) ||
-        cfg->tester.mqtt_enabled > 1 || cfg->ota.allow_http > 1 ||
+        cfg->rtc.enabled > 1 || cfg->tester.mqtt_enabled > 1 || cfg->ota.allow_http > 1 ||
         cfg->ota.status_led_enabled > 1 || cfg->ota.settings_require_password > 1 ||
         cfg->ota.sd_languages > 1 || cfg->ota.login_enabled > 1 ||
         (cfg->ota.session_days != 1 && cfg->ota.session_days != 7) ||
@@ -224,14 +229,18 @@ esp_err_t ebc_config_validate(const ebc_config_t *cfg, bool active)
         cfg->sd.bus == SD_BUS_SPI ? -1 : cfg->sd.d3_gpio,
         cfg->ota.status_led_enabled ? cfg->ota.led_gpio : -1,
         cfg->sd.card_detect_gpio,
+        cfg->rtc.enabled ? cfg->rtc.sda_gpio : -1,
+        cfg->rtc.enabled ? cfg->rtc.scl_gpio : -1,
+        cfg->rtc.enabled ? cfg->rtc.int_gpio : -1,
     };
     for (size_t i = 0; i < sizeof(required); ++i) {
         const int pin = required[i];
         const bool optional = (cfg->sd.bus == SD_BUS_SPI && (i == 8 || i == 9)) ||
-                              (i == 10 && !cfg->ota.status_led_enabled) || i == 11;
+                              (i == 10 && !cfg->ota.status_led_enabled) || i == 11 ||
+                              (i >= 12 && !cfg->rtc.enabled) || i == 14;
         if (pin == -1 && optional) continue;
         if (!GPIO_IS_VALID_GPIO(pin) ||
-            (i != 1 && i != 3 && i != 11 && !(i == 4 && cfg->sd.bus == SD_BUS_SPI) &&
+            (i != 1 && i != 3 && i != 11 && i != 14 && !(i == 4 && cfg->sd.bus == SD_BUS_SPI) &&
              !GPIO_IS_VALID_OUTPUT_GPIO(pin)) ||
             (pin >= 26 && pin <= 37) || pin == 19 || pin == 20 || pin == 43 || pin == 44) {
             ESP_LOGW(TAG, "Required GPIO %d is unavailable or reserved on N16R8", pin);
@@ -281,26 +290,60 @@ static ebc_io47_state_t detect_io47(void)
 
 static esp_err_t persist(const ebc_config_t *cfg, bool active)
 {
-    ebc_config_blob_t blob = {0};
-    blob.magic = EBC_CONFIG_MAGIC;
-    blob.version = EBC_CONFIG_VERSION;
-    blob.length = sizeof(blob.payload);
-    memcpy(&blob.payload, cfg, sizeof(*cfg));
-    blob.crc = esp_crc32_le(0, (const uint8_t *)&blob.payload, sizeof(blob.payload));
+    ebc_config_blob_t *blob = calloc(1, sizeof(*blob));
+    if (blob == NULL) {
+        ESP_LOGE(TAG, "Cannot allocate configuration for writing");
+        return ESP_ERR_NO_MEM;
+    }
+    blob->magic = EBC_CONFIG_MAGIC;
+    blob->version = EBC_CONFIG_VERSION;
+    blob->length = sizeof(blob->payload);
+    memcpy(&blob->payload, cfg, sizeof(*cfg));
+    blob->crc = esp_crc32_le(0, (const uint8_t *)&blob->payload, sizeof(blob->payload));
     nvs_handle_t handle;
     esp_err_t err = nvs_open(NAMESPACE, NVS_READWRITE, &handle);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Cannot open configuration for writing: %s", esp_err_to_name(err));
+        memset(blob, 0, sizeof(*blob));
+        free(blob);
         return err;
     }
-    err = nvs_set_blob(handle, "config", &blob, sizeof(blob));
+    err = nvs_set_blob(handle, "config", blob, sizeof(*blob));
     if (err == ESP_OK) err = nvs_set_u8(handle, "FirmwareMode", firmware_mode);
     if (err == ESP_OK) err = nvs_set_u8(handle, "ConfigAktive", active ? 1 : 0);
     if (err == ESP_OK) err = nvs_commit(handle);
     nvs_close(handle);
-    memset(&blob, 0, sizeof(blob));
+    memset(blob, 0, sizeof(*blob));
+    free(blob);
     if (err != ESP_OK) ESP_LOGE(TAG, "Cannot commit configuration: %s", esp_err_to_name(err));
     return err;
+}
+
+static bool enforce_factory_rtc(ebc_config_t *cfg)
+{
+    if (firmware_mode != EBC_FW_FACTORY) return false;
+    bool changed = false;
+    if (cfg->rtc.enabled != 1) {
+        cfg->rtc.enabled = 1;
+        changed = true;
+    }
+    if (cfg->rtc.int_gpio != CONFIG_EBCTESTER_RTC_INT_GPIO) {
+        cfg->rtc.int_gpio = CONFIG_EBCTESTER_RTC_INT_GPIO;
+        changed = true;
+    }
+    if (cfg->rtc.sda_gpio != CONFIG_EBCTESTER_I2C_SDA_GPIO) {
+        cfg->rtc.sda_gpio = CONFIG_EBCTESTER_I2C_SDA_GPIO;
+        changed = true;
+    }
+    if (cfg->rtc.scl_gpio != CONFIG_EBCTESTER_I2C_SCL_GPIO) {
+        cfg->rtc.scl_gpio = CONFIG_EBCTESTER_I2C_SCL_GPIO;
+        changed = true;
+    }
+    if (changed) {
+        ESP_LOGI(TAG, "FactoryMode enforces RTC on GPIO%d/%d/%d",
+                 cfg->rtc.int_gpio, cfg->rtc.sda_gpio, cfg->rtc.scl_gpio);
+    }
+    return changed;
 }
 
 static esp_err_t load(bool *valid)
@@ -313,20 +356,36 @@ static esp_err_t load(bool *valid)
         return ESP_OK;
     }
     if (err != ESP_OK) return err;
-    ebc_config_blob_t blob = {0};
-    size_t size = sizeof(blob);
-    err = nvs_get_blob(handle, "config", &blob, &size);
+    ebc_config_blob_t *blob = calloc(1, sizeof(*blob));
+    if (blob == NULL) {
+        nvs_close(handle);
+        ESP_LOGE(TAG, "Cannot allocate configuration for reading");
+        return ESP_ERR_NO_MEM;
+    }
+    bool migrated = false;
+    size_t size = sizeof(*blob);
+    err = nvs_get_blob(handle, "config", blob, &size);
     uint8_t mode = 0, active = 0;
-    if (err == ESP_OK && size == sizeof(blob) && blob.magic == EBC_CONFIG_MAGIC &&
-        blob.length == sizeof(blob.payload)) {
-        if (blob.version != EBC_CONFIG_VERSION) {
-            ESP_LOGI(TAG, "Configuration validation: version mismatch (%u)", blob.version);
-        } else if (blob.crc != esp_crc32_le(0, (const uint8_t *)&blob.payload, sizeof(blob.payload))) {
+    const size_t legacy_length = offsetof(ebc_config_t, rtc);
+    const bool legacy = blob->version == 1 && blob->length == legacy_length &&
+                        size == offsetof(ebc_config_blob_t, payload) + legacy_length;
+    if (err == ESP_OK && blob->magic == EBC_CONFIG_MAGIC &&
+        (legacy || (size == sizeof(*blob) && blob->length == sizeof(blob->payload)))) {
+        if (!legacy && blob->version != EBC_CONFIG_VERSION) {
+            ESP_LOGI(TAG, "Configuration validation: version mismatch (%u)", blob->version);
+        } else if (blob->crc != esp_crc32_le(0, (const uint8_t *)&blob->payload, blob->length)) {
             ESP_LOGI(TAG, "Configuration validation: CRC mismatch");
         } else {
+            if (legacy) {
+                blob->payload.rtc.enabled = 0;
+                blob->payload.rtc.int_gpio = CONFIG_EBCTESTER_RTC_INT_GPIO;
+                blob->payload.rtc.sda_gpio = CONFIG_EBCTESTER_I2C_SDA_GPIO;
+                blob->payload.rtc.scl_gpio = CONFIG_EBCTESTER_I2C_SCL_GPIO;
+                migrated = true;
+            }
             err = nvs_get_u8(handle, "FirmwareMode", &mode);
             if (err == ESP_OK && mode <= EBC_FW_FACTORY &&
-                ebc_config_validate(&blob.payload, false) == ESP_OK) {
+                ebc_config_validate(&blob->payload, false) == ESP_OK) {
                 esp_err_t active_err = nvs_get_u8(handle, "ConfigAktive", &active);
                 if (active_err == ESP_ERR_NVS_NOT_FOUND || active_err == ESP_ERR_NVS_TYPE_MISMATCH ||
                     (active_err == ESP_OK && active > 1)) {
@@ -336,8 +395,9 @@ static esp_err_t load(bool *valid)
                     err = active_err;
                 }
                 if (err == ESP_OK) {
-                    memcpy(&config, &blob.payload, sizeof(config));
+                    memcpy(&config, &blob->payload, sizeof(config));
                     firmware_mode = (ebc_fw_mode_t)mode;
+                    if (enforce_factory_rtc(&config)) migrated = true;
                     config_active = active == 1;
                     if (config_active && ebc_config_validate(&config, true) != ESP_OK) {
                         config_active = false;
@@ -352,7 +412,12 @@ static esp_err_t load(bool *valid)
         ESP_LOGI(TAG, "Configuration validation: new or invalid size/magic");
     }
     nvs_close(handle);
-    memset(&blob, 0, sizeof(blob));
+    memset(blob, 0, sizeof(*blob));
+    free(blob);
+    if (err == ESP_OK && *valid && migrated) {
+        ESP_LOGI(TAG, "Persisting configuration migration or FactoryMode RTC activation");
+        return persist(&config, config_active);
+    }
     if (err == ESP_ERR_NVS_NOT_FOUND || err == ESP_ERR_NVS_INVALID_LENGTH ||
         err == ESP_ERR_NVS_TYPE_MISMATCH) return ESP_OK;
     return err;
@@ -391,6 +456,7 @@ esp_err_t ebc_config_init(void)
             ESP_LOGW(TAG, "IO47 detection failed; selecting MakerMode");
         }
         firmware_mode = state == IO47_HIGH ? EBC_FW_FACTORY : EBC_FW_MAKER;
+        enforce_factory_rtc(&config);
         config_active = firmware_mode == EBC_FW_FACTORY;
         err = ebc_config_validate(&config, config_active);
         if (err == ESP_OK) err = persist(&config, config_active);
@@ -414,12 +480,23 @@ esp_err_t ebc_config_save(const ebc_config_t *cfg)
 esp_err_t ebc_config_save_with_active(const ebc_config_t *cfg, bool active)
 {
     if (!initialized) return ESP_ERR_INVALID_STATE;
-    esp_err_t err = ebc_config_validate(cfg, active);
-    if (err == ESP_OK) err = persist(cfg, active);
+    esp_err_t err = ebc_config_validate(cfg, false);
+    if (err != ESP_OK) return err;
+    ebc_config_t *next = malloc(sizeof(*next));
+    if (next == NULL) {
+        ESP_LOGE(TAG, "Cannot allocate configuration for saving");
+        return ESP_ERR_NO_MEM;
+    }
+    memcpy(next, cfg, sizeof(*next));
+    enforce_factory_rtc(next);
+    err = ebc_config_validate(next, active);
+    if (err == ESP_OK) err = persist(next, active);
     if (err == ESP_OK) {
-        memcpy(&config, cfg, sizeof(config));
+        memcpy(&config, next, sizeof(config));
         config_active = active;
     }
+    memset(next, 0, sizeof(*next));
+    free(next);
     return err;
 }
 

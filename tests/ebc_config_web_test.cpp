@@ -108,7 +108,7 @@ static std::string request_body()
 {
     Json root(cJSON_CreateObject(), cJSON_Delete);
     cJSON_AddBoolToObject(root.get(), "active", true);
-    for (const char *section : {"tester", "ota", "sd"}) cJSON_AddObjectToObject(root.get(), section);
+    for (const char *section : {"tester", "ota", "sd", "rtc"}) cJSON_AddObjectToObject(root.get(), section);
     for (const Field &field : fields) {
         cJSON *section = cJSON_GetObjectItemCaseSensitive(root.get(), field.section);
         if (field.type == Type::String || field.type == Type::Password) {
@@ -145,6 +145,9 @@ int main()
     mock_config.sd.sdmmc_freq_khz = mock_config.sd.spi_freq_khz = 10000;
     mock_config.tester.tester_uart.baud = mock_config.tester.dongle_uart.baud = 9600;
     mock_config.tester.averaging_length = 20;
+    mock_config.rtc.int_gpio = 14;
+    mock_config.rtc.sda_gpio = 15;
+    mock_config.rtc.scl_gpio = 16;
     assert(ebc_config_web_init() == ESP_OK && registered.size() == 1 &&
            registered[0] == "maker-settings");
     assert(ebc_config_web_register_reset() == ESP_OK && registered.size() == 2 &&
@@ -162,6 +165,7 @@ int main()
     get_handler(&req);
     assert(req.status == "200 OK" && req.response.find("private-") == std::string::npos);
     assert(req.response.find("\"configured\":true") != std::string::npos);
+    assert(req.response.find("\"section\":\"rtc\"") != std::string::npos);
     const std::string good = request_body();
     req = request(good);
     save_handler(&req);

@@ -3,9 +3,7 @@
 
 # EBCTester
 
-> **Warning:** EBCTester V2 is a preliminary development version and is not
-> suitable for production use. Features may change, and validation is
-> incomplete. Use the latest V1 release for production.
+> EBCTester V2 is the current stable release line.
 
 <p align="center">
   <img src="docs/images/readme-logo.png" alt="EBCTester logo" width="720">
@@ -26,8 +24,8 @@ Wi-Fi network.
 - [User Manual – Maker Edition (PDF)](docs/EBCTester_Manual_Maker_EN.pdf):
   self-built devices, Maker Settings and the detailed technical reference.
 
-Both manuals are in English. Translations follow once the firmware has reached a
-stable release, or on request. Sources: [docs/manual](docs/manual/README.md).
+Both manuals are in English. Translations are available on request. Sources:
+[docs/manual](docs/manual/README.md).
 
 See [CHANGELOG.md](CHANGELOG.md) for user-visible changes by firmware version.
 
@@ -472,11 +470,52 @@ with peripherals disabled. A valid saved configuration bypasses GPIO47.
 
 **Maker Settings** is available only in MakerMode; the existing **Settings**
 tab remains available in both modes. Configure UARTs, SD bus/pins, networking,
-OTA, LED, recording and MQTT defaults here, enable **ConfigAktive**, and save.
+OTA, LED, recording, optional RTC and MQTT defaults here, enable **ConfigAktive**, and save.
 The device restarts before enabling the hardware. While inactive, only the AP
 and web interface run: no tester/dongle UART, SD, LED, station Wi-Fi, SNTP,
-update checking, recorder, or MQTT starts. Flash/PSRAM and the SDK console
+update checking, RTC, recorder, or MQTT starts. Flash/PSRAM and the SDK console
 are outside this application-peripheral guarantee.
+
+### Optional DS3231 clock
+
+The RTC is **always enabled in FactoryMode**, including existing installations
+after an update. FactoryMode also enforces the original-board RTC pin mapping
+INT/SDA/SCL = GPIO14/GPIO15/GPIO16. Normal users do not need access to Maker
+Settings.
+In **MakerMode**, it is **disabled by default**; use
+**Maker Settings → Real-time clock** to enable it and configure the I2C pins
+before saving and restarting.
+SDK and original-board defaults are **RTC INT GPIO14, SDA GPIO15, SCL GPIO16**.
+INT is a reserved input (or `-1` when disconnected); alarms and wakeup are not
+implemented. Use external I2C pull-ups to 3.3 V (the original board has them).
+GPIO conflicts with enabled peripherals are rejected.
+
+With RTC enabled, startup reads a valid RTC immediately, then a successful
+NTP response synchronizes device time and the RTC. NTP synchronization repeats
+every **six hours**. Without a new NTP response, device time is refreshed from
+the RTC every six hours. A stopped oscillator, invalid calendar, or missing RTC
+is logged and never replaces device time with an invented timestamp.
+NTP remains usable even when RTC hardware is missing.
+
+RTC and device time use **UTC**. When RTC is enabled or synchronized time is
+available, the header shows time above date immediately beside **EBC RX**.
+Display conversion uses the browser's current time zone, including daylight
+saving time, not the browser's clock. Unavailable or stale device time is shown
+as placeholders. With RTC disabled, existing NTP behavior is unchanged.
+Configuration upgrades preserve existing settings: FactoryMode enables RTC,
+while MakerMode preserves its saved selection (off when migrating from v1).
+An inactive configuration still disables all peripherals, including RTC.
+
+If an enabled RTC is physically missing, bounded I2C failures are logged and
+NTP continues to provide device time. UI, recording and other services remain
+available; RTC operations retry on subsequent synchronization attempts.
+Without either NTP or a valid RTC, calendar time stays unavailable and recording
+continues using the existing uptime-based behavior.
+
+Hardware validation on the original PCB is pending; no hardware is flashed or
+battery test started by the host checks.
+
+### Connecting to the device
 
 1. Start the device using the setup AP password configured for the firmware.
    The standard project default is `ebctester`; change it before deployment.

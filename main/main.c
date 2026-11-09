@@ -24,6 +24,8 @@
 #include <string.h>
 #include "ha_mqtt.h"
 #include "ha_mqtt_web.h"
+#include "rtc_clock.h"
+#include "ds3231_time.h"
 
 static const char *TAG = "app_main";
 static ebc_config_t boot_config;
@@ -57,6 +59,8 @@ static void configure_services(bool active)
         .ap_password = cfg->ota.ap_password,
         .sntp_server = cfg->ota.sntp_server,
         .ap_only = !active,
+        .time_synced = rtc_clock_ntp_synced,
+        .sntp_sync_interval_ms = active && cfg->rtc.enabled ? RTC_SYNC_INTERVAL_MS : 0,
     };
     const ota_runtime_config_t ota = {
         .manifest_url = cfg->ota.manifest_url,
@@ -79,6 +83,7 @@ static void configure_services(bool active)
         .session_days = cfg->ota.session_days,
         .login_enabled = cfg->ota.login_enabled,
         .save_login = save_login,
+        .get_clock_utc = rtc_clock_get_utc,
     };
     sd_card_manager_config_t sd = {
         .spi = cfg->sd.bus == SD_BUS_SPI,
@@ -115,6 +120,10 @@ void app_main(void)
     ESP_ERROR_CHECK(debug_log_web_init());
     ESP_ERROR_CHECK(ebc_config_web_init());
     ESP_ERROR_CHECK(led_settings_init());
+    const esp_err_t rtc_err = rtc_clock_start();
+    if (rtc_err != ESP_OK) {
+        ESP_LOGE(TAG, "Cannot start RTC service: %s; network time remains available", esp_err_to_name(rtc_err));
+    }
     if (active) {
         ESP_ERROR_CHECK(sd_card_manager_init());
         ESP_ERROR_CHECK(battery_database_init());

@@ -170,10 +170,10 @@ validation popups are replaced by accessible feedback below each field.
 
 ### Branch builds and BIN files
 
-Firmware versions use `major.minor.build`. The build number increases across
-minor and major releases instead of resetting to zero; for example, `1.3.60`
-is followed by `1.4.61` for a new minor release. Set `PROJECT_VER` before the
-first release build and retain it for retries until publication succeeds.
+Firmware versions use `major.minor.build`. New versions must always be greater
+than the latest published one (for example, `1.99.21` to `2.0.0`). Set
+`PROJECT_VER` before the first release build and retain it for retries until
+publication succeeds.
 
 Firmware builds default to size optimization (`CONFIG_COMPILER_OPTIMIZATION_SIZE`,
 `-Os`). With the installed Xtensa GCC 15.2.0 toolchain, debug optimization
@@ -346,6 +346,10 @@ same `network` NVS namespace and are not erased. New builds keep the
 
 In menuconfig:
 
+- **EBCTester → DS3231 real-time clock** seeds the optional RTC settings:
+  INT GPIO14, I2C SDA GPIO15, I2C SCL GPIO16. FactoryMode always enables RTC;
+  MakerMode defaults to off and can enable it in Maker Settings.
+  Changes take effect after restart.
 - **EBCTester → Home Assistant MQTT → Enable MQTT component** enables MQTT.
   Broker settings and remote-start permission are configured on the device
   under **Settings → Home Assistant MQTT** after the firmware is installed.
@@ -362,6 +366,72 @@ In menuconfig:
 - **OTA Suite network**: optional AP/admin password (8–63 characters)
   and SNTP server. An empty password setting uses the stored password or
   generates and persists one in NVS. NVS errors never silently erase settings.
+
+### Optional RTC and device clock
+
+The central `ebc_cfg/config` blob version **2** appends `rtc.enabled`,
+`rtc.int_gpio`, `rtc.sda_gpio`, and `rtc.scl_gpio`. Valid version-1 blobs are
+CRC-checked and migrated without resetting credentials, mode, activation,
+or other settings. FactoryMode forces RTC enabled on initial setup, load
+(including existing version-2 configurations), migration and save. FactoryMode
+also enforces original-board RTC pins (INT/SDA/SCL = GPIO14/GPIO15/GPIO16);
+corrected settings are persisted and validated with RTC active.
+MakerMode defaults to off, preserves saved RTC selections and remains off when
+migrating from version 1. The obsolete SDK RTC-enable switch is no longer used;
+the mode determines activation defaults.
+Configuration read/write blobs and save candidates are allocated on the heap,
+not the task stack. The read buffer is freed before persisting a migration to
+avoid overlapping large buffers during startup. Allocation failures are logged
+and returned without resetting NVS; temporary buffers are cleared and released.
+Inactive configurations never initialize the RTC or I2C bus.
+Enabled RTC pins participate in the existing reserved-pin and uniqueness
+validation. SDA/SCL are mandatory output-capable pins; INT is optional and
+reserved as an input, without alarms or deep-sleep wakeup.
+
+`main/rtc_clock.c` owns a 100 kHz ESP-IDF master I2C bus and DS3231 device at
+7-bit address `0x68`. Transfers time out after 100 ms. Register reads use the
+DS3231's buffered time snapshot. Calendar validation covers BCD, 12/24-hour
+format, century, month lengths and leap years; valid UTC starts at 2024-01-01.
+The oscillator-stop flag (OSF) rejects untrusted time and is cleared only after
+writing NTP time. EOSC is cleared to allow battery operation; square-wave and
+alarm interrupt outputs are disabled. External pull-ups to 3.3 V are required.
+
+Startup reads RTC time before application recording/network services start.
+The network manager supplies a nonblocking NTP callback and an optional
+six-hour SNTP interval. The callback only notifies the low-priority RTC task:
+SNTP already sets device time, then the task writes UTC to the RTC. After six
+hours without a new NTP notification, the task reads RTC time into the device
+clock. A pending NTP notification takes priority over an in-flight RTC read.
+I2C failures or invalid RTC time are logged, leave the existing clock intact,
+and do not prevent network/UI/recording startup.
+An enabled but absent RTC therefore falls back to NTP; subsequent scheduled
+operations retry the RTC. Without both sources, UTC remains unavailable and
+the recorder continues its existing uptime-based behavior.
+
+The optional shared-web `get_clock_utc` callback adds `clockEnabled` and
+`clockUtc` (UTC epoch seconds, zero when unavailable) to authenticated
+`GET /api/status`. Header time/date are right of EBC RX. The browser uses
+device UTC plus monotonic elapsed time and its own time zone/daylight-saving
+rules; it never substitutes its own wall clock. After 15 seconds without a
+fresh device status, time/date become placeholders.
+RTC-disabled devices retain their existing SNTP interval and synchronization.
+
+Host-only verification (MSVC developer shell on Windows):
+
+```powershell
+python tests\rtc_clock_test.py
+python tests\ebc_config_test.py
+python tests\ebc_config_web_test.py
+node --test tests\rtc_clock.test.js tests\maker_settings.test.js tests\web_interface.test.js
+```
+
+After building in the ESP-IDF ESP32-S3 environment, run
+`python tests\ebc_config_stack_test.py` to verify that actual compiled
+configuration stack frames stay within 256 bytes. This catches large local
+buffers that native tests with desktop-sized stacks cannot detect.
+
+Original-board RTC, backup-cell retention and six-hour hardware operation
+still require physical validation. The tests never flash or start a battery test.
 
 For initial provisioning, install the partition table and rollback-enabled
 bootloader serially. This project requires a **16 MiB flash** module, such as an
@@ -692,7 +762,8 @@ in mOhm (NULL when invalid), validity, error and onset uncertainty.
 precision; `device_uptime_ms` remains available without synchronized wall time.
 Missing samples have NULL timestamps/loaded values. Without synchronized time,
 UTC is NULL, not an invented calendar timestamp. SNTP supplies UTC when WLAN is
-available; an offline start without a valid clock cannot know calendar time.
+available; the optional DS3231 supplies it offline when enabled and valid.
+An offline start without either valid clock cannot know calendar time.
 
 The battery is linked through `ebc_test_run.battery_id`; the view
 `ebc_resistance_result_view` exposes battery id/label, device, test start and run

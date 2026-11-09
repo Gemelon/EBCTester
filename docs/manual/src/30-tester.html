@@ -54,6 +54,24 @@ restart that follows <span class="ui">Save and restart</span>.</p>
   </tbody>
 </table>
 
+<h3>Real-time clock</h3>
+<table>
+  <thead><tr><th>Field</th><th>Default</th><th>Meaning</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Enable DS3231 RTC</td><td>off in MakerMode</td><td>Optional UTC clock and offline time source. FactoryMode always enables it. Requires active configuration; changes take effect after restart.</td></tr>
+  <tr><td class="k">RTC INT GPIO</td><td>14</td><td>Reserved input; use -1 if disconnected. Alarms and wakeup are not implemented.</td></tr>
+  <tr><td class="k">I2C SDA GPIO</td><td>15</td><td>RTC data pin; required when RTC is enabled.</td></tr>
+  <tr><td class="k">I2C SCL GPIO</td><td>16</td><td>RTC clock pin; required when RTC is enabled. The bus uses 100 kHz and external pull-ups to 3.3 V.</td></tr>
+  </tbody>
+</table>
+<p>At startup, a valid RTC supplies device time until NTP is available. Successful NTP responses update device
+time and RTC every six hours; without NTP, device time is refreshed from the RTC every six hours. Invalid time,
+a stopped oscillator or missing hardware is reported in the log. The header shows time above date beside EBC RX
+using the browser's current time zone, including summer time. Both clocks store UTC. With RTC disabled, existing
+NTP operation is unchanged.</p>
+<p>Missing RTC hardware never blocks normal services. NTP remains available as a fallback; without NTP and
+a valid RTC, calendar time is unavailable and recording uses device uptime.</p>
+
 <h3>Activation and validation</h3>
 <p>The checkbox <span class="ui">Configuration active (ConfigAktive)</span> decides whether the hardware is
 used after the restart. The following checks apply to every save; with ConfigAktive ticked the additional pin
@@ -62,8 +80,8 @@ checks apply:</p>
   <thead><tr><th>Always</th><th>Additionally when active</th></tr></thead>
   <tbody>
   <tr><td>Passwords: AP password empty or 8–63 characters; web password 8–63 printable ASCII characters without leading/trailing spaces</td>
-      <td>Tester and dongle UART pins, the pins of the selected SD bus and – if enabled – the LED pin are set</td></tr>
-  <tr><td>Every GPIO is −1 or a valid ESP32-S3 GPIO</td><td>Output pins are output-capable; RX pins and card detect may be input-only</td></tr>
+      <td>Tester and dongle UART pins, the pins of the selected SD bus and – if enabled – the LED and RTC SDA/SCL pins are set</td></tr>
+  <tr><td>Every GPIO is −1 or a valid ESP32-S3 GPIO</td><td>Output pins are output-capable; RX pins, card detect and optional RTC INT may be input-only</td></tr>
   <tr><td>Ranges of baud rates, averaging length, SD frequencies; device ID and SNTP server not empty; mount point of the form <code>/name</code>; tab lists contain only <code>a–z</code>, <code>0–9</code>, <code>-</code> and <code>,</code></td>
       <td>No pin is assigned twice</td></tr>
   <tr><td>Manifest URL empty, <code>https://</code> (or <code>http://</code> with HTTP allowed), without user name or fragment</td>

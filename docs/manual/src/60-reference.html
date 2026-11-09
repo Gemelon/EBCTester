@@ -149,13 +149,16 @@ configuration.</p>
 <table>
   <thead><tr><th>Key</th><th>Type</th><th>Content</th></tr></thead>
   <tbody>
-  <tr><td class="k"><code>config</code></td><td>blob</td><td>Header (magic <code>0x45424332</code> "EBC2", structure version 1, payload length, CRC-32) followed by the complete configuration structure</td></tr>
+  <tr><td class="k"><code>config</code></td><td>blob</td><td>Header (magic <code>0x45424332</code> "EBC2", structure version 2, payload length, CRC-32) followed by the complete configuration structure</td></tr>
   <tr><td class="k"><code>FirmwareMode</code></td><td>u8</td><td>0 = MakerMode, 1 = FactoryMode</td></tr>
   <tr><td class="k"><code>ConfigAktive</code></td><td>u8</td><td>0 = inactive (setup only), 1 = active</td></tr>
   </tbody>
 </table>
 <p>The configuration is written in the order blob – FirmwareMode – ConfigAktive and then committed. The blob is
 written as a whole: after a power failure during writing either the old or the new version is present.</p>
+<p>Valid version-1 configurations are CRC-checked and migrated to version 2 without resetting existing values,
+mode or activation. RTC is enabled in FactoryMode, including existing version-2 installations. MakerMode
+preserves a saved RTC selection and defaults to off, including migration from version 1.</p>
 <h4>Validity check</h4>
 <p>A stored configuration is valid only if the namespace exists, the blob has the expected size, magic and
 structure version, the CRC-32 over the payload is correct, <code>FirmwareMode</code> exists and the content passes
@@ -172,6 +175,7 @@ erase), the partition is erased and initialised again; the device then starts li
   <tr><td class="k">tester</td><td>tester UART TX/RX/baud, dongle UART TX/RX/baud, averaging length, device ID, MQTT enabled</td></tr>
   <tr><td class="k">ota</td><td>AP password, SNTP server, manifest URL, web (login) password, primary tabs, tab order, HTTP OTA allowed, status LED enabled and GPIO, settings-password confirmation, SD languages, session duration (1/7 days), browser login enabled</td></tr>
   <tr><td class="k">sd</td><td>bus (0 = 4-bit SDMMC, 1 = SPI), SDMMC and SPI frequency, card-detect GPIO, mount point, CLK/CMD/D0–D3, MISO/MOSI/CS/CLK</td></tr>
+  <tr><td class="k">rtc</td><td>DS3231 always enabled in FactoryMode; default off and editable in MakerMode. INT GPIO14 (reserved input), I2C SDA GPIO15, I2C SCL GPIO16.</td></tr>
   </tbody>
 </table>
 <h4>Other NVS namespaces</h4>
@@ -307,8 +311,12 @@ with pull-up R6, the signal SD_CD reads low with a card present.</p>
 <p>U1 (DS3231SN) is a temperature-compensated RTC (±2 ppm) on I²C with 4.7 kΩ pull-ups (R7/R8). Its INT/SQW output
 (open drain, pull-up R9) goes to GPIO 14 and can be used as an interrupt or deep-sleep wake-up source. A
 non-rechargeable CR2032 cell (BT1) on VBAT keeps the time when the board is unpowered; the cell voltage can be
-measured at TP11. Firmware 1.99.3 does not use the RTC yet; the time is obtained by SNTP when Wi-Fi with Internet
-access is available.</p>
+measured at TP11. From firmware 1.99.18, the RTC can be enabled in Maker Settings. It stores UTC and synchronises
+device time at startup and every six hours without NTP. Successful NTP responses take priority and update both
+clocks every six hours. Invalid time or a stopped oscillator is rejected. The header shows time above date beside
+EBC RX using the browser's time zone. INT is reserved; alarms and wakeup are not implemented. From 1.99.19,
+FactoryMode always enables RTC and enforces the original-board pins GPIO14/GPIO15/GPIO16; MakerMode defaults to off and can enable it in Maker Settings. Missing RTC
+hardware is logged without blocking other services; NTP supplies time if available.</p>
 <h4>Serial interface</h4>
 <p>The tester uses 5 V TTL levels, but ESP32-S3 inputs are not 5 V tolerant. U5 (TXS0104E) is a 4-bit bidirectional,
 auto-direction level shifter between 3.3 V (VCCA) and the +5 V rail (VCCB). It carries UART1 (tester) and UART2
@@ -658,7 +666,7 @@ start-up.</p>
 <p>Migrations run automatically in a transaction at the first start with a card. Older firmware refuses a newer
 schema: keep a database backup before an update if you might need to downgrade.</p>
 </only>
-<p>Time stamps are stored in UTC and require a synchronised clock (SNTP). Without it, the device uptime is
+<p>Time stamps are stored in UTC and require a synchronised clock (SNTP or an enabled, valid DS3231). Without it, the device uptime is
 recorded instead; no calendar time is invented.</p>
 
 <h3>MariaDB backup database</h3>
@@ -765,7 +773,7 @@ firmware.</p>
 <ul>
   <li>Firmware 1.99.3 is a beta version of V2. The hardware acceptance tests on the original board are still pending.</li>
   <li>The UART2 bridge for the manufacturer's PC software is not implemented.</li>
-  <li>The DS3231 real-time clock is not used yet; date and time come from SNTP only.</li>
+  <li>The optional DS3231 RTC is implemented from 1.99.18; physical validation and backup-cell retention tests are pending.</li>
   <li>Only EBC-A20, EBC-A40L and EBC-A50L can be controlled; physical tests with the A50L are pending.</li>
   <li>No battery-chemistry profiles and no temperature measurement.</li>
   <li>MQTT publishes measurements only; status entities do not yet receive values.</li>

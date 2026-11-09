@@ -31,6 +31,8 @@ with tempfile.TemporaryDirectory(prefix="ebctester-config-") as temporary:
         "#define ESP_ERR_INVALID_ARG 1\n#define ESP_ERR_INVALID_STATE 2\n"
         "#define ESP_ERR_NO_MEM 3\n", encoding="ascii")
     defaults = {
+        "EBCTESTER_RTC_INT_GPIO": "14", "EBCTESTER_I2C_SDA_GPIO": "15",
+        "EBCTESTER_I2C_SCL_GPIO": "16",
         "EBC_TESTER_UART_TX_GPIO": "17", "EBC_TESTER_UART_RX_GPIO": "18",
         "EBC_TESTER_UART_BAUD": "9600", "EBC_DONGLE_UART_TX_GPIO": "8",
         "EBC_DONGLE_UART_RX_GPIO": "9", "EBC_DONGLE_UART_BAUD": "9600",
@@ -44,10 +46,10 @@ with tempfile.TemporaryDirectory(prefix="ebctester-config-") as temporary:
         "SD_CARD_MANAGER_GPIO_CARD_DETECT": "13",
         "SD_CARD_MANAGER_MOUNT_POINT": '"/sdcard"',
         "SD_CARD_MANAGER_GPIO_CLK": "10", "SD_CARD_MANAGER_GPIO_CMD": "11",
-        "SD_CARD_MANAGER_GPIO_D0": "12", "SD_CARD_MANAGER_GPIO_D1": "14",
-        "SD_CARD_MANAGER_GPIO_D2": "15", "SD_CARD_MANAGER_GPIO_D3": "16",
-        "SD_CARD_MANAGER_GPIO_SPI_MISO": "2", "SD_CARD_MANAGER_GPIO_SPI_MOSI": "15",
-        "SD_CARD_MANAGER_GPIO_SPI_CS": "16", "SD_CARD_MANAGER_GPIO_SPI_CLK": "14",
+        "SD_CARD_MANAGER_GPIO_D0": "12", "SD_CARD_MANAGER_GPIO_D1": "4",
+        "SD_CARD_MANAGER_GPIO_D2": "5", "SD_CARD_MANAGER_GPIO_D3": "6",
+        "SD_CARD_MANAGER_GPIO_SPI_MISO": "2", "SD_CARD_MANAGER_GPIO_SPI_MOSI": "7",
+        "SD_CARD_MANAGER_GPIO_SPI_CS": "3", "SD_CARD_MANAGER_GPIO_SPI_CLK": "10",
     }
     for spi in (False, True):
         selected = dict(defaults)

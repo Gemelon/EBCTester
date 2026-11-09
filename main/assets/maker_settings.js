@@ -12,12 +12,12 @@
   function render(configuration) {
     fields = configuration.fields;
     $("maker-fields").replaceChildren();
-    for (const section of ["tester", "ota", "sd"]) {
+    for (const section of ["tester", "ota", "sd", "rtc"]) {
       const fieldset = document.createElement("fieldset");
       fieldset.className = "row g-3 mb-4";
       const legend = document.createElement("legend");
       legend.className = "h5";
-      legend.textContent = { tester: "EBCTester", ota: "Network, OTA and web", sd: "SD card" }[section];
+      legend.textContent = { tester: "EBCTester", ota: "Network, OTA and web", sd: "SD card", rtc: "Real-time clock" }[section];
       fieldset.append(legend);
       for (const field of fields.filter((item) => item.section === section)) {
         const wrapper = document.createElement("div");
@@ -80,7 +80,7 @@
     try {
       const headers = await WebAuth.settingsHeaders();
       if (headers === null) return;
-      const body = { active: $("maker-active").checked, tester: {}, ota: {}, sd: {} };
+      const body = { active: $("maker-active").checked, tester: {}, ota: {}, sd: {}, rtc: {} };
       for (const field of fields) {
         const input = $(`maker-${field.name}`);
         body[field.section][field.name] = field.type === "checkbox" ? input.checked :

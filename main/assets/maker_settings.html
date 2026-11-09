@@ -10,6 +10,7 @@
       <span class="form-check-label">Configuration active (ConfigAktive): enable peripheral hardware after restart</span>
     </label>
     <p>Leave password fields empty to keep the current passwords. Passwords are never returned by the device.</p>
+      <p>The DS3231 defaults to off in MakerMode and is always enabled in FactoryMode. It stores UTC. At startup and every six hours, NTP takes priority; without NTP, a valid RTC supplies device time. Missing RTC hardware does not block normal services; NTP remains available. The header uses your browser's time zone. RTC INT is reserved; alarms are not used.</p>
     <button id="maker-save" type="submit" class="btn btn-primary" disabled>Save and restart</button>
   </form>
   <p id="maker-message" class="alert d-none mt-3" role="status"></p>

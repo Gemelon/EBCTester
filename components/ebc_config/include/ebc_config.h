@@ -19,7 +19,7 @@ extern "C" {
 #define EBC_CONFIG_DEVICE_ID_MAX 65
 #define EBC_CONFIG_MOUNT_POINT_MAX 64
 #define EBC_CONFIG_MAGIC UINT32_C(0x45424332)
-#define EBC_CONFIG_VERSION 1
+#define EBC_CONFIG_VERSION 2
 
 typedef enum { EBC_FW_MAKER = 0, EBC_FW_FACTORY = 1 } ebc_fw_mode_t;
 typedef enum { IO47_OPEN, IO47_LOW, IO47_HIGH, IO47_ERROR } ebc_io47_state_t;
@@ -30,6 +30,13 @@ typedef struct {
     int8_t rx_gpio;
     uint32_t baud;
 } ebc_uart_config_t;
+
+typedef struct {
+    uint8_t enabled;
+    int8_t int_gpio;
+    int8_t sda_gpio;
+    int8_t scl_gpio;
+} ebc_rtc_config_t;
 
 typedef struct {
     struct {
@@ -71,6 +78,12 @@ typedef struct {
         int8_t spi_cs_gpio;
         int8_t spi_clk_gpio;
     } sd;
+#ifdef __cplusplus
+    alignas(4)
+#else
+    _Alignas(4)
+#endif
+    ebc_rtc_config_t rtc;
 } ebc_config_t;
 
 typedef struct {

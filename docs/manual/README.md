@@ -10,7 +10,7 @@ Both English manuals are built from one HTML source:
 | Factory | `docs/EBCTester_Manual_Factory_EN.pdf` | Normal user interface, compact technical reference |
 | Maker | `docs/EBCTester_Manual_Maker_EN.pdf` | Maker setup and Maker Settings, detailed technical reference |
 
-Translations follow once the firmware has reached a stable release, or on request.
+Translations are available on request.
 
 ## Files
 

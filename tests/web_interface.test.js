@@ -77,6 +77,7 @@ function createPage(status = readyStatus, confirmResult = true, checkOnOpen = fa
     TextEncoder, AbortSignal: { timeout: () => undefined },
     confirm: (message) => { confirmations.push(message); return confirmResult; },
     setTimeout: (callback) => timers.push(callback),
+    clearTimeout() {},
     fetch: async (url, options) => {
       requests.push({ url, options });
       if (offline) throw new Error("offline");

@@ -47,6 +47,10 @@ struct Field {
     {#section, name, label, offsetof(ebc_config_t, section.member), \
      sizeof(((ebc_config_t *)nullptr)->section.member), Type::type, min, max}
 const Field fields[] = {
+    FIELD(rtc, enabled, "enabled", "Enable DS3231 RTC", Bool, 0, 1),
+    FIELD(rtc, int_gpio, "int_gpio", "RTC INT GPIO (-1: not connected; reserved input)", Gpio, -1, 48),
+    FIELD(rtc, sda_gpio, "sda_gpio", "I2C SDA GPIO", Gpio, -1, 48),
+    FIELD(rtc, scl_gpio, "scl_gpio", "I2C SCL GPIO", Gpio, -1, 48),
     FIELD(tester, tester_uart.tx_gpio, "tester_tx_gpio", "Tester UART TX GPIO", Gpio, -1, 48),
     FIELD(tester, tester_uart.rx_gpio, "tester_rx_gpio", "Tester UART RX GPIO", Gpio, -1, 48),
     FIELD(tester, tester_uart.baud, "tester_baud", "Tester UART baud rate", U32, 1200, 115200),
@@ -226,7 +230,8 @@ bool known_fields(const cJSON *root)
         if (!cJSON_IsObject(section) ||
             (std::strcmp(section->string, "tester") != 0 &&
              std::strcmp(section->string, "ota") != 0 &&
-             std::strcmp(section->string, "sd") != 0)) return false;
+             std::strcmp(section->string, "sd") != 0 &&
+             std::strcmp(section->string, "rtc") != 0)) return false;
         for (const cJSON *item = section->child; item; item = item->next) {
             bool known = false;
             for (const Field &field : fields) {

@@ -3,8 +3,137 @@
 
 # Changelog
 
-> **V2 development branch:** This is a preliminary, evolving version and is
-> not suitable for production use. Use the latest V1 release for production.
+## [2.0.0] – 2026-11-09
+
+### Changed
+
+- Promote EBCTester V2 to the stable main release line.
+- Update firmware versioning baseline from `1.99.21` to `2.0.0` for the first
+  production V2 release.
+
+### Fixed
+
+- Include the confirmed startup stability fixes from the final V2 pre-release
+  cycle (configuration migration stack usage, DS3231 default handling and
+  persisted Maker-mode RTC settings).
+
+### Validation
+
+- V2 branch runtime validation completed over an extended period without new
+  instability reports.
+- Host and web regression tests from the 1.99.21 release line remain passing
+  for this promotion release.
+
+## [1.99.21] – 2026-11-08
+
+### Fixed
+
+- Fix the confirmed main-task stack overflow during v1 configuration migration,
+  which prevented startup and triggered OTA rollback to 1.99.17.
+- Move configuration read/write blobs and save candidates to the heap and free
+  the read buffer before writing migrated settings. Keep NVS values and RTC
+  mode behavior unchanged; report allocation failures without resetting NVS.
+
+### Validation
+
+- Native migration, configuration, Maker API and RTC tests passed, including
+  allocation failures, cleared-buffer cleanup and NVS-handle cleanup.
+- Added a regression check of actual ESP32-S3 stack frames. Previous read/write
+  frames were 2,032 bytes each; the new initialization frame is 96 bytes and
+  persistence frame is 64 bytes. All configuration frames are at most 128 bytes,
+  below the enforced 256-byte limit; the main-task stack remains 3,584 bytes.
+- Full ESP-IDF build and SFTP publication succeeded. Local and downloaded BIN
+  and manifest match at 2,859,360 bytes with SHA256
+  `9d9cc4800f0f0dee045bf1477e311ad1ebd9f644041abb062bf76e30d3874815`.
+
+### Limitations
+
+- Startup on the user's device still requires confirmation; automated checks
+  never flash hardware. Physical RTC and backup-cell tests remain pending.
+
+## [1.99.20] – 2026-11-08
+
+### Fixed
+
+- Enforce the onboard DS3231
+  enable state and original-board RTC pins (INT/SDA/SCL = GPIO14/GPIO15/GPIO16)
+  whenever configurations are loaded, migrated, or saved.
+- Keep MakerMode behavior unchanged: RTC defaults to off, can be enabled in
+  Maker Settings, and persists user selection.
+
+### Validation
+
+- Native configuration tests passed for FactoryMode enforcement, version-1/2
+  migration, persisted saves, MakerMode selections and pin validation.
+- RTC fallback and Maker/API web tests passed.
+- Full ESP-IDF build and SFTP publication succeeded. Local and downloaded BIN
+  and manifest match at 2,859,104 bytes with SHA256
+  `4c785e6bed980d96ecc8749ab8b0ea90987f947dd27fc25c831204961c5abf87`.
+
+### Limitations
+
+- Missing RTC hardware is logged and does not block startup; NTP remains the
+  fallback. Without RTC and NTP, calendar time remains unavailable.
+- Physical RTC and backup-cell validation remain pending.
+- The attempted pin correction did not fix the startup failure; the main-task
+  stack overflow was subsequently diagnosed and addressed in 1.99.21.
+
+## [1.99.19] – 2026-11-08
+
+### Fixed
+
+- Always enable the onboard DS3231 in FactoryMode, including existing saved
+  configurations and upgrades. Normal users need no Maker Settings access.
+- Keep RTC off by default in MakerMode while preserving the user's saved
+  selection and allowing activation through Maker Settings.
+
+### Validation
+
+- Native configuration tests passed for initial setup, v1 migration, existing
+  v2 FactoryMode settings, enforced saves, GPIO conflicts and Maker selections.
+- RTC missing-hardware fallback, Maker API and targeted clock UI tests passed.
+- Full ESP-IDF build and SFTP publication succeeded. Local and downloaded BIN
+  and manifest match at 2,859,024 bytes with SHA256
+  `1a5bf24bf63bad71262d4cf48ea7b87759de41984a1d44e7684d5eb01c1fd913`.
+
+### Limitations
+
+- Physical RTC and backup-cell validation remain pending. Missing RTC hardware
+  is logged and falls back to NTP; without either source, calendar time remains
+  unavailable and recording uses the existing uptime behavior.
+- Inactive configurations still disable all application peripherals.
+
+## [1.99.18] – 2026-11-08
+
+### Added
+
+- Optional DS3231 RTC in Maker Settings, disabled by default, with configurable
+  INT/SDA/SCL pins (original-board defaults: GPIO14/GPIO15/GPIO16).
+- Startup and six-hour UTC synchronization with NTP priority and offline RTC
+  fallback. Invalid calendar/oscillator-stop time is rejected; missing RTC
+  hardware does not block normal device services.
+- Header clock beside EBC RX, with time above date, using the browser's detected
+  time zone and daylight-saving rules.
+
+### Changed
+
+- Preserve existing configuration during migration to blob version 2; RTC stays
+  disabled on upgrade. RTC-disabled devices keep their existing NTP behavior.
+
+### Validation
+
+- Native RTC, configuration/migration and Maker API tests passed.
+- Targeted web tests and exact Berlin/UTC+8 date-rollover and DST tests passed.
+- Full ESP-IDF build and SFTP publication succeeded. Local and downloaded BIN
+  and manifest match at 2,858,672 bytes with SHA256
+  `24ccc1a140964eb5cbc2bc23923d8ed1a4736266a38733227050a92ed902d44e`.
+
+### Limitations
+
+- Physical RTC operation, backup-cell retention and six-hour hardware tests
+  remain pending. RTC INT is reserved; alarms and wakeup are not implemented.
+- Existing unrelated checks still fail: the SD language template lacks LED
+  catalog entries, and the license metadata test reads binary files as UTF-8.
 
 ## [1.99.17] – 2026-11-07
 

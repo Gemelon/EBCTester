@@ -36,6 +36,10 @@ function fixture(script = source) {
     { section: "tester", name: "mqtt_enabled", label: "MQTT", type: "checkbox", value: false },
     { section: "ota", name: "web_password", label: "Web password", type: "password", configured: true, maxLength: 63 },
     { section: "sd", name: "bus", label: "SD bus", type: "bus", value: 1 },
+    { section: "rtc", name: "enabled", label: "Enable DS3231 RTC", type: "checkbox", value: false },
+    { section: "rtc", name: "sda_gpio", label: "I2C SDA GPIO", type: "number", value: 15, min: -1, max: 48 },
+    { section: "rtc", name: "scl_gpio", label: "I2C SCL GPIO", type: "number", value: 16, min: -1, max: 48 },
+    { section: "rtc", name: "int_gpio", label: "RTC INT GPIO", type: "number", value: 14, min: -1, max: 48 },
   ];
   vm.runInNewContext(script, {
     document: { getElementById: element, createElement: () => element() },
@@ -66,6 +70,10 @@ test("renders Maker fields without exposing stored passwords", async () => {
   assert.equal(page.element("maker-bus").value, "1");
   assert.equal(page.element("maker-active").checked, false);
   assert.equal(page.element("maker-save").disabled, false);
+  assert.equal(page.element("maker-enabled").checked, false);
+  assert.equal(page.element("maker-sda_gpio").value, 15);
+  assert.equal(page.element("maker-scl_gpio").value, 16);
+  assert.equal(page.element("maker-int_gpio").value, 14);
 });
 
 test("saves typed configuration with authorization, activation and restart", async () => {
@@ -74,6 +82,8 @@ test("saves typed configuration with authorization, activation and restart", asy
   page.element("maker-active").checked = true;
   page.element("maker-tester_tx_gpio").value = "12";
   page.element("maker-web_password").value = "new-password";
+  page.element("maker-enabled").checked = true;
+  page.element("maker-sda_gpio").value = "1";
   await page.submit();
   const post = page.requests.find(request => request.options.method === "POST");
   const body = JSON.parse(post.options.body);
@@ -81,6 +91,7 @@ test("saves typed configuration with authorization, activation and restart", asy
   assert.equal(body.tester.tester_tx_gpio, 12);
   assert.equal(body.tester.mqtt_enabled, false);
   assert.equal(body.sd.bus, 1);
+  assert.deepEqual(body.rtc, { enabled: true, sda_gpio: 1, scl_gpio: 16, int_gpio: 14 });
   assert.equal(post.options.headers["X-CSRF-Token"], "csrf");
   assert.equal(post.options.headers["X-Admin-Password"], "test-only");
   assert.equal(page.element("maker-web_password").value, "");
