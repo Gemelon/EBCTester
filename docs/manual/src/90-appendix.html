@@ -38,9 +38,23 @@ languages from SD</span> in Maker Settings and an active configuration.</only></
   <dt>Frame</dt><dd>One message between EBCTester and the tester.</dd>
   <dt>MakerMode</dt><dd>Firmware mode of self-built devices (GPIO 47 low or open): hardware configured in Maker Settings.</dd>
   <dt>NVS</dt><dd>Non-volatile storage in the ESP32 flash for settings.</dd>
+  <dt>NTP</dt><dd>Network Time Protocol – see SNTP.</dd>
   <dt>OTA</dt><dd>Over-the-air – firmware update over Wi-Fi.</dd>
+  <dt>RTC</dt><dd>Real-time clock – the DS3231 chip that keeps the time while the device is off.</dd>
   <dt>Segment</dt><dd>Section of a test run with one operating mode.</dd>
   <dt>SNTP</dt><dd>Simple Network Time Protocol – time synchronisation over the Internet.</dd>
   <dt>SOC</dt><dd>State of charge in percent.</dd>
   <dt>Test run</dt><dd>Recording of one manual operation, plan or DCIR test with all its measurements.</dd>
+  <dt>UTC</dt><dd>Coordinated Universal Time – the time base of all stored time stamps.</dd>
+  <dt>WS2812</dt><dd>RGB LED with integrated driver; several LEDs are connected in a chain on one data line.</dd>
 </dl>
+
+<only maker>
+<h2 class="chapter appendix">Appendix C – Schematic</h2>
+<p>Schematic of the EBCTester board, revision 1 (2 November 2026). The page is rotated; the original A3 drawing is
+published as <code>docs/EBCTester_Schematic.pdf</code> in the repository and can be zoomed without loss.</p>
+<figure class="tall">
+  <img src="../images/schematic-rev1.png" alt="EBCTester schematic, revision 1">
+  <figcaption>EBCTester schematic, revision 1 (KiCad 10)</figcaption>
+</figure>
+</only>

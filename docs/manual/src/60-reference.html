@@ -26,7 +26,7 @@ are separate, reusable repositories included as Git submodules under <code>exter
   <thead><tr><th>Repository / component</th><th>Responsibility</th></tr></thead>
   <tbody>
   <tr><td class="k">ebc_config</td><td>Central device configuration in NVS, GPIO 47 mode detection, validation, reset functions</td></tr>
-  <tr><td class="k">main (ebc_config_web)</td><td>Maker Settings tab, device reset, start-up sequence</td></tr>
+  <tr><td class="k">main</td><td>Start-up sequence; Maker Settings tab and device reset (ebc_config_web); DS3231 driver and time synchronisation (rtc_clock, ds3231_time); LED function groups (led_policy, led_settings)</td></tr>
   <tr><td class="k">ebc_link</td><td>UARTs, frame parser, model detection and communication with the tester</td></tr>
   <tr><td class="k">test_control / test_store</td><td>Manual control, test plans, batteries, recording of test runs</td></tr>
   <tr><td class="k">resistance_test</td><td>DCIR preparation, load pulse and evaluation</td></tr>
@@ -113,9 +113,10 @@ is created – on a new device, after a device reset or when the stored data is 
   <tr><td class="k">Maker Settings tab</td><td>not present</td><td>present</td></tr>
   <tr><td class="k">Settings-change confirmation</td><td>always on</td><td>can be switched off in Maker Settings</td></tr>
   <tr><td class="k">Access-point password</td><td>firmware default</td><td>editable in Maker Settings</td></tr>
+  <tr><td class="k">Real-time clock</td><td>always enabled, GPIO 14/15/16 enforced</td><td>optional, off by default, pins editable</td></tr>
   </tbody>
 </table>
-<p>While the configuration is inactive, no tester or dongle UART, SD card, status LED, Wi-Fi station
+<p>While the configuration is inactive, no tester or dongle UART, SD card, status LED, I²C bus or RTC, Wi-Fi station
 connection, time synchronisation, update check, recorder or MQTT client is started. Only the access point and
 the web interface run. The flash memory, the PSRAM and the USB console of the ESP32 are outside this
 guarantee.</p>
@@ -175,7 +176,7 @@ erase), the partition is erased and initialised again; the device then starts li
   <tr><td class="k">tester</td><td>tester UART TX/RX/baud, dongle UART TX/RX/baud, averaging length, device ID, MQTT enabled</td></tr>
   <tr><td class="k">ota</td><td>AP password, SNTP server, manifest URL, web (login) password, primary tabs, tab order, HTTP OTA allowed, status LED enabled and GPIO, settings-password confirmation, SD languages, session duration (1/7 days), browser login enabled</td></tr>
   <tr><td class="k">sd</td><td>bus (0 = 4-bit SDMMC, 1 = SPI), SDMMC and SPI frequency, card-detect GPIO, mount point, CLK/CMD/D0–D3, MISO/MOSI/CS/CLK</td></tr>
-  <tr><td class="k">rtc</td><td>DS3231 always enabled in FactoryMode; default off and editable in MakerMode. INT GPIO14 (reserved input), I2C SDA GPIO15, I2C SCL GPIO16.</td></tr>
+  <tr><td class="k">rtc</td><td>RTC enabled, INT GPIO (reserved input), I²C SDA and SCL GPIO (structure version 2). FactoryMode forces enabled with GPIO 14/15/16 on every load and save.</td></tr>
   </tbody>
 </table>
 <h4>Other NVS namespaces</h4>
@@ -187,6 +188,7 @@ erase), the partition is erased and initialised again; the device then starts li
   <tr><td class="k"><code>tester</code></td><td>Tester model, current battery, plan, manual values, DCIR parameters</td><td>kept</td></tr>
   <tr><td class="k"><code>ha_mqtt</code></td><td>Broker settings</td><td>kept</td></tr>
   <tr><td class="k"><code>debug_log</code></td><td>Debug-log setting</td><td>kept</td></tr>
+  <tr><td class="k"><code>leds</code></td><td>LED count and function groups (versioned blob)</td><td>kept</td></tr>
   <tr><td class="k">others</td><td>MariaDB settings, Wi-Fi driver data, OTA state</td><td>kept</td></tr>
   </tbody>
 </table>
@@ -216,9 +218,10 @@ in FactoryMode without any setting. On a Maker device they are only a proposal i
   <tr><td class="k">Access-point password</td><td><code>ebctester</code></td><td class="k">Login password</td><td><code>ebctester</code>, 24 h, login required</td></tr>
   <tr><td class="k">SNTP server</td><td><code>pool.ntp.org</code></td><td class="k">Settings confirmation</td><td>on</td></tr>
   <tr><td class="k">MQTT</td><td>off</td><td class="k">HTTP OTA</td><td>off</td></tr>
+  <tr><td class="k">Real-time clock</td><td>INT / SDA / SCL = GPIO 14 / 15 / 16; Factory: on, Maker: off</td><td class="k">LED functions</td><td>2 LEDs: tester mode + OTA, message frames</td></tr>
   </tbody>
 </table>
-<only maker><div class="caution"><b>Caution</b>Firmware 1.99.3 evaluates the card-detect input as active-high
+<only maker><div class="caution"><b>Caution</b>Firmware 2.0.0 evaluates the card-detect input as active-high
 only. The switch of the original board is active-low (GPIO 13 reads low with a card inserted). On a Maker device
 with this circuit, enter <code>−1</code> for the card-detect GPIO until a polarity option is available.</div></only>
 
@@ -231,11 +234,11 @@ SD card, real-time clock and a level-shifted serial interface.</p>
   <tr><td class="k">Microcontroller</td><td>ESP32-S3-WROOM-1U-N16R8: dual-core 240 MHz, 16 MB flash, 8 MB octal PSRAM, Wi-Fi 2.4 GHz with u.FL antenna connector</td></tr>
   <tr><td class="k">Power supply</td><td>19 V via J4 (EBC-A20 adapter) or 5 V via USB-C, both may be connected</td></tr>
   <tr><td class="k">Storage</td><td>microSD socket, 4-bit SD mode, card-detect switch</td></tr>
-  <tr><td class="k">Real-time clock</td><td>DS3231 with CR2032 backup cell (not used by firmware 1.99.3)</td></tr>
+  <tr><td class="k">Real-time clock</td><td>DS3231 with CR2032 backup cell, always used in FactoryMode</td></tr>
   <tr><td class="k">Tester interface</td><td>2 × UART, 5 V TTL via TXS0104E level shifter</td></tr>
-  <tr><td class="k">Indicators</td><td>Power LED, 2 × WS2812B RGB LED (status, reserved)</td></tr>
+  <tr><td class="k">Indicators</td><td>Power LED, 2 × WS2812B RGB LED (configurable function groups), chain extension J5</td></tr>
   <tr><td class="k">Board size</td><td>80 × 80 mm, 4 × M3 mounting holes (connected to GND)</td></tr>
-  <tr><td class="k">Revision</td><td>Schematic revision 1 (2 November 2026), PCB marking B1.1, date code 20261103</td></tr>
+  <tr><td class="k">Revision</td><td>Schematic revision 1 (2 November 2026), PCB marking "EBCTester V1.0", date code 20261103</td></tr>
   </tbody>
 </table>
 
@@ -311,12 +314,11 @@ with pull-up R6, the signal SD_CD reads low with a card present.</p>
 <p>U1 (DS3231SN) is a temperature-compensated RTC (±2 ppm) on I²C with 4.7 kΩ pull-ups (R7/R8). Its INT/SQW output
 (open drain, pull-up R9) goes to GPIO 14 and can be used as an interrupt or deep-sleep wake-up source. A
 non-rechargeable CR2032 cell (BT1) on VBAT keeps the time when the board is unpowered; the cell voltage can be
-measured at TP11. From firmware 1.99.18, the RTC can be enabled in Maker Settings. It stores UTC and synchronises
-device time at startup and every six hours without NTP. Successful NTP responses take priority and update both
-clocks every six hours. Invalid time or a stopped oscillator is rejected. The header shows time above date beside
-EBC RX using the browser's time zone. INT is reserved; alarms and wakeup are not implemented. From 1.99.19,
-FactoryMode always enables RTC and enforces the original-board pins GPIO14/GPIO15/GPIO16; MakerMode defaults to off and can enable it in Maker Settings. Missing RTC
-hardware is logged without blocking other services; NTP supplies time if available.</p>
+measured at TP11. The firmware accesses the DS3231 at address 0x68 with 100 kHz and 100 ms time-out. It
+validates the calendar data (BCD, 12/24-hour format, month lengths, leap years, no date before 2024) and rejects
+the time while the oscillator-stop flag is set; the flag is cleared only after NTP time has been written. The
+oscillator is enabled for battery operation, square-wave and alarm outputs are switched off. INT is reserved;
+alarms and wake-up are not implemented. RST and 32KHZ are not connected.</p>
 <h4>Serial interface</h4>
 <p>The tester uses 5 V TTL levels, but ESP32-S3 inputs are not 5 V tolerant. U5 (TXS0104E) is a 4-bit bidirectional,
 auto-direction level shifter between 3.3 V (VCCA) and the +5 V rail (VCCB). It carries UART1 (tester) and UART2
@@ -328,7 +330,8 @@ resistor R15 (470 Ω). Each LED has a 100 nF decoupling capacitor (C17, C18). Th
 ESP32 drives the data line with 3.3 V. To keep this level above the input-high threshold of LED1 (0.7 × VDD), LED1 is
 supplied through the Schottky diode D5, which lowers its supply by about 0.3 V. LED2 receives the regenerated 5 V
 signal from LED1. The data output of LED2 is led through R16 (470 Ω) to connector J5, so that further WS2812B LEDs
-can be added to the chain. Firmware 1.99.3 drives LED1 only.</p>
+can be added to the chain. The firmware drives up to 16 LEDs in this chain; their function is set in
+<span class="ui">Settings → LEDs</span>.</p>
 <h4>Power-OK LED and mode jumper</h4>
 <p>D6 is connected to +3.3 V through R14 (470 Ω) and lights up as soon as the 3.3 V supply is present – independently
 of the firmware. The three-pad solder jumper JP1 ties GPIO 47 to +3.3 V (pads 1–2, bridged as delivered) or to GND
@@ -364,7 +367,8 @@ manufacturer's PC software and the tester is not implemented yet.</p>
   </tbody>
 </table>
 <p>J3 carries the power rails, the I²C bus with the RTC interrupt and five free GPIOs for extensions (for example a
-display or temperature sensors). It is not used by the current firmware. Its 3.3 V GPIOs are not 5 V tolerant.</p>
+display or temperature sensors). The I²C lines are shared with the on-board RTC (address 0x68 is taken); the five
+GPIOs are not used by the current firmware. Its 3.3 V GPIOs are not 5 V tolerant.</p>
 <h4>J5 – LED chain extension (JST XH, 3-pin, 2.5 mm)</h4>
 <table class="compact">
   <thead><tr><th>Pin</th><th>Signal</th><th>Description</th></tr></thead>
@@ -440,7 +444,8 @@ point.</p>
 <ul>
   <li>Use a level shifter between the 5 V tester port and the ESP32. A plain resistor divider on the RX line works, but the TX line needs a real driver for reliable 5 V levels.</li>
   <li>SD lines need 10 kΩ pull-ups to 3.3 V; keep the wires short (a few cm) or lower the SD frequency.</li>
-  <li>The card-detect input must be high when a card is inserted (firmware 1.99.3). Without a switch, enter −1.</li>
+  <li>The card-detect input must be high when a card is inserted (firmware 2.0.0). Without a switch, or with an active-low switch, enter −1.</li>
+  <li>A DS3231 needs pull-ups of 2.2–10 kΩ to 3.3 V on SDA and SCL (most modules have them). Supply the module with 3.3 V so that its pull-ups do not pull the ESP32 pins to 5 V.</li>
   <li>For a WS2812 supplied with 5 V, make sure that 3.3 V data is recognised as high (supply the first LED via a diode as on the original board, or use a level shifter).</li>
 </ul>
 
@@ -484,6 +489,31 @@ antenna with SMA male (DreamLNK W10-2.4G, C381198), CR2032 cell, mating cables f
 XH-T crimp contacts, UL1007 24 AWG). Use standard SMA, not RP-SMA. Insert the CR2032 with "+" facing up.</p>
 
 <h3>Printed circuit board</h3>
+<p>The following images were generated by the PCB manufacturer from the production data of the first batch
+(date code 20261103). They show the assembled board as ordered, with all components on the top side.</p>
+<figure class="w65">
+  <img src="../images/pcb-3d-top.png" alt="Assembled board, top view">
+  <figcaption>Assembled board, top view (manufacturer rendering)</figcaption>
+</figure>
+<table class="compact">
+  <thead><tr><th>Area</th><th>Components</th></tr></thead>
+  <tbody>
+  <tr><td>Top left</td><td>J1 microSD socket with pull-ups R1–R6 and C3; test points TXD0/RXD0 (TP10/TP9) to the right of U4</td></tr>
+  <tr><td>Top centre</td><td>U4 ESP32-S3-WROOM-1U with its u.FL antenna socket; JP1 below it</td></tr>
+  <tr><td>Left edge</td><td>J2 USB-C with D4, R10/R11; below: D6 power LED, LED1/LED2 with C17/C18, J5 LED extension, SW1 BOOT and SW2 RESET</td></tr>
+  <tr><td>Centre</td><td>U1 DS3231 with R7–R9, C1/C2; BT1 CR2032 holder below</td></tr>
+  <tr><td>Right of centre</td><td>Power supply: U2 with L1, C4, C6–C8, D3 (19 V → 5 V); D1/D2 diode OR; U3 with L2, C5, C9–C11 (5 V → 3.3 V); U5 TXS0104E</td></tr>
+  <tr><td>Right edge</td><td>J3 expansion connector (top) and J4 tester connector (bottom)</td></tr>
+  </tbody>
+</table>
+<figure class="w80">
+  <img src="../images/pcb-3d-angle-1.png" alt="Assembled board, oblique view">
+  <figcaption>Oblique view from the bottom left: connectors J3/J4 on the right, coin-cell holder in front</figcaption>
+</figure>
+<figure class="w80">
+  <img src="../images/pcb-3d-angle-2.png" alt="Assembled board, second oblique view">
+  <figcaption>Oblique view: USB-C socket, status LEDs, J5 and the buttons on the left edge</figcaption>
+</figure>
 <figure class="w65">
   <img src="../images/pcb-layout.png" alt="PCB layout">
   <figcaption>Layout, top side (copper and silkscreen)</figcaption>
@@ -508,7 +538,129 @@ XH-T crimp contacts, UL1007 24 AWG). Use standard SMA, not RP-SMA. Insert the CR
 </table>
 <p>Positions of the hole centres are measured from the top left corner of the board (orientation as in the layout
 figure, J3/J4 on the right). Because the mounting holes are connected to GND, a metal housing is connected to the
-ground of the board. The schematic is published as <code>docs/EBCTester_Schematic.pdf</code>.</p>
+ground of the board. The schematic is printed in <a href="#ref:Appendix C – Schematic">Appendix C</a> and published as
+<code>docs/EBCTester_Schematic.pdf</code>.</p>
+</only>
+
+<only maker>
+<h2 class="chapter">Building the hardware</h2>
+<p>This chapter shows how to build an EBCTester yourself. There are two ways:</p>
+<table>
+  <thead><tr><th>Way</th><th>Suited for</th><th>Firmware mode</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Original PCB</td><td>A compact, robust device with power supply from the EBC-A20, RTC and LEDs on board. Order the board assembled with the BOM files from the repository and the production data described in <a href="#ref:Hardware">Hardware</a>.</td>
+      <td>FactoryMode if JP1 is left bridged (1–2): no configuration needed</td></tr>
+  <tr><td class="k">Module build</td><td>Quick start with ready-made breakout modules on a perfboard or breadboard. Every function of the original circuit can be replaced by a module.</td>
+      <td>MakerMode (GPIO 47 open): pins entered in Maker Settings</td></tr>
+  </tbody>
+</table>
+<p>The circuit of the original board is the reference for both ways. The complete schematic is printed in
+<a href="#ref:Appendix C – Schematic">Appendix C</a>; its function is explained in
+<a href="#ref:Circuit description">Circuit description</a>.</p>
+
+<h3>Example: the prototype</h3>
+<figure class="w80">
+  <img src="../images/maker-prototype.jpg" alt="EBCTester prototype on a perfboard next to an EBC-A20">
+  <figcaption>The author's prototype on a perfboard, connected to an EBC-A20 (CV mode, 3.004 V)</figcaption>
+</figure>
+<p>The first EBCTester was built from modules on a perfboard, and the firmware was developed on it. It is a good
+template for your own module build:</p>
+<ul>
+  <li><b>ESP32-S3 development board</b> (bottom) with 16 MB flash, two USB-C sockets, BOOT and RESET buttons and an
+  RGB status LED. The LED on the development board is used as status LED.</li>
+  <li><b>microSD breakout</b> (top left) that supports both SPI and SDIO mode and has the pull-ups on board. The
+  prototype uses it in SPI mode.</li>
+  <li><b>Bidirectional level shifter</b> (red module, right) between the 3.3 V ESP32 pins and the 5 V serial port of
+  the tester.</li>
+  <li><b>Tester connector</b> (white JST socket) with a twisted cable to the serial port of the EBC-A20.</li>
+</ul>
+<p>Pin assignment of the prototype (as entered in Maker Settings):</p>
+<table class="compact">
+  <thead><tr><th>Function</th><th>GPIO</th><th>Function</th><th>GPIO</th></tr></thead>
+  <tbody>
+  <tr><td>Tester UART TX / RX</td><td>10 / 11</td><td>SD bus</td><td>SPI, 10 MHz</td></tr>
+  <tr><td>Dongle UART TX / RX</td><td>8 / 9</td><td>SPI CLK / MOSI</td><td>6 / 7</td></tr>
+  <tr><td>Status LED (on the development board)</td><td>48</td><td>SPI MISO / CS</td><td>5 / 17</td></tr>
+  </tbody>
+</table>
+<p>These are the same pins as on the original board: in SPI mode, MISO uses the D0 line, MOSI the CMD line and
+CS the D3 line of the SDMMC wiring. A board wired like this can therefore be switched between SPI and 4-bit SDMMC
+in Maker Settings if all six SD lines are connected.</p>
+
+<h3>Replacing board components by modules</h3>
+<table class="compact">
+  <thead><tr><th style="width:25%">Original board</th><th style="width:30%">Module replacement</th><th>Notes</th></tr></thead>
+  <tbody>
+  <tr><td>U4 ESP32-S3-WROOM-1U-N16R8, J2 USB-C, SW1/SW2, D4</td><td>ESP32-S3 development board with N16R8 module (for example ESP32-S3-DevKitC-1 N16R8 or compatible)</td>
+      <td>16 MB flash is mandatory. Boards with PCB antenna need no external antenna. Check which GPIO the on-board RGB LED uses (often 48, on some revisions 38).</td></tr>
+  <tr><td>U2, U3, D1, D2, D3 power supply</td><td>USB supply of the development board, or a 19 V → 5 V step-down module feeding its 5 V pin</td>
+      <td>Do not feed 5 V into the 5 V pin while USB is connected unless the board has a protection diode. The 3.3 V regulator of the development board then supplies the logic.</td></tr>
+  <tr><td>U5 TXS0104E</td><td>Bidirectional level-shifter module (TXS0104E/TXS0108E or MOSFET type)</td>
+      <td>Low side (VA/LV) to 3.3 V, high side (VB/HV) to 5 V, OE to 3.3 V (enabled). Only the tester UART (2 channels) is needed; UART2 is reserved.</td></tr>
+  <tr><td>J1 microSD, R1–R6</td><td>microSD breakout for 3.3 V with pull-ups</td>
+      <td>Breakouts that support SDIO allow 4-bit SDMMC. Simple Arduino modules with a 5 V regulator and level buffer support SPI only.</td></tr>
+  <tr><td>U1 DS3231, BT1, R7–R9</td><td>DS3231 module (optional)</td>
+      <td>Supply with 3.3 V. Many modules contain a charging circuit for a rechargeable LIR2032; with a non-rechargeable CR2032 remove the charging diode or resistor as described for the module.</td></tr>
+  <tr><td>LED1, LED2, J5</td><td>RGB LED of the development board, or a WS2812 strip</td>
+      <td>Up to 16 LEDs in one chain. A 5 V WS2812 needs a valid high level: feed the first LED through a diode or use a level shifter.</td></tr>
+  <tr><td>JP1</td><td>–</td><td>Leave GPIO 47 open (or connect it to GND) so that the device starts in MakerMode.</td></tr>
+  <tr><td>J4</td><td>Any 4-pin connector or soldered cable</td><td>GND, tester RX, tester TX are required; 19 V is only needed if the board is powered from the tester.</td></tr>
+  </tbody>
+</table>
+
+<h3>Wiring</h3>
+<h4>Tester interface</h4>
+<table class="compact">
+  <thead><tr><th>ESP32-S3</th><th>Level shifter</th><th>Tester (5 V TTL)</th></tr></thead>
+  <tbody>
+  <tr><td>3.3 V</td><td>VA / LV, OE</td><td>–</td></tr>
+  <tr><td>5 V</td><td>VB / HV</td><td>–</td></tr>
+  <tr><td>GND</td><td>GND</td><td>GND</td></tr>
+  <tr><td>Tester UART TX (GPIO 10)</td><td>A1 → B1</td><td>RX of the tester</td></tr>
+  <tr><td>Tester UART RX (GPIO 11)</td><td>A2 ← B2</td><td>TX of the tester</td></tr>
+  </tbody>
+</table>
+<div class="caution"><b>Caution</b>Never connect a 5 V tester line directly to an ESP32 pin. The pinout of the tester
+port differs between models and cable versions – measure it with a multimeter before connecting (idle level of the
+tester's TX line: about 5 V).</div>
+<h4>microSD card</h4>
+<table class="compact">
+  <thead><tr><th>Card signal</th><th>4-bit SDMMC</th><th>SPI</th><th>Default GPIO</th></tr></thead>
+  <tbody>
+  <tr><td>CLK</td><td>CLK</td><td>CLK (SCK)</td><td>6</td></tr>
+  <tr><td>CMD</td><td>CMD</td><td>MOSI (DI)</td><td>7</td></tr>
+  <tr><td>DAT0</td><td>D0</td><td>MISO (DO)</td><td>5</td></tr>
+  <tr><td>DAT1</td><td>D1</td><td>–</td><td>4</td></tr>
+  <tr><td>DAT2</td><td>D2</td><td>–</td><td>18</td></tr>
+  <tr><td>DAT3 / CD</td><td>D3</td><td>CS</td><td>17</td></tr>
+  <tr><td>VDD / GND</td><td colspan="3">3.3 V / GND, 100 nF close to the socket; 10 kΩ pull-ups to 3.3 V on CMD and DAT0–DAT3</td></tr>
+  </tbody>
+</table>
+<h4>Real-time clock and LEDs</h4>
+<table class="compact">
+  <thead><tr><th>Signal</th><th>Default GPIO</th><th>Notes</th></tr></thead>
+  <tbody>
+  <tr><td>DS3231 SDA / SCL</td><td>15 / 16</td><td>Pull-ups to 3.3 V; module VCC to 3.3 V</td></tr>
+  <tr><td>DS3231 INT/SQW</td><td>14</td><td>Optional, reserved; <code>−1</code> if not connected</td></tr>
+  <tr><td>WS2812 DIN</td><td>48</td><td>Series resistor 330–470 Ω close to the first LED</td></tr>
+  </tbody>
+</table>
+<p>The pins in these tables are the firmware defaults and match the original board – using them means you only
+have to activate the configuration in Maker Settings. Any other free, output-capable GPIO can be used (see
+<a href="#ref:Pins and wiring rules">Pins and wiring rules</a>).</p>
+
+<h3>Commissioning</h3>
+<ol class="steps">
+  <li><b>Check the wiring</b> without power: no short circuit between 5 V, 3.3 V and GND; no 5 V line on an ESP32 pin.</li>
+  <li><b>Power up without SD card and tester.</b> Check 3.3 V and 5 V (on the original board at TP2 and TP1, see <a href="#ref:Test points">Test points</a>).</li>
+  <li><b>Install the firmware</b> over USB (<a href="#ref:Installing the firmware">Installing the firmware</a>). The device starts in MakerMode with an inactive configuration.</li>
+  <li><b>Enter the pins</b> in Maker Settings, first <i>without</i> ConfigAktive, and save. Then tick ConfigAktive and save again.</li>
+  <li><b>SD card:</b> insert a FAT32 card and open <span class="ui">Administration → SD card</span>. "SD card ready" and the free space must be shown; <code>ebc_a20.db</code> is created.</li>
+  <li><b>Tester:</b> select the model in <span class="ui">Settings → EBC tester</span>, switch the tester on and click <span class="ui">Connect</span> in the Manual tab. The RX indicator turns green and the message counter increases.</li>
+  <li><b>Real-time clock</b> (if fitted): enable it in Maker Settings, connect the device to Wi-Fi with Internet access and check the debug log for RTC messages and the clock in the header. Then disconnect the power for a minute – after the restart the time must still be correct.</li>
+  <li><b>LEDs:</b> set the LED count in <span class="ui">Settings → LEDs</span>; the tester-mode LED must turn green when the tester is connected.</li>
+  <li><b>First test</b> with a low current (for example a short D-CC discharge at 0.5 A) and check the recorded run in Measurements.</li>
+</ol>
 </only>
 
 <h2 class="chapter">Firmware installation<only maker> and build</only></h2>
@@ -517,7 +669,7 @@ ground of the board. The schematic is published as <code>docs/EBCTester_Schemati
 table and application. Flash it at address <code>0x0</code> with esptool (see <only factory>below</only><only maker><a href="#ref:Installing the firmware">Installing the firmware</a></only>).
 Updates are normally installed over Wi-Fi; a USB installation is only needed for the first installation, after a
 change of the partition table or for recovery.</p>
-<only factory><pre>esptool.py --chip esp32s3 --port COM5 write_flash 0x0 EBCTester-1.99.3-full-install.bin</pre>
+<only factory><pre>esptool.py --chip esp32s3 --port COM5 write_flash 0x0 EBCTester-2.0.0-full-install.bin</pre>
 <p>Writing the full image does not erase the settings memory. To start like a new device afterwards, use the
 device reset or the USB erase described in <a href="#ref:Troubleshooting">Troubleshooting</a>.</p></only>
 
@@ -556,6 +708,7 @@ that already has a valid configuration – reset the device configuration to app
   <tr><td>OTA Suite update checks</td><td>Firmware manifest URL</td><td>release channel</td></tr>
   <tr><td>OTA Suite firmware updates</td><td>Allow unencrypted HTTP OTA</td><td>off</td></tr>
   <tr><td>OTA Suite status LED</td><td>Enable WS2812 LED, GPIO</td><td>on, 48</td></tr>
+  <tr><td>EBCTester → DS3231 real-time clock</td><td>INT, SDA, SCL GPIO (<code>CONFIG_EBCTESTER_RTC_INT_GPIO</code>, <code>…_I2C_SDA_GPIO</code>, <code>…_I2C_SCL_GPIO</code>)</td><td>14, 15, 16</td></tr>
   </tbody>
 </table>
 
@@ -573,18 +726,26 @@ that already has a valid configuration – reset the device configuration to app
 <p>A changed partition table cannot be installed over the air; it requires flashing over USB. Back up settings and
 data before repartitioning.</p>
 
-<h3>Status LED</h3>
-<p>The firmware drives one WS2812 RGB LED (GRB) on the configured GPIO; on the original board this is LED1.
-Brightness is limited to 24/255. The LED task updates every 50 ms and never starts an update.</p>
+<h3>Status LEDs</h3>
+<p>The firmware drives a chain of 1–16 WS2812 RGB LEDs (GRB) on the configured GPIO; on the original board LED1 and
+LED2, extendable through J5. The LED task updates every 50 ms; brightness is kept low (normal colours at about
+24/255). The function group of each LED is stored in the NVS namespace <code>leds</code>.</p>
 <table class="compact">
-  <thead><tr><th>State</th><th>LED</th></tr></thead>
+  <thead><tr><th>Function group</th><th>Input</th><th>Colours</th></tr></thead>
   <tbody>
-  <tr><td>Normal operation</td><td>Smooth 30-second colour cycle</td></tr>
+  <tr><td>Tester mode</td><td>Connection, manual operation, automatic plan</td><td>off / green / blue / orange</td></tr>
+  <tr><td>Message frame status</td><td>Counter of valid frames, age of the last valid and invalid frame, model check</td><td>off after 5 s silence; dim green; one 100 ms bright-green flash per valid frame (100 ms pause between flashes); orange on invalid frames or model errors</td></tr>
+  <tr><td>Off</td><td>–</td><td>off</td></tr>
+  </tbody>
+</table>
+<table class="compact">
+  <thead><tr><th>Update state (LEDs with OTA override)</th><th>LED</th></tr></thead>
+  <tbody>
   <tr><td>Firmware download</td><td>Blue pulse (2 seconds)</td></tr>
   <tr><td>Verification</td><td>Yellow pulse (may be brief)</td></tr>
   <tr><td>Waiting for restart</td><td>Solid green</td></tr>
   <tr><td>Update failed</td><td>Red blink (0.5 s on/off) until a new attempt or restart</td></tr>
-  <tr><td>Configuration inactive or LED disabled</td><td>Off</td></tr>
+  <tr><td>Configuration inactive or LED disabled</td><td>All LEDs off</td></tr>
   </tbody>
 </table>
 
@@ -693,7 +854,7 @@ endpoints require a login session (cookie); POST requests additionally require t
   <thead><tr><th style="width:36%">Endpoint</th><th>Method</th><th>Purpose</th></tr></thead>
   <tbody>
   <tr><td>/api/auth/login, /api/auth/logout</td><td>POST</td><td>Login (JSON user name/password, header <code>X-Web-Login: 1</code>) and logout</td></tr>
-  <tr><td>/api/status</td><td>GET</td><td>Device, network and update status, CSRF token, <code>configActive</code>, <code>firmwareMode</code> (<code>factory</code>/<code>maker</code>), tabs</td></tr>
+  <tr><td>/api/status</td><td>GET</td><td>Device, network and update status, CSRF token, <code>configActive</code>, <code>firmwareMode</code> (<code>factory</code>/<code>maker</code>), tabs, <code>clockEnabled</code> and <code>clockUtc</code> (UTC seconds, 0 = no valid time)</td></tr>
   <tr><td>/api/tester/status</td><td>GET</td><td>Live values, connection, model and limits, plan, recorder</td></tr>
   <tr><td>/api/tester/command</td><td>POST</td><td>connect, disconnect, stop, auto_connect, charge, discharge_cc, discharge_cp</td></tr>
   <tr><td>/api/tester/plan, /api/tester/plan/action</td><td>POST</td><td>Save plan; start, abort, reset, load_db, save_db</td></tr>
@@ -704,7 +865,8 @@ endpoints require a login session (cookie); POST requests additionally require t
   <tr><td>/api/tester/battery, /api/tester/model</td><td>POST</td><td>Battery actions; tester model selection</td></tr>
   <tr><td>/api/tester/resistance(/history)</td><td>GET/POST</td><td>DCIR configuration, status, start/abort; history</td></tr>
   <tr><td>/api/test-runs(/rename|/delete)</td><td>GET/POST</td><td>Test-run management</td></tr>
-  <tr><td>/api/maker/config</td><td>GET/POST</td><td>Maker Settings (MakerMode only, otherwise HTTP 403). GET returns the field list with ranges; passwords only as <code>configured</code>. POST: <code>{"active":bool,"tester":{…},"ota":{…},"sd":{…}}</code>, restarts the device</td></tr>
+  <tr><td>/api/maker/config</td><td>GET/POST</td><td>Maker Settings (MakerMode only, otherwise HTTP 403). GET returns the field list with ranges; passwords only as <code>configured</code>. POST: <code>{"active":bool,"tester":{…},"ota":{…},"sd":{…},"rtc":{…}}</code>, restarts the device</td></tr>
+  <tr><td>/api/leds/settings</td><td>GET/POST</td><td>LED count (1–16) and per-LED <code>group</code> (<code>off</code>, <code>tester</code>, <code>frames</code>) with <code>ota</code> override; applied immediately</td></tr>
   <tr><td>/api/config/reset</td><td>POST</td><td>Device reset: <code>{"scope":"config"|"all","confirm":true}</code>, restarts the device; HTTP 409 while a test or update is running</td></tr>
   <tr><td>/api/mariadb/…, /api/mqtt/…, /api/debug/…</td><td>GET/POST</td><td>Status and settings of the optional services</td></tr>
   <tr><td>/api/sd/…, /api/updates/check, /api/ota</td><td>GET/POST</td><td>SD card file operations; update check and installation</td></tr>
@@ -743,8 +905,8 @@ retried with increasing intervals from 1 to 60 seconds.</p>
 <pre>{
   "project": "EBCTester",
   "target": "esp32s3",
-  "version": "1.99.4",
-  "url": "https://updates.example.org/BatteryTester/EBCTester-1.99.4.bin",
+  "version": "2.0.1",
+  "url": "https://updates.example.org/BatteryTester/EBCTester-2.0.1.bin",
   "size": 2825440,
   "sha256": "&lt;64 lower-case hex digits&gt;",
   "notes": "Release notes"
@@ -769,15 +931,14 @@ firmware.</p>
   <li><b>Storage:</b> NVS and flash are not encrypted by default; protect physical access and the USB port (the start-up log shows a generated access-point password). Change the shared initial login password <code>ebctester</code> on first use.</li>
   <li><b>Firmware:</b> SHA-256 protects against corruption, not against deliberate replacement. Secure Boot, signed images and flash encryption are separate deployment decisions.</li>
 </ul>
-<h3>Known limitations (firmware 1.99.3)</h3>
+<h3>Known limitations (firmware 2.0.0)</h3>
 <ul>
-  <li>Firmware 1.99.3 is a beta version of V2. The hardware acceptance tests on the original board are still pending.</li>
   <li>The UART2 bridge for the manufacturer's PC software is not implemented.</li>
-  <li>The optional DS3231 RTC is implemented from 1.99.18; physical validation and backup-cell retention tests are pending.</li>
+  <li>The real-time clock is implemented; long-term tests of the backup cell on the original board are still pending.</li>
+  <li>The INT output of the DS3231 is reserved; alarms and deep-sleep wake-up are not implemented.</li>
   <li>Only EBC-A20, EBC-A40L and EBC-A50L can be controlled; physical tests with the A50L are pending.</li>
   <li>No battery-chemistry profiles and no temperature measurement.</li>
   <li>MQTT publishes measurements only; status entities do not yet receive values.</li>
-  <li>LED2 of the original board is not driven yet.</li>
   <only maker><li>The card-detect input is active-high only.</li></only>
   <li>A forgotten login password can only be reset by erasing the settings memory over USB.</li>
 </ul>

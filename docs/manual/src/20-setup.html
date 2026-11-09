@@ -14,6 +14,7 @@ edge. The LEDs are on the left side, the BOOT and RESET buttons in the bottom le
 holder in the middle. The antenna socket (u.FL) is on the ESP32 module U4 at the top of the board.</p>
 <ol class="steps">
   <li><b>Antenna.</b> Mount the SMA socket of the antenna cable in the housing, plug its small u.FL plug onto the socket of the ESP32 module and screw on the antenna. Without an antenna Wi-Fi does not work.</li>
+  <li><b>Coin cell.</b> Insert a CR2032 cell into BT1 with "+" facing up. It keeps the real-time clock running while the board is unpowered.</li>
   <li><b>microSD card.</b> Insert a FAT32-formatted card. The card is never formatted automatically; a new, empty database is created on it at first use.</li>
   <li><b>Tester connection.</b> Connect J4 to the tester's serial interface (pin assignment in <a href="#ref:Connectors">Connectors</a>). The board's TX line goes to the tester's RX line and vice versa. With the EBC-A20, J4 can also supply the board from the tester's 19 V adapter.</li>
   <li><b>Power.</b> Power the board either through J4 (19 V) or through USB-C. Both may be connected at the same time.</li>
@@ -40,13 +41,16 @@ first start. Your hardware must, however, meet the following requirements:</p>
   <tr><td class="k">Tester UART</td><td>One TX and one RX pin, connected through a 3.3 V ↔ 5 V level shifter (for example TXS0104E) to the tester's TTL port. TX of the ESP32 goes to RX of the tester and vice versa.</td></tr>
   <tr><td class="k">Dongle UART</td><td>A second TX/RX pair is required by the configuration (reserved for a future PC dongle bridge). It can be left unconnected, but the pins must be free.</td></tr>
   <tr><td class="k">SD card</td><td>4-bit SDMMC (CLK, CMD, D0–D3) or SPI (MISO, MOSI, CS, CLK); 10 kΩ pull-ups to 3.3 V on CMD and D0–D3 (SDMMC) or MISO/MOSI/CS (SPI). Card detect is optional and must be <b>high</b> when a card is inserted.</td></tr>
-  <tr><td class="k">Status LED</td><td>Optional WS2812 (GRB) on any output-capable GPIO.</td></tr>
+  <tr><td class="k">Status LEDs</td><td>Optional WS2812 (GRB) chain of 1–16 LEDs on one output-capable GPIO. The number of LEDs and their functions are set in <span class="ui">Settings → LEDs</span>.</td></tr>
+  <tr><td class="k">Real-time clock</td><td>Optional DS3231 on I²C (SDA, SCL, optionally INT) with pull-ups to 3.3 V and a backup cell. Disabled by default; enabled in Maker Settings.</td></tr>
   <tr><td class="k">GPIO 47</td><td>Leave it open or tie it to GND. A high level selects FactoryMode (see <a href="#ref:Factory and Maker devices">Factory and Maker devices</a>).</td></tr>
   </tbody>
 </table>
 <p>The following pins cannot be used for the peripherals: GPIO 26–32 (internal flash), GPIO 33–37 (octal
 PSRAM), GPIO 19/20 (native USB), GPIO 43/44 (serial console). Avoid the strapping pins 0, 3, 45 and 46. Details
-are given in <a href="#ref:Pins and wiring rules">Pins and wiring rules</a>.</p>
+are given in <a href="#ref:Pins and wiring rules">Pins and wiring rules</a>. A complete guide to building the
+circuit yourself – on the original PCB or with breakout modules on a perfboard – is given in
+<a href="#ref:Building the hardware">Building the hardware</a>.</p>
 <div class="tip"><b>Tip</b>The original EBCTester board is a complete reference design. Its circuit, bill of
 materials and pin assignment are documented in Part II and can be copied for your own build.</div>
 
@@ -54,7 +58,7 @@ materials and pin assignment are documented in Part II and can be copied for you
 <p>Each GitHub release contains a file <code>EBCTester-&lt;version&gt;-full-install.bin</code> with bootloader,
 partition table and application. Flash it once over USB at address <code>0x0</code>, for example with
 Espressif's esptool:</p>
-<pre>esptool.py --chip esp32s3 --port COM5 write_flash 0x0 EBCTester-1.99.3-full-install.bin</pre>
+<pre>esptool.py --chip esp32s3 --port COM5 write_flash 0x0 EBCTester-2.0.0-full-install.bin</pre>
 <p>If the board is not recognised, start it in download mode: hold BOOT, press and release RESET, release BOOT.
 Later updates are installed over Wi-Fi (see <a href="#ref:Updates">Updates</a>). To build the firmware
 yourself, see <a href="#ref:Building from source">Building from source</a>.</p>
@@ -110,7 +114,7 @@ affected by logging in or out. The login can also be switched off completely (se
   <figcaption>A new Maker device: only the access point and the web interface are running</figcaption>
 </figure>
 <ol class="steps">
-  <li>Open <span class="ui">Maker Settings</span> and enter the GPIO numbers of your wiring: tester UART, dongle UART, SD bus and its pins, card detect and the status LED. Use <code>-1</code> for pins that are not connected. All fields are described in <a href="#ref:Maker Settings reference">Maker Settings reference</a>.</li>
+  <li>Open <span class="ui">Maker Settings</span> and enter the GPIO numbers of your wiring: tester UART, dongle UART, SD bus and its pins, card detect, the status LED and – if fitted – the DS3231 real-time clock. Use <code>-1</code> for pins that are not connected. All fields are described in <a href="#ref:Maker Settings reference">Maker Settings reference</a>.</li>
   <li>Set a personal access-point password and web (login) password. Leave the password fields empty to keep the current passwords.</li>
   <li>Review the network and update options (time server, firmware manifest URL) and the recording settings.</li>
   <li>Tick <span class="ui">Configuration active (ConfigAktive)</span>.</li>
@@ -130,8 +134,8 @@ finished first.</div>
 
 <h3>Connecting to your home Wi-Fi (optional)</h3>
 <p>EBCTester works completely without home Wi-Fi. Connecting it to your network is still useful: you can reach
-it from every device in the house, the clock is synchronised from the Internet (needed for correct date/time
-stamps and for update checks) and optional services such as MariaDB and MQTT become possible.</p>
+it from every device in the house, the clock is synchronised from the Internet (needed for update checks and to
+set the real-time clock) and optional services such as MariaDB and MQTT become possible.</p>
 <ol class="steps">
   <li>Go to <span class="ui">Administration → Settings → Configure Wi-Fi</span>.</li>
   <li>Enter the network name (SSID) and password and click <span class="ui">Save</span>. Confirm with the login password when asked.</li>
@@ -157,38 +161,76 @@ plans and parameters in advance. The model can only be changed while no operatio
 active. If the connected tester reports a different supported model, EBCTester shows an error, disconnects and
 does not reconnect automatically until you correct the selection or click <span class="ui">Connect</span> again.</p>
 
+<h3>Date and time</h3>
+<p>Measurements are stored with UTC time stamps. EBCTester takes the time from two sources:</p>
+<ul>
+  <li><b>Internet time (NTP)</b> whenever the device is connected to a Wi-Fi network with Internet access. NTP has
+  priority and is checked again every six hours.</li>
+  <li><b>Real-time clock (DS3231)</b><only factory> on the board</only>. It is read at every start, so the time is
+  correct immediately – also when the device runs only on its own access point. Every successful NTP
+  synchronisation sets the real-time clock again.</li>
+</ul>
+<only factory><p>The real-time clock is always active on the original board. Set it once: connect the device to a
+network with Internet access (see above) for a few minutes. With a CR2032 cell inserted, it then keeps the time
+for years, even without power.</p></only>
+<only maker><p>The DS3231 is optional on Maker devices and disabled by default. Enable it in Maker Settings (see
+<a href="#ref:Real-time clock">Real-time clock</a>). Without it, the time is available only while NTP can be
+reached.</p></only>
+<p>The header shows the device time with the date below it, converted to the time zone and summer-time rules
+of your browser. Dashes (<code>--:--:--</code>) mean that the device has no valid time yet. Without a valid time,
+measurements are stored with the device uptime instead of a date.</p>
+
 <h3>LEDs</h3>
 <only factory>
+<p>The green LED D6 lights up as soon as the 3.3 V supply is OK. If it stays dark, check the 19 V or USB supply.
+LED1 and LED2 are RGB status LEDs. Their function can be changed in <span class="ui">Settings → LEDs</span> (see
+<a href="#ref:LED settings">LED settings</a>); as delivered they show:</p>
 <table>
   <thead><tr><th>LED</th><th>Display</th><th>Meaning</th></tr></thead>
   <tbody>
-  <tr><td class="k">D6 – power</td><td>green, steady</td><td>The 3.3 V supply is OK. If D6 stays dark, check the 19 V or USB supply.</td></tr>
-  <tr><td class="k" rowspan="5">LED1 – status</td><td>slow colour cycle</td><td>Normal operation</td></tr>
-  <tr><td>blue, pulsing</td><td>Firmware update is being downloaded</td></tr>
-  <tr><td>yellow, pulsing</td><td>Downloaded firmware is being verified</td></tr>
-  <tr><td>green, steady</td><td>Update verified, device is about to restart</td></tr>
-  <tr><td>red, blinking</td><td>Firmware update failed</td></tr>
-  <tr><td class="k">LED2</td><td>off</td><td>Not used by firmware 1.99.3 (reserved for a tester activity indicator)</td></tr>
+  <tr><td class="k" rowspan="4">LED1 – tester mode</td><td>off</td><td>Tester not connected</td></tr>
+  <tr><td>green</td><td>Tester connected and idle</td></tr>
+  <tr><td>blue</td><td>Manual operation running (charge or discharge)</td></tr>
+  <tr><td>orange</td><td>Automatic test plan running</td></tr>
+  <tr><td class="k" rowspan="4">LED2 – message frames</td><td>off</td><td>No message from the tester for more than 5 seconds</td></tr>
+  <tr><td>dark green</td><td>Messages are being received</td></tr>
+  <tr><td>short bright-green flash</td><td>One flash for every valid message from the tester</td></tr>
+  <tr><td>orange</td><td>Communication error: invalid message, wrong tester model or a model that cannot be controlled</td></tr>
   </tbody>
 </table>
-<p>The header of the web interface shows the communication with the tester (see
-<a href="#ref:The web interface at a glance">The web interface at a glance</a>).</p>
 </only>
 <only maker>
-<p>If a WS2812 status LED is configured and enabled, it shows the device and update state. While the
-configuration is inactive, the LED stays off.</p>
+<p>If WS2812 status LEDs are configured and enabled, each LED shows one function group. The assignment is made in
+<span class="ui">Settings → LEDs</span> (see <a href="#ref:LED settings">LED settings</a>). By default LED 1
+shows the tester mode and LED 2 the message frames. While the configuration is inactive, all LEDs stay off.</p>
+<table>
+  <thead><tr><th>Function group</th><th>Display</th><th>Meaning</th></tr></thead>
+  <tbody>
+  <tr><td class="k" rowspan="4">Tester mode</td><td>off</td><td>Tester not connected</td></tr>
+  <tr><td>green</td><td>Tester connected and idle</td></tr>
+  <tr><td>blue</td><td>Manual operation running</td></tr>
+  <tr><td>orange</td><td>Automatic test plan running</td></tr>
+  <tr><td class="k" rowspan="4">Message frame status</td><td>off</td><td>No message for more than 5 seconds</td></tr>
+  <tr><td>dark green</td><td>Messages are being received</td></tr>
+  <tr><td>short bright-green flash</td><td>One flash for every valid message</td></tr>
+  <tr><td>orange</td><td>Communication error</td></tr>
+  <tr><td class="k">Off</td><td>off</td><td>LED not used</td></tr>
+  </tbody>
+</table>
+</only>
+<p>During a firmware update, every LED with the option <span class="ui">OTA override</span> (as delivered: LED 1)
+shows the update state instead of its normal function:</p>
 <table>
   <thead><tr><th>Display</th><th>Meaning</th></tr></thead>
   <tbody>
-  <tr><td>off</td><td>No LED configured, LED disabled or configuration inactive</td></tr>
-  <tr><td>slow colour cycle</td><td>Normal operation</td></tr>
   <tr><td>blue, pulsing</td><td>Firmware update is being downloaded</td></tr>
   <tr><td>yellow, pulsing</td><td>Downloaded firmware is being verified</td></tr>
   <tr><td>green, steady</td><td>Update verified, device is about to restart</td></tr>
   <tr><td>red, blinking</td><td>Firmware update failed</td></tr>
   </tbody>
 </table>
-</only>
+<p>The header of the web interface also shows the communication with the tester (see
+<a href="#ref:The web interface at a glance">The web interface at a glance</a>).</p>
 
 <h3>The web interface at a glance</h3>
 <figure>
@@ -202,6 +244,7 @@ configuration is inactive, the LED stays off.</p>
   <tr><td class="k">Model</td><td>The selected tester model (for example EBC-A20). It turns into a warning if the connected tester does not match or is unknown.</td></tr>
   <tr><td class="k">Battery tester / Administration</td><td>Switches between the two sections of the interface. Each section remembers its last open tab.</td></tr>
   <tr><td class="k">RX indicator</td><td>Green while the tester is connected, with a short flash for every valid message received from the tester. Grey = tester not connected, amber = the browser cannot reach the device.</td></tr>
+  <tr><td class="k">Clock</td><td>Device time and date in the time zone of your browser (see <a href="#ref:Date and time">Date and time</a>). Dashes mean that no valid time is available.</td></tr>
   <tr><td class="k">Log out</td><td>Ends the browser session. Hidden when browser login is switched off.</td></tr>
   <tr><td class="k">Language</td><td>English, Deutsch and any languages loaded from the SD card. The choice is stored in the browser; switching reloads the page (unsaved form entries are lost, a running test is not affected).</td></tr>
   </tbody>
