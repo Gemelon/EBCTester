@@ -16,6 +16,7 @@
 #include "nvs.h"
 #include "test_control.h"
 #include "web_interface.h"
+#include "ebc_config.h"
 
 extern const unsigned char mqtt_html_start[] asm("_binary_mqtt_html_start");
 extern const unsigned char mqtt_html_end[] asm("_binary_mqtt_html_end");
@@ -57,6 +58,8 @@ esp_err_t load_settings_locked()
         return ESP_OK;
     }
     ha_mqtt_settings_defaults(&saved_settings);
+    saved_settings.enabled = ebc_config_get()->tester.mqtt_enabled != 0;
+    saved_settings.measurement_interval_seconds = ebc_config_get()->tester.averaging_length;
 
     nvs_handle_t handle;
     const esp_err_t open_err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
@@ -68,12 +71,10 @@ esp_err_t load_settings_locked()
         return open_err;
     }
 
-    uint8_t enabled = 0;
     uint8_t remote_start = 0;
     uint16_t port = saved_settings.port;
     uint32_t interval = saved_settings.measurement_interval_seconds;
-    esp_err_t err = read_nvs_value(handle, "enabled", &enabled, nvs_get_u8);
-    if (err == ESP_OK) err = read_nvs_value(handle, "remote", &remote_start, nvs_get_u8);
+    esp_err_t err = read_nvs_value(handle, "remote", &remote_start, nvs_get_u8);
     if (err == ESP_OK) err = read_nvs_value(handle, "port", &port, nvs_get_u16);
     if (err == ESP_OK) err = read_nvs_value(handle, "interval", &interval, nvs_get_u32);
     if (err == ESP_OK) err = read_nvs_string(handle, "host", saved_settings.host,
@@ -90,7 +91,6 @@ esp_err_t load_settings_locked()
         return err;
     }
 
-    saved_settings.enabled = enabled != 0;
     saved_settings.allow_remote_start = remote_start != 0;
     saved_settings.port = port;
     saved_settings.measurement_interval_seconds = interval;
@@ -177,8 +177,7 @@ bool save_settings(const ha_mqtt_settings_t &settings)
         ESP_LOGE(TAG, "Cannot open MQTT settings: %s", esp_err_to_name(err));
         return false;
     }
-    err = nvs_set_u8(handle, "enabled", updated.enabled ? 1 : 0);
-    if (err == ESP_OK) err = nvs_set_u8(handle, "remote", updated.allow_remote_start ? 1 : 0);
+    err = nvs_set_u8(handle, "remote", updated.allow_remote_start ? 1 : 0);
     if (err == ESP_OK) err = nvs_set_u16(handle, "port", updated.port);
     if (err == ESP_OK) err = nvs_set_u32(handle, "interval", updated.measurement_interval_seconds);
     if (err == ESP_OK) err = nvs_set_str(handle, "host", updated.host);
@@ -191,12 +190,20 @@ bool save_settings(const ha_mqtt_settings_t &settings)
         ESP_LOGE(TAG, "Cannot save MQTT settings: %s", esp_err_to_name(err));
         return false;
     }
+    ebc_config_t cfg = *ebc_config_get();
+    cfg.tester.mqtt_enabled = updated.enabled ? 1 : 0;
+    const esp_err_t config_err = ebc_config_save(&cfg);
+    if (config_err != ESP_OK) {
+        ESP_LOGE(TAG, "Cannot save MQTT activation: %s", esp_err_to_name(config_err));
+        return false;
+    }
     saved_settings = updated;
     return true;
 }
 
 esp_err_t apply_settings(const ha_mqtt_settings_t &settings)
 {
+    if (!ebc_config_is_active()) return ESP_ERR_INVALID_STATE;
     std::lock_guard<std::mutex> lock(client_mutex);
     esp_err_t err = ha_mqtt_stop();
     if (err != ESP_OK) {

@@ -170,10 +170,10 @@ validation popups are replaced by accessible feedback below each field.
 
 ### Branch builds and BIN files
 
-Firmware versions use `major.minor.build`. The build number increases across
-minor and major releases instead of resetting to zero; for example, `1.3.60`
-is followed by `1.4.61` for a new minor release. Set `PROJECT_VER` before the
-first release build and retain it for retries until publication succeeds.
+Firmware versions use `major.minor.build`. New versions must always be greater
+than the latest published one (for example, `1.99.21` to `2.0.0`). Set
+`PROJECT_VER` before the first release build and retain it for retries until
+publication succeeds.
 
 Firmware builds default to size optimization (`CONFIG_COMPILER_OPTIMIZATION_SIZE`,
 `-Os`). With the installed Xtensa GCC 15.2.0 toolchain, debug optimization
@@ -251,10 +251,10 @@ falls back to English. Translations are assigned using `textContent` and
 safe attribute setters, never inserted as HTML or executed as scripts.
 
 English/German resources and the browser runtime are bundled in the shared
-`ota-suite/components/web_interface` component. This project enables
-`CONFIG_OTA_SUITE_WEB_SD_LANGUAGES=y` and registers `ui_localization` before
-starting the server. The shared web component also works standalone with
-that option disabled. SD language reads hold the same storage lock as SQLite;
+`ota-suite/components/web_interface` component. This project seeds the
+SD-language setting from SDK defaults and passes its NVS value to the shared
+web component. `ui_localization` is registered only with active configuration.
+SD language reads hold the same storage lock as SQLite;
 no card is formatted and the database schema is unchanged.
 
 Validation: `node tests\ui_languages_test.js` checks catalog coverage, English
@@ -346,6 +346,10 @@ same `network` NVS namespace and are not erased. New builds keep the
 
 In menuconfig:
 
+- **EBCTester → DS3231 real-time clock** seeds the optional RTC settings:
+  INT GPIO14, I2C SDA GPIO15, I2C SCL GPIO16. FactoryMode always enables RTC;
+  MakerMode defaults to off and can enable it in Maker Settings.
+  Changes take effect after restart.
 - **EBCTester → Home Assistant MQTT → Enable MQTT component** enables MQTT.
   Broker settings and remote-start permission are configured on the device
   under **Settings → Home Assistant MQTT** after the firmware is installed.
@@ -362,6 +366,72 @@ In menuconfig:
 - **OTA Suite network**: optional AP/admin password (8–63 characters)
   and SNTP server. An empty password setting uses the stored password or
   generates and persists one in NVS. NVS errors never silently erase settings.
+
+### Optional RTC and device clock
+
+The central `ebc_cfg/config` blob version **2** appends `rtc.enabled`,
+`rtc.int_gpio`, `rtc.sda_gpio`, and `rtc.scl_gpio`. Valid version-1 blobs are
+CRC-checked and migrated without resetting credentials, mode, activation,
+or other settings. FactoryMode forces RTC enabled on initial setup, load
+(including existing version-2 configurations), migration and save. FactoryMode
+also enforces original-board RTC pins (INT/SDA/SCL = GPIO14/GPIO15/GPIO16);
+corrected settings are persisted and validated with RTC active.
+MakerMode defaults to off, preserves saved RTC selections and remains off when
+migrating from version 1. The obsolete SDK RTC-enable switch is no longer used;
+the mode determines activation defaults.
+Configuration read/write blobs and save candidates are allocated on the heap,
+not the task stack. The read buffer is freed before persisting a migration to
+avoid overlapping large buffers during startup. Allocation failures are logged
+and returned without resetting NVS; temporary buffers are cleared and released.
+Inactive configurations never initialize the RTC or I2C bus.
+Enabled RTC pins participate in the existing reserved-pin and uniqueness
+validation. SDA/SCL are mandatory output-capable pins; INT is optional and
+reserved as an input, without alarms or deep-sleep wakeup.
+
+`main/rtc_clock.c` owns a 100 kHz ESP-IDF master I2C bus and DS3231 device at
+7-bit address `0x68`. Transfers time out after 100 ms. Register reads use the
+DS3231's buffered time snapshot. Calendar validation covers BCD, 12/24-hour
+format, century, month lengths and leap years; valid UTC starts at 2024-01-01.
+The oscillator-stop flag (OSF) rejects untrusted time and is cleared only after
+writing NTP time. EOSC is cleared to allow battery operation; square-wave and
+alarm interrupt outputs are disabled. External pull-ups to 3.3 V are required.
+
+Startup reads RTC time before application recording/network services start.
+The network manager supplies a nonblocking NTP callback and an optional
+six-hour SNTP interval. The callback only notifies the low-priority RTC task:
+SNTP already sets device time, then the task writes UTC to the RTC. After six
+hours without a new NTP notification, the task reads RTC time into the device
+clock. A pending NTP notification takes priority over an in-flight RTC read.
+I2C failures or invalid RTC time are logged, leave the existing clock intact,
+and do not prevent network/UI/recording startup.
+An enabled but absent RTC therefore falls back to NTP; subsequent scheduled
+operations retry the RTC. Without both sources, UTC remains unavailable and
+the recorder continues its existing uptime-based behavior.
+
+The optional shared-web `get_clock_utc` callback adds `clockEnabled` and
+`clockUtc` (UTC epoch seconds, zero when unavailable) to authenticated
+`GET /api/status`. Header time/date are right of EBC RX. The browser uses
+device UTC plus monotonic elapsed time and its own time zone/daylight-saving
+rules; it never substitutes its own wall clock. After 15 seconds without a
+fresh device status, time/date become placeholders.
+RTC-disabled devices retain their existing SNTP interval and synchronization.
+
+Host-only verification (MSVC developer shell on Windows):
+
+```powershell
+python tests\rtc_clock_test.py
+python tests\ebc_config_test.py
+python tests\ebc_config_web_test.py
+node --test tests\rtc_clock.test.js tests\maker_settings.test.js tests\web_interface.test.js
+```
+
+After building in the ESP-IDF ESP32-S3 environment, run
+`python tests\ebc_config_stack_test.py` to verify that actual compiled
+configuration stack frames stay within 256 bytes. This catches large local
+buffers that native tests with desktop-sized stacks cannot detect.
+
+Original-board RTC, backup-cell retention and six-hour hardware operation
+still require physical validation. The tests never flash or start a battery test.
 
 For initial provisioning, install the partition table and rollback-enabled
 bootloader serially. This project requires a **16 MiB flash** module, such as an
@@ -482,9 +552,10 @@ The dashboard is read-only. Demo-data generation and run deletion are not
 available; their former POST endpoints are no longer registered. Existing
 stored runs, including previously generated demo data, remain unchanged.
 
-The tab order is set with `CONFIG_OTA_SUITE_WEB_TAB_ORDER` in
-`sdkconfig.defaults` (`dashboard,battery,manual,auto,resistance,overview,sd-card,updates,settings`);
-the first tab opens on page load.
+The tab order and primary tabs come from NVS; SDK configuration is used only
+to seed a new configuration. Maker devices can edit them in **Maker Settings**.
+The first configured available tab opens on page load. Inactive Maker devices
+open Maker Settings first regardless of the stored tab order.
 
 The header and browser title use the firmware project name **EBCTester**.
 The top menu splits tabs into **Battery tester** (Measurements, Battery, Manual,
@@ -500,6 +571,52 @@ are shown in amber.
 All endpoints require web login; POST endpoints also require the CSRF token.
 Each request opens the database under the shared SD lock and closes it again;
 503 means the card or database is not ready or busy.
+
+## Configurable physical LED groups
+
+**Settings > LED function groups** is available in both MakerMode and
+FactoryMode. The WS2812 chain contains two board LEDs followed by optional
+extensions, with 1-16 configured LEDs. Defaults: LED1 = Tester mode + OTA;
+LED2 = Message frame status. Select a normal group and optional OTA override
+independently for each LED; Off + OTA provides a dedicated update indicator.
+Inactive chain positions are driven off. Lowering the count preserves the
+hidden assignments, so increasing it restores them.
+
+| Group | State | Output |
+| --- | --- | --- |
+| Tester mode | Disconnected | Off |
+| Tester mode | Connected, idle | Green |
+| Tester mode | Manual operation active | Blue |
+| Tester mode | Automatic plan running, including waits | Orange |
+| Message frame status | No valid or invalid message for more than 5 s | Off |
+| Message frame status | Receiving | Dark green |
+| Message frame status | Each valid message | One bright green flash |
+| Message frame status | Latest message invalid, unknown/unsupported tester, or model mismatch | Orange |
+| OTA | Downloading | Pulsing blue |
+| OTA | Verifying | Pulsing yellow |
+| OTA | Verified, restarting | Steady green |
+| OTA | Failed | Blinking red |
+
+OTA takes priority only on opted-in LEDs and returns to the normal group when
+the OTA state becomes idle. Silence takes priority over a remembered
+communication error. A later valid message clears an invalid-frame error;
+model mismatch remains until the link is corrected.
+
+`GET /api/leds/settings` returns `count`, `maxCount`, `hardwareEnabled`, the
+`groups` catalog, and 16 `leds` assignments. `POST /api/leds/settings` accepts
+`count` (integer 1-16) and exactly 16 `{group, ota}` objects, with stable group
+IDs `off`, `tester`, and `frames`, and a boolean `ota`. POST requires the
+standard settings authorization and CSRF token. The versioned configuration
+is stored separately in NVS namespace `leds`, key `config`, preserving
+existing hardware configuration without a schema migration. A full NVS reset
+also clears LED assignments.
+
+The reusable `ota-suite/status_led` driver accepts a normal-renderer callback
+and handles WS2812 output and selective OTA priority, without depending on
+tester internals. EBCTester's group catalog and policy provide normal colors;
+new groups add stable IDs without changing existing assignments. The LED task
+refreshes every 50 ms and replays counted valid frames as 100 ms flashes with
+100 ms dark-green gaps. No UART, recording, or OTA callbacks wait for LED output.
 
 ## MariaDB backup
 
@@ -544,6 +661,10 @@ implemented yet; UART2 is initialized and its input discarded.
 
 - **Battery**: label, manufacturer, serial, manufacturing date, nominal
   capacity, notes; stored in NVS and optionally in the SQLite database.
+  Renaming a saved battery is done by changing its label in the form and
+  pressing **Apply and save to database**. The request includes
+  `previousLabel`, updates the existing row in `ebc_battery`, and keeps the
+  `battery_id`, so linked test runs stay associated with the renamed battery.
   **Delete battery** sits immediately after **New battery** and targets the
   saved battery displayed in the form, not a different saved-list selection.
   Confirmation and settings authorization are required. The action is
@@ -566,8 +687,8 @@ implemented yet; UART2 is initialized and its input discarded.
   a running plan is marked "Interrupted" and must be reset.
 
 Active tests are recorded as test runs with segments; each measurement is the
-average of `CONFIG_TEST_CONTROL_AVERAGING_LENGTH` frames (default 20 ≈ 20 s).
-The device id is `CONFIG_TEST_STORE_DEVICE_ID`.
+average of the NVS `tester.averaging_length` frames (default 20 ≈ 20 s).
+The device ID is NVS `tester.device_id`. SDK values seed both on first start.
 
 API (login required, POST with CSRF token): `GET /api/tester/status`,
 `/api/tester/settings`, `/api/tester/catalog`; `POST /api/tester/battery`,
@@ -641,7 +762,8 @@ in mOhm (NULL when invalid), validity, error and onset uncertainty.
 precision; `device_uptime_ms` remains available without synchronized wall time.
 Missing samples have NULL timestamps/loaded values. Without synchronized time,
 UTC is NULL, not an invented calendar timestamp. SNTP supplies UTC when WLAN is
-available; an offline start without a valid clock cannot know calendar time.
+available; the optional DS3231 supplies it offline when enabled and valid.
+An offline start without either valid clock cannot know calendar time.
 
 The battery is linked through `ebc_test_run.battery_id`; the view
 `ebc_resistance_result_view` exposes battery id/label, device, test start and run
@@ -868,9 +990,10 @@ Availability checks never contact the image URL.
 The shared web interface uses `/login` instead of the browser's Basic-auth
 dialog. `POST /api/auth/login` accepts JSON `username`/`password` (`admin` and the
 configured web password) with `X-Web-Login: 1`. The initial password is
-`ebctester`, set by `CONFIG_OTA_SUITE_WEB_PASSWORD` in `sdkconfig` and
-`sdkconfig.defaults`. It is independent of the Wi-Fi/AP password. Existing
-devices without a saved web password use this default after updating.
+`ebctester`, seeded from SDK defaults into the central `ebc_cfg/config` blob.
+It is independent of the Wi-Fi/AP password. The central blob also stores login
+enabled/disabled and the session duration; the shared authentication component
+persists changes through an application callback, not a second password store.
 No CORS permission is granted. Invalid
 credentials do not create sessions; failed password checks impose a one-second
 retry interval without blocking a server task.
@@ -922,8 +1045,8 @@ device status, extension assets, SD language files and all controls remain prote
 The login page uses built-in English/German, not protected SD catalogs.
 Existing Basic-auth API clients must switch to cookie login and CSRF tokens.
 
-`CONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD` in **OTA Suite web interface**
-defaults to `y` (also set in `sdkconfig.defaults`). When enabled, every device
+The NVS `ota.settings_require_password` setting defaults to enabled from SDK
+configuration and is editable in Maker Settings. When enabled, every device
 settings save requires `X-Admin-Password` in addition to CSRF and a session
 when browser login is enabled. Disabling browser login does not remove this
 password check. The header must contain the currently configured login password,
@@ -935,7 +1058,7 @@ write or apply settings. The password is not the AP, Wi-Fi station, MQTT broker
 or MariaDB password.
 
 Protected saves are `/api/network`, `/api/auth/settings`, `/api/debug/settings`,
-`/api/mariadb/settings`, and `/api/mqtt/settings` (when MQTT is compiled in).
+`/api/mariadb/settings`, `/api/mqtt/settings`, `/api/maker/config`, and `/api/config/reset`.
 They use `web_interface_authorize_settings_request()`. Extension settings UIs
 use `await WebAuth.settingsHeaders()` and cancel the save if it returns `null`.
 Extensions must use this helper and the server-side settings guard for future

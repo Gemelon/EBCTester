@@ -59,6 +59,8 @@ typedef struct {
     uint32_t frames_ok;
     uint32_t frames_bad;
     uint32_t last_frame_age_ms;
+    uint32_t last_invalid_frame_age_ms;
+    bool last_message_invalid;
 } ebc_link_status_t;
 
 /* Callbacks run in the link task; they must not block for long. */

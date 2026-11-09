@@ -1,0 +1,330 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+<only maker>
+<h2 class="chapter">Maker Settings reference</h2>
+<p>The <span class="ui">Maker Settings</span> tab exists only in MakerMode. On an inactive device it is the
+first tab; after activation it is found at the end of the Administration section. All values are stored on
+the device (see <a href="#ref:Configuration storage">Configuration storage</a>) and take effect after the
+restart that follows <span class="ui">Save and restart</span>.</p>
+<figure class="tall">
+  <img src="../images/manual/maker-settings.png" alt="Maker Settings">
+  <figcaption>Maker Settings with the pin assignment of the original board</figcaption>
+</figure>
+
+<h3>EBCTester</h3>
+<table>
+  <thead><tr><th>Field</th><th>Range</th><th>Meaning</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Tester UART TX / RX GPIO</td><td>−1 … 48</td><td>Pins of UART1 to the tester (ESP32 point of view: TX sends to the tester). Required when active.</td></tr>
+  <tr><td class="k">Tester UART baud rate</td><td>1200 … 115200</td><td>The EBC testers use 9600 Bd (8 data bits, odd parity, 1 stop bit). Change only for special adapters.</td></tr>
+  <tr><td class="k">Dongle UART TX / RX GPIO, baud rate</td><td>−1 … 48 / 1200 … 115200</td><td>UART2, reserved for the bridge to the manufacturer's PC software (not implemented yet). Two free pins are required when active.</td></tr>
+  <tr><td class="k">Frames per stored average</td><td>1 … 120</td><td>The tester sends about one status message per second. This many messages are averaged into one stored measurement (default 20, about one measurement every 20 s). A mode, step, cycle or set-point change always starts a new average.</td></tr>
+  <tr><td class="k">Device ID</td><td>text</td><td>Identifier stored with plans and test runs (default <code>EBC-A20</code>).</td></tr>
+  <tr><td class="k">Enable Home Assistant MQTT</td><td>on/off</td><td>Initial state of the MQTT client. The broker itself is configured under <span class="ui">Settings → Home Assistant MQTT</span>.</td></tr>
+  </tbody>
+</table>
+
+<h3>Network, OTA and web</h3>
+<table>
+  <thead><tr><th>Field</th><th>Range</th><th>Meaning</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Access point password</td><td>8 … 63 characters</td><td>Password of the setup access point <code>BatteryTester-XXXXXX</code>. Leave empty to keep the current password.</td></tr>
+  <tr><td class="k">SNTP server</td><td>host name</td><td>Time server (default <code>pool.ntp.org</code>). The time is needed for date stamps and HTTPS update checks.</td></tr>
+  <tr><td class="k">Firmware manifest URL</td><td>HTTPS URL</td><td>Address of <code>firmware.json</code> that announces new firmware. Empty disables update checks. <code>http://</code> is accepted only when unencrypted updates are allowed.</td></tr>
+  <tr><td class="k">Allow unencrypted HTTP firmware updates</td><td>on/off</td><td>Only for a trusted test network. Default off.</td></tr>
+  <tr><td class="k">Enable status LED / Status LED GPIO</td><td>on/off, −1 … 48</td><td>WS2812 status LED and its data pin.</td></tr>
+  <tr><td class="k">Web password</td><td>8 … 63 printable ASCII</td><td>Login password for user <code>admin</code>; the same password as in Login Settings. No spaces at the beginning or end. Leave empty to keep it.</td></tr>
+  <tr><td class="k">Confirm settings changes with password</td><td>on/off</td><td>When on (default), every settings change asks for the login password, also with browser login switched off.</td></tr>
+  <tr><td class="k">Load additional languages from SD</td><td>on/off</td><td>Allows UI translations from the <code>/languages</code> folder of the SD card.</td></tr>
+  <tr><td class="k">Primary tabs</td><td>tab ids</td><td>Tabs shown in the Battery tester section; all others appear under Administration. Default <code>dashboard,battery,manual,auto,resistance</code>.</td></tr>
+  <tr><td class="k">Tab order</td><td>tab ids</td><td>Display order; the first tab opens when the page loads. Unlisted tabs are appended. Tab ids: <code>dashboard</code>, <code>battery</code>, <code>manual</code>, <code>auto</code>, <code>resistance</code>, <code>overview</code>, <code>test-runs</code>, <code>sd-card</code>, <code>updates</code>, <code>settings</code>, <code>debug</code>, <code>maker-settings</code>.</td></tr>
+  </tbody>
+</table>
+
+<h3>SD card</h3>
+<table>
+  <thead><tr><th>Field</th><th>Range</th><th>Meaning</th></tr></thead>
+  <tbody>
+  <tr><td class="k">SD bus</td><td>4-bit SDMMC / SPI</td><td>Bus mode of the card socket. Only the pins of the selected bus are used.</td></tr>
+  <tr><td class="k">SDMMC / SPI frequency</td><td>400 … 20000 kHz</td><td>Bus clock, default 10 000 kHz. Reduce it for long wires.</td></tr>
+  <tr><td class="k">Card-detect GPIO</td><td>−1 … 48</td><td>Input that is <b>high</b> when a card is inserted. <code>−1</code> = no card-detect switch; the card is then assumed to be present.</td></tr>
+  <tr><td class="k">SD mount point</td><td><code>/name</code></td><td>Mount point of the file system, default <code>/sdcard</code>. One level only.</td></tr>
+  <tr><td class="k">SDMMC CLK, CMD, D0 … D3 GPIO</td><td>−1 … 48</td><td>Pins for 4-bit SDMMC; all six are required with this bus.</td></tr>
+  <tr><td class="k">SPI MISO, MOSI, CS, CLK GPIO</td><td>−1 … 48</td><td>Pins for SPI; all four are required with this bus.</td></tr>
+  </tbody>
+</table>
+
+<h3>Real-time clock</h3>
+<table>
+  <thead><tr><th>Field</th><th>Default</th><th>Meaning</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Enable DS3231 RTC</td><td>off in MakerMode</td><td>Optional UTC clock and offline time source. FactoryMode always enables it. Requires active configuration; changes take effect after restart.</td></tr>
+  <tr><td class="k">RTC INT GPIO</td><td>14</td><td>Reserved input; use -1 if disconnected. Alarms and wakeup are not implemented.</td></tr>
+  <tr><td class="k">I2C SDA GPIO</td><td>15</td><td>RTC data pin; required when RTC is enabled.</td></tr>
+  <tr><td class="k">I2C SCL GPIO</td><td>16</td><td>RTC clock pin; required when RTC is enabled. The bus uses 100 kHz and external pull-ups to 3.3 V.</td></tr>
+  </tbody>
+</table>
+<p>At startup, a valid RTC supplies device time until NTP is available. Successful NTP responses update device
+time and RTC every six hours; without NTP, device time is refreshed from the RTC every six hours. Invalid time,
+a stopped oscillator or missing hardware is reported in the log. The header shows time above date beside EBC RX
+using the browser's current time zone, including summer time. Both clocks store UTC. With RTC disabled, existing
+NTP operation is unchanged.</p>
+<p>Missing RTC hardware never blocks normal services. NTP remains available as a fallback; without NTP and
+a valid RTC, calendar time is unavailable and recording uses device uptime.</p>
+
+<h3>Activation and validation</h3>
+<p>The checkbox <span class="ui">Configuration active (ConfigAktive)</span> decides whether the hardware is
+used after the restart. The following checks apply to every save; with ConfigAktive ticked the additional pin
+checks apply:</p>
+<table>
+  <thead><tr><th>Always</th><th>Additionally when active</th></tr></thead>
+  <tbody>
+  <tr><td>Passwords: AP password empty or 8–63 characters; web password 8–63 printable ASCII characters without leading/trailing spaces</td>
+      <td>Tester and dongle UART pins, the pins of the selected SD bus and – if enabled – the LED and RTC SDA/SCL pins are set</td></tr>
+  <tr><td>Every GPIO is −1 or a valid ESP32-S3 GPIO</td><td>Output pins are output-capable; RX pins, card detect and optional RTC INT may be input-only</td></tr>
+  <tr><td>Ranges of baud rates, averaging length, SD frequencies; device ID and SNTP server not empty; mount point of the form <code>/name</code>; tab lists contain only <code>a–z</code>, <code>0–9</code>, <code>-</code> and <code>,</code></td>
+      <td>No pin is assigned twice</td></tr>
+  <tr><td>Manifest URL empty, <code>https://</code> (or <code>http://</code> with HTTP allowed), without user name or fragment</td>
+      <td>No reserved pin: GPIO 19/20 (USB), 26–37 (flash/PSRAM), 43/44 (console)</td></tr>
+  </tbody>
+</table>
+<p>If a stored configuration that is marked active fails the pin checks at a later start (for example
+after a firmware change), the device starts inactive and logs <i>Unsafe peripheral configuration; starting
+inactive</i>. Correct the settings in Maker Settings and activate them again.</p>
+<p>To return a device to the inactive setup state, untick ConfigAktive and save. The settings are kept.</p>
+</only>
+
+<h2 class="chapter">Battery tester section</h2>
+
+<h3>Measurements</h3>
+<p>The <span class="ui">Measurements</span> tab is the dashboard for recorded test runs. All data comes from the
+database on the SD card, so the page also works on the access point without Internet.</p>
+<figure class="tall">
+  <img src="../images/manual/dashboard.png" alt="Measurements dashboard">
+  <figcaption>Measurements dashboard during a running capacity test</figcaption>
+</figure>
+<h4>Selecting a test run</h4>
+<ol>
+  <li>Optionally restrict the list with <span class="ui">Battery</span>.</li>
+  <li>Choose a run under <span class="ui">Test run</span>. Runs are listed newest first with date, battery, plan and status (or with the custom name given in test-run management).</li>
+  <li>Click <span class="ui">Load data</span>. <span class="ui">Refresh list</span> re-reads the list of runs, for example after a new test was started.</li>
+</ol>
+<p>The newest run is loaded automatically when the page opens. A running test is refreshed every 15 seconds.</p>
+<h4>What is shown</h4>
+<ul>
+  <li><b>Summary cards:</b> battery (label, manufacturer, serial number, nominal capacity), the latest current, voltage and capacity, and the run status with current step and cycle.</li>
+  <li><b>Voltage &amp; current over time:</b> one colour per segment; voltage as solid line (left axis), current as dashed line (right axis). The time axis shows hours:minutes since the start of the run.</li>
+  <li><b>Capacity over time</b> for every charge or discharge segment, and <b>Capacity per segment</b> as a bar chart (green = charge, red = discharge).</li>
+  <li><b>Segment timeline:</b> one row per segment with mode, plan step, cycle, the three set-points (SP1–SP3), number of measurements, capacity, start time and duration.</li>
+</ul>
+<p>A <i>segment</i> is a continuous section of a run with one operating mode – for example "charge CC/CV" or
+"wait". To keep the charts fast, at most 1500 points are drawn; the line above the timeline states how many of
+the stored points are shown ("every n-th"). Segment boundaries are always included. Hover over a chart (or tap
+it) to see the exact values.</p>
+<table>
+  <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Running</td><td>The test is still being recorded.</td></tr>
+  <tr><td class="k">Completed</td><td>Finished normally (plan complete or cut-off condition reached).</td></tr>
+  <tr><td class="k">Stopped</td><td>Stopped by the user.</td></tr>
+  <tr><td class="k">Interrupted</td><td>Ended by a power loss, restart or lost connection.</td></tr>
+  <tr><td class="k">Error</td><td>Ended because of an error (see the debug log for details).</td></tr>
+  </tbody>
+</table>
+
+<h3>Battery</h3>
+<p>Here you enter the battery that will be tested next. Its data is stored with every test run, so you always
+know which cell or pack a measurement belongs to.</p>
+<figure>
+  <img src="../images/manual/battery.png" alt="Battery tab">
+  <figcaption>Battery tab</figcaption>
+</figure>
+<table>
+  <thead><tr><th>Field</th><th>Description</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Label</td><td>Unique name of the battery, for example <i>LFP-50Ah #01</i>. Required for saving to the database.</td></tr>
+  <tr><td class="k">Manufacturer, Serial number</td><td>Free text.</td></tr>
+  <tr><td class="k">Manufacture date</td><td>Date picker.</td></tr>
+  <tr><td class="k">Nominal capacity (Ah)</td><td>Rated capacity; shown in the dashboard for comparison.</td></tr>
+  <tr><td class="k">Notes</td><td>Up to 255 characters.</td></tr>
+  </tbody>
+</table>
+<table>
+  <thead><tr><th>Button</th><th>Function</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Apply</td><td>Makes the entered battery the current battery (stored on the device). The next test run is recorded with it.</td></tr>
+  <tr><td class="k">Apply and save to database</td><td>Additionally saves the battery in the SD database so it can be selected again later. To rename a saved battery, load it, change <span class="ui">Label</span>, then click this button.</td></tr>
+  <tr><td class="k">New battery</td><td>Clears the form for a new entry.</td></tr>
+  <tr><td class="k">Delete battery</td><td>Deletes the saved battery shown in the form after confirmation and the login password. Not possible while it is used by recorded runs – delete those runs first in test-run management – or while a recording, plan or DCIR test is active. MariaDB backups are not changed.</td></tr>
+  <tr><td class="k">Load button / Refresh list</td><td>Under <span class="ui">Saved batteries</span>: select a battery and click the button below the list (labelled <span class="ui">Charge</span> in firmware 1.99.3) or double-click the entry to load it into the form. <span class="ui">Refresh list</span> re-reads the database.</td></tr>
+  </tbody>
+</table>
+<p>Empty fields do not overwrite values that are already stored.</p>
+
+<h3>Manual control</h3>
+<p>The <span class="ui">Manual</span> tab gives you direct control of the tester – comparable to the buttons on
+the tester itself, but with recording.</p>
+<figure>
+  <img src="../images/manual/manual.png" alt="Manual control">
+  <figcaption>Manual control with the tester connected and idle</figcaption>
+</figure>
+<h4>Status</h4>
+<p>Shows the live values from the tester (voltage, current, power, capacity), the operating mode with its code,
+the set-points currently active in the tester, the current battery, the recording state (number of stored
+measurements) and whether a test plan is active. The badge at the top right shows <i>Disconnected</i>,
+<i>Connected</i> or the active mode. <span class="ui">Stop</span> stops the current operation immediately; it is
+always available while connected.</p>
+<h4>Connection</h4>
+<ul>
+  <li><span class="ui">Connect</span> starts communication with the tester. The tester's keypad is locked while connected.</li>
+  <li><span class="ui">Disconnect (unlock keypad)</span> ends the connection and unlocks the keypad.</li>
+  <li><span class="ui">Connect automatically (every 3 s)</span>: EBCTester tries to connect on its own, for example after switching the tester on.</li>
+  <li>Diagnostic values: model ID reported by the tester, number of valid/invalid messages, age of the last message, and whether a command is waiting for confirmation.</li>
+</ul>
+<h4>Charge (C-CV)</h4>
+<p>Charges with constant current until the charge voltage is reached, then with constant voltage until the
+current falls below the cut-off current.</p>
+<table>
+  <thead><tr><th>Field</th><th>Meaning</th><th>EBC-A20 range</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Current (A)</td><td>Charge current in the CC phase</td><td>0.01 – 5 A</td></tr>
+  <tr><td class="k">Charge voltage (V)</td><td>End-of-charge voltage (CV level)</td><td>up to 18 V</td></tr>
+  <tr><td class="k">Cutoff current (A)</td><td>Charging ends when the current drops below this value</td><td>≤ charge current</td></tr>
+  </tbody>
+</table>
+<h4>Discharge</h4>
+<p>Select <span class="ui">Constant current (D-CC)</span> or <span class="ui">Constant power (D-CP)</span>.</p>
+<table>
+  <thead><tr><th>Field</th><th>Meaning</th><th>EBC-A20 range</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Current (A) / Power (W)</td><td>Discharge current (D-CC) or power (D-CP)</td><td>0.01 – 20 A / 1 – 85 W</td></tr>
+  <tr><td class="k">Cutoff voltage (V)</td><td>Discharging ends at this battery voltage</td><td>up to 30 V</td></tr>
+  <tr><td class="k">Max. time (min, 0 = off)</td><td>Additional time limit</td><td>0 – 239 min</td></tr>
+  </tbody>
+</table>
+<p>In D-CP mode the power must also be achievable within the maximum current at the cut-off voltage
+(power ≤ max. current × cut-off voltage). For the A40L/A50L the ranges of the respective model apply.</p>
+<p>After <span class="ui">Start charging</span> or <span class="ui">Start discharging</span>, EBCTester waits up
+to 10 seconds for the tester to confirm the mode; otherwise it reports an error and sends Stop. Every manual
+operation is recorded automatically as a test run.</p>
+<div class="note"><b>Note</b>Start buttons are disabled while a command is pending, while another operation or a
+test plan is running (including its wait steps) and while no tester is connected. The reason is shown below the
+button.</div>
+
+<h3>Automatic control (test plans)</h3>
+<p>A test plan is a sequence of up to 10 steps that EBCTester executes on its own. The plan runs on the ESP32
+and continues without Wi-Fi and without an open browser as long as the device is powered.</p>
+<figure>
+  <img src="../images/manual/auto.png" alt="Automatic control">
+  <figcaption>Automatic control: running plan, plan table and step editor</figcaption>
+</figure>
+<h4>Step types</h4>
+<table>
+  <thead><tr><th>Mode</th><th>Value 1</th><th>Value 2</th><th>Value 3</th><th>Function</th></tr></thead>
+  <tbody>
+  <tr><td class="k">D-CC</td><td>Current (A)</td><td>Cutoff voltage (V)</td><td>Max. time (min, 0 = off)</td><td>Discharge at constant current until the cut-off voltage.</td></tr>
+  <tr><td class="k">D-CP</td><td>Power (W)</td><td>Cutoff voltage (V)</td><td>Max. time (min, 0 = off)</td><td>Discharge at constant power until the cut-off voltage.</td></tr>
+  <tr><td class="k">C-CV</td><td>Current (A)</td><td>Charge voltage (V)</td><td>Cutoff current (A)</td><td>Charge CC/CV until the cut-off current.</td></tr>
+  <tr><td class="k">Wait</td><td>–</td><td>–</td><td>Duration (1 – 239 min)</td><td>Pause, for example to let the cell recover.</td></tr>
+  <tr><td class="k">Cycle</td><td>–</td><td>–</td><td>Total passes (1 – 239)</td><td>Returns to step 1 until the number of passes is reached. Not allowed as first step and only once per plan.</td></tr>
+  </tbody>
+</table>
+<h4>Creating and editing a plan</h4>
+<ol class="steps">
+  <li>Enter a <span class="ui">Name</span> for the plan.</li>
+  <li>In the <span class="ui">Step editor</span>, choose the mode, fill in the values and click <span class="ui">Add</span>. The step is appended – or inserted after the selected row.</li>
+  <li>Click a row in the table to select it. You can then <span class="ui">Replace</span> it with the editor values, move it (<span class="ui">↑ Move up</span>, <span class="ui">↓ Move down</span>) or <span class="ui">Delete step</span>. Click the row again to deselect it.</li>
+  <li><span class="ui">Save to database</span> stores the plan under its name on the SD card. <span class="ui">Delete all steps</span> clears the table.</li>
+</ol>
+<p>Every change is saved on the device immediately and checked against the limits of the selected tester.
+Saved plans can be loaded again with the <span class="ui">Saved plans</span> list and <span class="ui">Load</span>;
+<span class="ui">↻</span> refreshes the list.</p>
+<h4>Example: capacity test of a LiFePO4 cell</h4>
+<table>
+  <thead><tr><th>#</th><th>Mode</th><th>Values</th><th>Purpose</th></tr></thead>
+  <tbody>
+  <tr><td>1</td><td>C-CV</td><td>5.00 A · 3.65 V · 0.50 A</td><td>Charge fully</td></tr>
+  <tr><td>2</td><td>Wait</td><td>30 min</td><td>Let the cell settle</td></tr>
+  <tr><td>3</td><td>D-CC</td><td>20.00 A · 2.50 V · 0 (no time limit)</td><td>Measure the capacity</td></tr>
+  <tr><td>4</td><td>Wait</td><td>30 min</td><td>Let the cell recover</td></tr>
+  <tr><td>5</td><td>C-CV</td><td>5.00 A · 3.40 V · 0.50 A</td><td>Charge to a storage level</td></tr>
+  </tbody>
+</table>
+<p class="small muted">Example values only – use the values from your cell's data sheet.</p>
+<h4>Running a plan</h4>
+<p>Connect the tester, check the current battery and click <span class="ui">Start plan</span>. The
+<span class="ui">Plan sequence</span> card shows the plan name, current step, cycle, time in the step, status
+message, battery, tester mode, live values and the number of recorded measurements. The active step is
+highlighted green in the table.</p>
+<ul>
+  <li><span class="ui">Abort</span> stops the plan and the tester after confirmation.</li>
+  <li><span class="ui">Reset status</span> returns a completed, aborted or interrupted plan to "Ready" so it can be started again.</li>
+</ul>
+<div class="caution"><b>Caution</b>After a power failure or restart, a running plan is not resumed automatically.
+It is marked <i>Interrupted</i>. Check the battery, then click <span class="ui">Reset status</span> and start
+again if required.</div>
+
+<h3>Internal resistance (DCIR)</h3>
+<p>This tab measures the DC internal resistance of a battery with a load pulse. The battery rests without load,
+then a defined discharge current is switched on. From the voltage drop the resistance is calculated three
+times – by default 1, 5 and 10 seconds after switching on:</p>
+<p style="text-align:center"><b>R = (U<sub>1</sub> − U<sub>2</sub>) / I<sub>2</sub></b></p>
+<p>U<sub>1</sub> is the average rest voltage at the end of the rest phase, U<sub>2</sub> and I<sub>2</sub> are the
+voltage and the measured current at the sampling time. Short times mainly reflect the ohmic resistance
+(contacts, electrolyte); longer times include polarisation effects.</p>
+<figure class="tall">
+  <img src="../images/manual/resistance.png" alt="Internal resistance">
+  <figcaption>Internal resistance: parameters, sequence and results of a completed test</figcaption>
+</figure>
+<h4>Preparation methods</h4>
+<ul>
+  <li><b>State of charge already prepared:</b> the battery is already at the desired state of charge. The test starts with the rest phase.</li>
+  <li><b>Automatic preparation and measurement:</b> the battery is first fully charged (C-CV), then the calculated amount of charge is removed: usable capacity × (100 − target SOC) / 100. The removed charge is integrated from the measured current. The target SOC is therefore an estimate based on the entered capacity, not a measured value. A target of 100 % skips the discharge.</li>
+</ul>
+<h4>Parameters</h4>
+<table>
+  <thead><tr><th>Group / parameter</th><th>Meaning</th><th>Default</th></tr></thead>
+  <tbody>
+  <tr><td colspan="3"><b>Automatic preparation</b> (only with automatic preparation)</td></tr>
+  <tr><td class="k">Usable capacity (Ah)</td><td>Capacity used to calculate the charge to remove</td><td>20</td></tr>
+  <tr><td class="k">Charge current / voltage / cutoff current</td><td>Full charge before the measurement</td><td>0.5 A / 3.45 V / 0.1 A</td></tr>
+  <tr><td class="k">Preparation discharge current (A)</td><td>Current used to reach the target SOC</td><td>0.5</td></tr>
+  <tr><td class="k">Max. charge / preparation time (s)</td><td>Time-outs for both phases</td><td>86400</td></tr>
+  <tr><td colspan="3"><b>Rest and load pulse</b></td></tr>
+  <tr><td class="k">Prepared / target SOC (%)</td><td>Target state of charge (automatic) or information (prepared)</td><td>50</td></tr>
+  <tr><td class="k">Rest time (s)</td><td>Rest without load before the pulse</td><td>60</td></tr>
+  <tr><td class="k">U1 window at end of rest (s)</td><td>Averaging window for U<sub>1</sub></td><td>3</td></tr>
+  <tr><td class="k">Max. idle current (A)</td><td>Current that still counts as "no load"</td><td>0.02</td></tr>
+  <tr><td class="k">Pulse current (A) / duration (s)</td><td>Load pulse</td><td>0.5 A / 12 s</td></tr>
+  <tr><td class="k">Sample times R1 / R2 / R3 (s)</td><td>Times of the three results after switching on</td><td>1 / 5 / 10</td></tr>
+  <tr><td colspan="3"><b>Protection limits and measurement quality</b></td></tr>
+  <tr><td class="k">Minimum / cutoff voltage (V)</td><td>Test stops below this voltage</td><td>2.5</td></tr>
+  <tr><td class="k">Maximum battery voltage (V)</td><td>Test stops above this voltage</td><td>3.6</td></tr>
+  <tr><td class="k">Maximum power (W)</td><td>Upper limit for current × max. voltage</td><td>50</td></tr>
+  <tr><td class="k">Max. UART gap (s)</td><td>Longest permitted interval between tester messages</td><td>3</td></tr>
+  <tr><td class="k">Max. sample delay (s)</td><td>Timing tolerance of the samples</td><td>1.5</td></tr>
+  <tr><td class="k">Min. voltage drop (V)</td><td>Smaller drops are rejected as not credible</td><td>0.001</td></tr>
+  </tbody>
+</table>
+<p>Consistency rules: sample times must increase; the pulse must last at least as long as the last sample
+time plus the timing tolerance; the rest time must be at least the U1 window; cut-off and charge voltage must be
+below the maximum voltage; and current × maximum voltage must not exceed the maximum power. In addition, all
+values must be within the limits of the selected tester.</p>
+<h4>Running the measurement</h4>
+<ol class="steps">
+  <li>Connect the battery with four-wire sensing (separate sense leads) – otherwise the cable resistance is included in the result.</li>
+  <li>Check all parameters and click <span class="ui">Save parameters</span>.</li>
+  <li>Tick the confirmation box ("Charging parameters and current/voltage/power limits checked for this battery"). Changing any parameter clears this box again.</li>
+  <li>Click <span class="ui">Start measurement</span>. The SD database must be ready.</li>
+  <li>Follow the progress in the <span class="ui">Sequence</span> card; <span class="ui">Abort / stop</span> ends the test at any time.</li>
+</ol>
+<p>The <span class="ui">Results</span> table lists for each sampling time the requested and actual time,
+U<sub>2</sub>, I<sub>2</sub>, the resistance in mΩ and the time stamp. Late or missing samples, too small or negative
+voltage drops or missing current produce an "invalid" result instead of a wrong number. <i>Onset sampling gap</i>
+shows the uncertainty of the switch-on moment caused by the interval between tester messages – this mainly
+limits the accuracy of the 1-second value.</p>
+<p>Every DCIR test is stored as a normal test run (raw curve in Measurements) plus structured results.
+<span class="ui">Measurements saved on SD</span> lists the last 20 DCIR tests. Temperature is not measured and is
+reported as unknown.</p>
+<div class="note"><b>Note</b>During a DCIR test all other starts, connect/disconnect and battery changes are
+blocked. Stop and Abort always remain available. A DCIR test is never resumed after a restart.</div>

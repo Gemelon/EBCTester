@@ -1,0 +1,214 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+<h2 class="chapter">Administration section</h2>
+
+<h3>Device information</h3>
+<figure>
+  <img src="../images/manual/overview.png" alt="Device information">
+  <figcaption>Device information</figcaption>
+</figure>
+<p>Shows the installed firmware version, the project name, the connected Wi-Fi network and IP address, the
+name of the setup access point (<code>BatteryTester-XXXXXX</code>), its address <code>http://192.168.4.1</code>,
+and whether the clock has been synchronised (<i>HTTPS clock</i>). <span class="ui">System status</span> shows the
+network message and leads to the update page.</p>
+
+<h3>Test run management</h3>
+<figure>
+  <img src="../images/manual/test-runs.png" alt="Test run management">
+  <figcaption>Test run management</figcaption>
+</figure>
+<p>This table lists all runs in the SD database, 50 per page, newest first.</p>
+<ul>
+  <li><b>Filter:</b> free-text <span class="ui">Search</span> (name, battery, plan, date, status or run ID), <span class="ui">Battery</span>, <span class="ui">Status</span> and a date range (<span class="ui">From date</span> / <span class="ui">Through date</span>; the end date includes the whole day). Click <span class="ui">Apply filters</span>; <span class="ui">Reset filters</span> clears them.</li>
+  <li><b>Rename:</b> select one run with the radio button and click <span class="ui">Rename</span>. Up to 100 characters; an empty name restores the automatic name. The name is also used in the dashboard.</li>
+  <li><b>Delete:</b> select a run and click <span class="ui">Delete</span>. After confirmation the run is permanently removed together with its measurements, segments and DCIR results. Batteries and plans are kept.</li>
+</ul>
+<p>Running runs are protected and cannot be renamed or deleted. Renaming and deleting require the login
+password and only affect the SD database – existing MariaDB backups are not changed, and custom names are not
+transferred to MariaDB.</p>
+<div class="caution"><b>Caution</b>Deleting cannot be undone. Make a backup (MariaDB synchronisation or a copy
+of the database file) before deleting important runs, and do not delete runs while a MariaDB synchronisation is
+running.</div>
+
+<h3>SD card</h3>
+<figure>
+  <img src="../images/manual/sd-card.png" alt="SD card management">
+  <figcaption>SD card management</figcaption>
+</figure>
+<p>A simple file manager for the microSD card – no need to remove it from the device. The header shows whether
+a card is mounted and how much space is free.</p>
+<ul>
+  <li>Click a folder name to open it; use the breadcrumb path to go back.</li>
+  <li><span class="ui">New file</span>, <span class="ui">New folder</span> and <span class="ui">Upload files</span> (several files possible, with progress bar).</li>
+  <li>For each entry: <span class="ui">Download</span> (files only), <span class="ui">Rename</span>, <span class="ui">Move</span> and <span class="ui">Delete</span>.</li>
+</ul>
+<p>Deleting is permanent; only empty folders can be deleted. The card is never formatted automatically. The
+measurement database is the file <code>ebc_a20.db</code> in the root folder; download it regularly as a backup.</p>
+<div class="caution"><b>Caution</b>Do not rename, move or delete the database file while the device is in use.
+Download it only when no test is being recorded to get a consistent copy.</div>
+
+<h3>Updates</h3>
+<figure>
+  <img src="../images/manual/updates.png" alt="Firmware update">
+  <figcaption>Firmware update</figcaption>
+</figure>
+<p>When the device is connected to the Internet it checks for new firmware after connecting, every six hours and
+once each time you open the web interface. Only a small description file is downloaded – firmware is never
+installed automatically.</p>
+<ol class="steps">
+  <li>If an update is available, the new version and its release notes are shown. <span class="ui">Check for updates</span> repeats the check manually.</li>
+  <li>Make sure no test is running, then click <span class="ui">Start update</span> and confirm the version.</li>
+  <li>The firmware is downloaded into the inactive memory area and checked (size and SHA-256 checksum). Progress is shown.</li>
+  <li>After successful verification the device restarts. The new firmware is only accepted permanently if it runs stable for 10 seconds; otherwise the previous version is restored automatically.</li>
+</ol>
+<div class="warning"><b>Warning</b>Do not disconnect the power during an update, and never update during a
+battery test.</div>
+<p>A firmware update keeps all settings, including the <only factory>FactoryMode</only><only maker>Maker</only>
+configuration, the passwords and the Wi-Fi credentials.</p>
+<only maker><p>While the configuration is inactive, update checks are switched off; the tab is still shown.</p></only>
+
+<h3>Settings</h3>
+<p>The <span class="ui">Settings</span> tab collects all device settings. When you save a setting you are asked
+for the current login password (labelled <span class="ui">Admin password</span> in the dialog) as an extra
+protection – also when browser login is switched off. Cancelling or entering a wrong password does not save
+anything. The access-point password is not used here.<only maker> On Maker devices this confirmation can be
+switched off in Maker Settings.</only></p>
+<figure class="w50">
+  <img src="../images/manual/password-dialog.png" alt="Password confirmation">
+  <figcaption>Password confirmation when saving settings</figcaption>
+</figure>
+
+<h4>Login Settings</h4>
+<figure>
+  <img src="../images/manual/settings-login.png" alt="Login Settings">
+  <figcaption>Login Settings</figcaption>
+</figure>
+<table>
+  <thead><tr><th>Setting</th><th>Description</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Require browser login</td><td>On by default. When switched off, the web interface opens without logging in and the <span class="ui">Log out</span> button disappears.</td></tr>
+  <tr><td class="k">Require login</td><td><span class="ui">Daily (24 hours)</span> (default) or <span class="ui">Weekly (7 days)</span>. The duration counts from the login, is not extended by activity and applies to new logins. Only available while browser login is on.</td></tr>
+  <tr><td class="k">New login password / Repeat new password</td><td>Enter the new password twice. 8–63 printable ASCII characters (letters, digits and common symbols, no umlauts), no spaces at the beginning or end. Leave both fields empty to keep the current password.</td></tr>
+  </tbody>
+</table>
+<p>Click <span class="ui">Save</span> and confirm with the current login password – also when you are changing
+the password itself. The new password is stored permanently on the device and survives restarts and firmware
+updates. The access-point password is not changed. Changing the password or switching browser login on or off
+ends all existing sessions; the page reloads automatically. Afterwards log in with the new password.</p>
+<div class="warning"><b>Warning</b>With browser login switched off, everyone in the network can view all data and
+operate the tester – including starting and stopping tests. Use this only in a network you trust completely.
+Settings changes still require the login password.</div>
+
+<h4>Configure Wi-Fi</h4>
+<figure>
+  <img src="../images/manual/settings-wifi.png" alt="Wi-Fi settings">
+  <figcaption>Wi-Fi settings</figcaption>
+</figure>
+<p>Network name (SSID) and password of your home network. Leave the password empty for an open network;
+otherwise 8–63 characters or 64 hexadecimal characters. The credentials are stored on the device.</p>
+
+<h4>EBC tester</h4>
+<p>Selection of the tester model – see <a href="#ref:Selecting the tester model">Selecting the tester model</a>.</p>
+
+<h4>Home Assistant MQTT</h4>
+<figure class="w80">
+  <img src="../images/manual/settings-mqtt.png" alt="Home Assistant MQTT">
+  <figcaption>Home Assistant MQTT</figcaption>
+</figure>
+<p>Optional connection to an MQTT broker, typically the one used by Home Assistant. The device then appears
+automatically in Home Assistant (MQTT discovery) and publishes voltage, current and capacity of every recorded
+measurement.</p>
+<table>
+  <tbody>
+  <tr><td class="k">Enable MQTT</td><td>Switches the client on or off.</td></tr>
+  <tr><td class="k">Broker host / port</td><td>IP address or host name (without <code>mqtt://</code>), port usually 1883.</td></tr>
+  <tr><td class="k">User name / password</td><td>Broker account. Leave the password empty to keep the saved one.</td></tr>
+  <tr><td class="k">Topic prefix</td><td>Start of all topics, for example <code>ebctester</code>.</td></tr>
+  <tr><td class="k">Measurement expiry interval (s)</td><td>Interval between recorded measurements; values become "unavailable" after three intervals without new data.</td></tr>
+  <tr><td class="k">Allow remote plan start commands</td><td>Off by default. Only when enabled can a plan be started via MQTT. Stop and Abort always work.</td></tr>
+  </tbody>
+</table>
+<p><span class="ui">Save settings</span> applies the settings immediately, <span class="ui">Test connection</span>
+reconnects with the saved settings. The connection state is shown below. MQTT is unencrypted – use a dedicated
+broker user with restricted rights. Details are given in <a href="#ref:Home Assistant MQTT topics">Home Assistant MQTT topics</a>.</p>
+
+<h4>MariaDB backup</h4>
+<figure>
+  <img src="../images/manual/settings-mariadb.png" alt="MariaDB backup">
+  <figcaption>MariaDB backup</figcaption>
+</figure>
+<p>Copies the recorded test runs to a MariaDB database, for example on a NAS. Only new data is transferred;
+repeated or interrupted synchronisations do not create duplicates.</p>
+<ul>
+  <li>Enter server, port (3306), database, user and password; choose <span class="ui">Automatic backup</span> and an interval in minutes (0 = manual only). Save.</li>
+  <li><span class="ui">Test connection</span> checks access, <span class="ui">Sync now</span> starts a transfer immediately, <span class="ui">Transfer everything again</span> re-sends all data (no duplicates are created).</li>
+  <li>The status area shows state, last successful backup, number of runs and measurements transferred, and the server version.</li>
+</ul>
+<p>Automatic backup only runs with Wi-Fi, a ready SD card and a saved password. Runs deleted on the device remain
+in MariaDB. The database tables must already exist on the server – see <a href="#ref:MariaDB backup database">MariaDB backup database</a>.
+The connection is unencrypted: use it only in your home network.</p>
+
+<h4>Debug log</h4>
+<figure class="w80">
+  <img src="../images/manual/settings-debug.png" alt="Debug log setting">
+  <figcaption>Debug log setting</figcaption>
+</figure>
+<p>When enabled, the device keeps the last 500 log lines in memory and shows them in the
+<span class="ui">Debug</span> tab. Disabled by default; disabling frees the memory. Logging never delays
+recording, plans or SD access.</p>
+
+<h4>Language</h4>
+<figure class="w80">
+  <img src="../images/manual/settings-languages.png" alt="Language">
+  <figcaption>Language</figcaption>
+</figure>
+<p>English and German are built in. Additional languages can be added as JSON files in the folder
+<code>/languages</code> on the SD card (see <a href="#ref:Appendix A – Language files">Appendix A</a>).
+<span class="ui">Reload languages</span> reads the folder again; then select the language in the header.</p>
+
+<h4 id="device-reset">Device reset</h4>
+<figure class="w80">
+  <img src="../images/manual/settings-reset.png" alt="Device reset">
+  <figcaption>Device reset</figcaption>
+</figure>
+<p>Two reset functions return the device to the state of its first start. Both ask for confirmation and the
+login password, restart the device and detect the mode (GPIO 47) again. Data on the SD card – measurements,
+batteries, plans and language files – is never erased.</p>
+<table>
+  <thead><tr><th>Button</th><th>Resets</th><th>Keeps</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Reset device configuration</td><td>Device configuration<only maker> (all Maker Settings and ConfigAktive)</only>, login password (back to <code>ebctester</code>), login options, access-point password, Firmware mode</td>
+      <td>Wi-Fi credentials, tester model, current battery and plan, MQTT and MariaDB settings, debug-log setting</td></tr>
+  <tr><td class="k">Erase all NVS settings including Wi-Fi</td><td>Everything stored on the device, including Wi-Fi credentials, tester model and all service settings</td>
+      <td>Only the firmware and the SD card</td></tr>
+  </tbody>
+</table>
+<p>A reset is refused while a test, plan or recording is running or a firmware update is in progress. Stop the
+test and wait until the recording has finished.</p>
+<only factory><div class="note"><b>Note</b>On an original board in its delivered state, the device starts in
+FactoryMode again after a reset and is immediately ready for use. If JP1 has been changed, the device starts in
+MakerMode and has to be configured (see the Maker Edition of this manual).</div></only>
+<only maker><div class="note"><b>Note</b>After a reset, Maker devices start inactive again with the default pin
+assignment of the firmware. Note your Maker Settings before resetting.</div></only>
+
+<only maker>
+<h3>Maker Settings</h3>
+<p>On an active Maker device, <span class="ui">Maker Settings</span> is the last tab of the Administration
+section. It contains the same form as during the first setup (see
+<a href="#ref:Maker Settings reference">Maker Settings reference</a>). Every save restarts the device.</p>
+<figure>
+  <img src="../images/manual/maker-active.png" alt="Maker Settings on an active device">
+  <figcaption>Maker Settings on an active device</figcaption>
+</figure>
+</only>
+
+<h3>Debug</h3>
+<figure>
+  <img src="../images/manual/debug.png" alt="Debug tab">
+  <figcaption>Debug tab</figcaption>
+</figure>
+<p>Live log of the running firmware – useful when something does not work and no USB cable is at hand.
+<span class="ui">Pause</span> freezes the display, <span class="ui">Clear buffer</span> empties it,
+<span class="ui">Download</span> saves the lines as a text file, and <span class="ui">Follow output</span> keeps the
+view at the newest line. Log lines may contain network and file names, but never passwords. Messages from the
+very beginning of the start-up – including the mode detection – are only visible on the USB console.</p>

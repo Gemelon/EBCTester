@@ -5,6 +5,7 @@
 #pragma once
 
 #include "esp_err.h"
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,6 +16,8 @@ typedef void (*test_control_persisted_sample_callback_t)(float voltage_v, float 
 
 /* Starts the EBC link, the test recorder and the Battery/Manual/Automatic web tabs. */
 esp_err_t test_control_init(void);
+bool test_control_configuration_busy(void);
+bool test_control_automatic_operation_running(void);
 void test_control_set_persisted_sample_callback(
     test_control_persisted_sample_callback_t callback);
 void test_control_handle_mqtt_command(const char *command, const char *value);

@@ -12,6 +12,7 @@ const root = path.resolve(__dirname, "..");
 const suite = process.env.OTA_SUITE_DIR || path.join(root, "external", "ota-suite");
 const script = fs.readFileSync(path.join(suite, "components", "web_interface", "assets", "app.js"), "utf8");
 const assets = path.join(suite, "components", "web_interface", "assets");
+const pageMarkup = fs.readFileSync(path.join(assets, "index.html"), "utf8");
 const languageScript = fs.readFileSync(path.join(assets, "i18n.js"), "utf8");
 const languages = {
   en: JSON.parse(fs.readFileSync(path.join(assets, "en.json"), "utf8")),
@@ -76,6 +77,7 @@ function createPage(status = readyStatus, confirmResult = true, checkOnOpen = fa
     TextEncoder, AbortSignal: { timeout: () => undefined },
     confirm: (message) => { confirmations.push(message); return confirmResult; },
     setTimeout: (callback) => timers.push(callback),
+    clearTimeout() {},
     fetch: async (url, options) => {
       requests.push({ url, options });
       if (offline) throw new Error("offline");
@@ -128,6 +130,38 @@ test("startup and repeated polling never automatically start OTA", async () => {
   assert.equal(page.element("ota-start").disabled, false);
   assert.equal(page.mutations().length, 0);
   assert.ok(page.requests.every((request) => request.url === "/api/status"));
+});
+
+test("Debug remains the last tab even when the configured order puts it first", () => {
+  const page = createPage();
+  const ids = ["debug", "overview", "updates", "maker-settings", "settings"];
+  const tabs = page.element("web-tabs");
+  tabs.children = ids.map((id) => {
+    const item = {};
+    const button = page.element(`tab-button-${id}`);
+    button.dataset = { tabTarget: id };
+    button.parentElement = item;
+    item.button = button;
+    return item;
+  });
+  tabs.querySelectorAll = () => tabs.children.map((item) => item.button);
+  tabs.append = (item) => {
+    tabs.children = tabs.children.filter((child) => child !== item);
+    tabs.children.push(item);
+  };
+
+  vm.runInContext('initialTabApplied = true; applyTabOrder("debug,overview,settings,maker-settings")', page.context);
+
+  assert.deepEqual(tabs.children.map((item) => item.button.dataset.tabTarget),
+    ["overview", "settings", "maker-settings", "updates", "debug"]);
+});
+
+test("tester selection is placed before the standard settings cards", () => {
+  const settingsStart = pageMarkup.indexOf('<section id="tab-settings"');
+  const extensions = pageMarkup.indexOf('<div id="settings-extensions"></div>', settingsStart);
+  const loginSettings = pageMarkup.indexOf('aria-labelledby="login-settings-title"', settingsStart);
+  assert.ok(settingsStart >= 0 && extensions > settingsStart && extensions < loginSettings);
+  assert.match(script, /extension\.id === "tester"\) settingsExtensions\.prepend\(pane\)/);
 });
 
 test("opening the UI checks once without requiring settings authentication or installing", async () => {

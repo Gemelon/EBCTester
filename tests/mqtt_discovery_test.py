@@ -22,8 +22,7 @@ class MqttDiscoveryTests(unittest.TestCase):
                          source.index("static bool settings_valid")]
         live = source[source.index("static char live_measurement_payload"):
                       source.index("typedef enum {")]
-        measurement = source[source.index("esp_err_t ha_mqtt_publish_measurement"):
-                             source.index("\n#else", source.index("esp_err_t ha_mqtt_publish_measurement"))]
+        measurement = source[source.index("esp_err_t ha_mqtt_publish_measurement"):]
         harness = r'''
 #include <assert.h>
 #include <stdbool.h>

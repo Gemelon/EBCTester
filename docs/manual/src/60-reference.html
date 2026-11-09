@@ -1,0 +1,789 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+<section class="part-page">
+  <h1 class="part-title">Part II – Technical Reference</h1>
+  <only factory><p>This part summarises the technical data of the EBCTester board and the firmware: start-up
+    behaviour, connectors, firmware defaults, data storage, interfaces and security. A complete reference for
+    developers and makers is contained in the Maker Edition of this manual.</p></only>
+  <only maker><p>This part is intended for readers who build the hardware themselves, compile the firmware,
+    integrate EBCTester into other systems or want to understand how it works internally. It covers the
+    start-up and configuration logic, the reference circuit, connectors and parts, firmware configuration,
+    the tester protocol, data storage, interfaces and security.</p></only>
+</section>
+
+<h2 class="chapter">System architecture</h2>
+<only factory>
+<p>The firmware is written in C/C++ with Espressif's ESP-IDF 6.0.1 for the ESP32-S3. Tester communication,
+test control, recording, the charts and the optional services are separate components; networking, firmware
+updates and SD-card handling are reusable libraries (OTA Suite, SD Card Manager).</p>
+</only>
+<only maker>
+<h3>Firmware structure</h3>
+<p>The firmware is written in C/C++ with Espressif's ESP-IDF 6.0.1 for the ESP32-S3. It is divided into
+functional components; the main program only initialises services. Networking, updates and SD-card handling
+are separate, reusable repositories included as Git submodules under <code>external/</code>.</p>
+<table>
+  <thead><tr><th>Repository / component</th><th>Responsibility</th></tr></thead>
+  <tbody>
+  <tr><td class="k">ebc_config</td><td>Central device configuration in NVS, GPIO 47 mode detection, validation, reset functions</td></tr>
+  <tr><td class="k">main (ebc_config_web)</td><td>Maker Settings tab, device reset, start-up sequence</td></tr>
+  <tr><td class="k">ebc_link</td><td>UARTs, frame parser, model detection and communication with the tester</td></tr>
+  <tr><td class="k">test_control / test_store</td><td>Manual control, test plans, batteries, recording of test runs</td></tr>
+  <tr><td class="k">resistance_test</td><td>DCIR preparation, load pulse and evaluation</td></tr>
+  <tr><td class="k">sqlite3 / battery_database</td><td>SQLite adapter, SD file-system layer and database schema</td></tr>
+  <tr><td class="k">battery_dashboard</td><td>Measurements tab, charts (Chart.js) and test-run management</td></tr>
+  <tr><td class="k">mariadb_sync</td><td>Incremental backup to MariaDB</td></tr>
+  <tr><td class="k">ha_mqtt</td><td>Optional Home Assistant MQTT integration</td></tr>
+  <tr><td class="k">ui_localization / debug_log</td><td>Additional SD languages; in-memory log and Debug tab</td></tr>
+  <tr><td class="k">ota-suite</td><td>Wi-Fi provisioning, access point, web server and shared UI, login, manual OTA updates, status LED</td></tr>
+  <tr><td class="k">sd-card-manager</td><td>SDMMC/SPI driver, card detection, shared storage lock, file-management tab</td></tr>
+  </tbody>
+</table>
+<h3>Data flow</h3>
+</only>
+<p>The tester sends a status message roughly once per second. <code>ebc_link</code> checks each message
+(checksum, model identifier) and passes it to the controller. While a test is active, <code>test_store</code>
+averages a configurable number of messages (default 20, about one stored measurement every 20 seconds) and
+writes the measurement in a database transaction to the SD card. Plans and DCIR tests are state machines
+running in their own tasks; they react to the received messages and send commands to the tester. The web
+interface only reads data and sends commands through authenticated HTTP requests – it is never needed for a
+test to continue.</p>
+
+<h2 class="chapter">Start-up and device configuration</h2>
+
+<h3>Start-up sequence</h3>
+<p>Before any other service starts, the firmware loads the device configuration from the non-volatile storage
+(NVS) of the ESP32. Only on a new device, or if the stored configuration is not valid, does it create a new one
+and detect the firmware mode:</p>
+<figure class="w80">
+<svg viewBox="0 0 560 360" xmlns="http://www.w3.org/2000/svg" font-family="Inter, DejaVu Sans, sans-serif" font-size="10">
+  <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1e4d3a"/></marker></defs>
+  <g stroke="#1e4d3a" stroke-width="1.3" fill="none">
+    <line x1="140" y1="42" x2="140" y2="62" marker-end="url(#a2)"/>
+    <line x1="140" y1="112" x2="140" y2="134" marker-end="url(#a2)"/>
+    <line x1="210" y1="87" x2="388" y2="87" marker-end="url(#a2)"/>
+    <line x1="140" y1="170" x2="140" y2="190" marker-end="url(#a2)"/>
+    <line x1="140" y1="240" x2="140" y2="262" marker-end="url(#a2)"/>
+    <line x1="140" y1="296" x2="140" y2="316" />
+    <line x1="140" y1="316" x2="388" y2="316" />
+    <line x1="460" y1="316" x2="460" y2="304" marker-end="url(#a2)"/>
+    <line x1="460" y1="110" x2="460" y2="128" marker-end="url(#a2)"/>
+    <line x1="460" y1="170" x2="460" y2="190" marker-end="url(#a2)"/>
+    <line x1="460" y1="240" x2="460" y2="258" marker-end="url(#a2)"/>
+  </g>
+  <rect x="70" y="12" width="140" height="30" rx="15" fill="#e3efe8" stroke="#2d7a57"/>
+  <text x="140" y="31" text-anchor="middle" font-weight="700">Power on / restart</text>
+  <polygon points="140,62 210,87 140,112 70,87" fill="#fff" stroke="#2d7a57"/>
+  <text x="140" y="84" text-anchor="middle">Valid configuration</text><text x="140" y="96" text-anchor="middle">in NVS?</text>
+  <text x="296" y="81" text-anchor="middle" font-size="9" fill="#2d7a57" font-weight="700">yes</text>
+  <text x="152" y="128" font-size="9" fill="#b4621a" font-weight="700">no (new / invalid)</text>
+  <rect x="60" y="134" width="160" height="36" rx="5" fill="#fff" stroke="#2d7a57"/>
+  <text x="140" y="149" text-anchor="middle">Load firmware defaults</text><text x="140" y="162" text-anchor="middle" fill="#4f5e56" font-size="9">(from the build configuration)</text>
+  <rect x="60" y="190" width="160" height="50" rx="5" fill="#fff" stroke="#2d7a57"/>
+  <text x="140" y="208" text-anchor="middle">Sample GPIO 47</text>
+  <text x="140" y="221" text-anchor="middle" fill="#4f5e56" font-size="9">high → FactoryMode, active</text>
+  <text x="140" y="233" text-anchor="middle" fill="#4f5e56" font-size="9">low / open / error → MakerMode, inactive</text>
+  <rect x="60" y="262" width="160" height="34" rx="5" fill="#fff" stroke="#2d7a57"/>
+  <text x="140" y="283" text-anchor="middle">Store configuration in NVS</text>
+  <rect x="390" y="64" width="140" height="46" rx="5" fill="#fff" stroke="#2d7a57"/>
+  <text x="460" y="83" text-anchor="middle">Use stored mode and</text><text x="460" y="96" text-anchor="middle">configuration</text>
+  <polygon points="460,128 530,149 460,170 390,149" fill="#fff" stroke="#2d7a57"/>
+  <text x="460" y="152" text-anchor="middle">ConfigAktive = 1?</text>
+  <rect x="390" y="190" width="140" height="50" rx="5" fill="#eaf6ef" stroke="#2d7a57"/>
+  <text x="460" y="207" text-anchor="middle" font-weight="700">yes: all services</text>
+  <text x="460" y="220" text-anchor="middle" font-size="9" fill="#4f5e56">UARTs, SD, LED, Wi-Fi station,</text>
+  <text x="460" y="232" text-anchor="middle" font-size="9" fill="#4f5e56">recording, MQTT, updates</text>
+  <rect x="390" y="258" width="140" height="46" rx="5" fill="#fdf6e3" stroke="#d39b1c"/>
+  <text x="460" y="276" text-anchor="middle" font-weight="700">no: setup only</text>
+  <text x="460" y="290" text-anchor="middle" font-size="9" fill="#4f5e56">access point + web interface</text>
+  <text x="280" y="344" text-anchor="middle" font-size="9" fill="#6b7a72">Both paths end with the web interface on http://192.168.4.1</text>
+</svg>
+<figcaption>Start-up sequence and mode selection</figcaption>
+</figure>
+<p>A valid stored configuration always takes precedence: GPIO 47 is evaluated only when a new configuration
+is created – on a new device, after a device reset or when the stored data is damaged.</p>
+
+<h3>Firmware modes</h3>
+<table>
+  <thead><tr><th></th><th>FactoryMode</th><th>MakerMode</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Selected by</td><td>GPIO 47 high at the first start</td><td>GPIO 47 low, open or inconsistent at the first start</td></tr>
+  <tr><td class="k">Configuration at first start</td><td>Active (ConfigAktive = 1)</td><td>Inactive (ConfigAktive = 0)</td></tr>
+  <tr><td class="k">Hardware configuration</td><td>Firmware defaults (pin assignment of the original board); not editable in the browser</td><td>Firmware defaults as a proposal; edited in <span class="ui">Maker Settings</span></td></tr>
+  <tr><td class="k">Maker Settings tab</td><td>not present</td><td>present</td></tr>
+  <tr><td class="k">Settings-change confirmation</td><td>always on</td><td>can be switched off in Maker Settings</td></tr>
+  <tr><td class="k">Access-point password</td><td>firmware default</td><td>editable in Maker Settings</td></tr>
+  </tbody>
+</table>
+<p>While the configuration is inactive, no tester or dongle UART, SD card, status LED, Wi-Fi station
+connection, time synchronisation, update check, recorder or MQTT client is started. Only the access point and
+the web interface run. The flash memory, the PSRAM and the USB console of the ESP32 are outside this
+guarantee.</p>
+
+<h3>GPIO 47 detection</h3>
+<p>The level of GPIO 47 is determined without loading the pin permanently:</p>
+<ol>
+  <li>The internal pull-up is switched on; after 200 µs the pin is read.</li>
+  <li>The internal pull-down is switched on; after 200 µs the pin is read again.</li>
+  <li>Steps 1–2 are repeated three times. Afterwards both pull resistors are switched off and the pin is disabled, so no current flows through the internal resistor during operation.</li>
+</ol>
+<table>
+  <thead><tr><th>Read with pull-up</th><th>Read with pull-down</th><th>Result</th><th>Mode</th></tr></thead>
+  <tbody>
+  <tr><td class="c">1</td><td class="c">0</td><td>open (pin follows the internal resistor)</td><td>MakerMode</td></tr>
+  <tr><td class="c">0</td><td class="c">0</td><td>low (tied to GND)</td><td>MakerMode</td></tr>
+  <tr><td class="c">1</td><td class="c">1</td><td>high (tied to 3.3 V)</td><td>FactoryMode</td></tr>
+  <tr><td class="c">0</td><td class="c">1</td><td>inconsistent (interference)</td><td>MakerMode, warning in the log</td></tr>
+  </tbody>
+</table>
+<p>The pull-up is "1" only if it is 1 in all three passes; the pull-down result is "1" if it is 1 in any pass.
+An external connection must be clearly stronger than the internal resistors (about 45 kΩ): use a direct
+connection or a resistor of at most 10 kΩ. On the original board, solder jumper JP1 ties GPIO 47 directly to
+3.3 V (pads 1–2, as delivered) or to GND (pads 2–3).</p>
+
+<h3>Configuration storage</h3>
+<p>All hardware-related settings are stored in the NVS namespace <code>ebc_cfg</code>. After the first start the
+firmware uses only these stored values; the build configuration (sdkconfig) only supplies the defaults for a new
+configuration.</p>
+<only maker>
+<table>
+  <thead><tr><th>Key</th><th>Type</th><th>Content</th></tr></thead>
+  <tbody>
+  <tr><td class="k"><code>config</code></td><td>blob</td><td>Header (magic <code>0x45424332</code> "EBC2", structure version 2, payload length, CRC-32) followed by the complete configuration structure</td></tr>
+  <tr><td class="k"><code>FirmwareMode</code></td><td>u8</td><td>0 = MakerMode, 1 = FactoryMode</td></tr>
+  <tr><td class="k"><code>ConfigAktive</code></td><td>u8</td><td>0 = inactive (setup only), 1 = active</td></tr>
+  </tbody>
+</table>
+<p>The configuration is written in the order blob – FirmwareMode – ConfigAktive and then committed. The blob is
+written as a whole: after a power failure during writing either the old or the new version is present.</p>
+<p>Valid version-1 configurations are CRC-checked and migrated to version 2 without resetting existing values,
+mode or activation. RTC is enabled in FactoryMode, including existing version-2 installations. MakerMode
+preserves a saved RTC selection and defaults to off, including migration from version 1.</p>
+<h4>Validity check</h4>
+<p>A stored configuration is valid only if the namespace exists, the blob has the expected size, magic and
+structure version, the CRC-32 over the payload is correct, <code>FirmwareMode</code> exists and the content passes
+the general checks of <a href="#ref:Activation and validation">Activation and validation</a>. The start-up log reports
+the result: <i>new</i>, <i>new or invalid size/magic</i>, <i>version mismatch</i>, <i>CRC mismatch</i> or
+<i>valid</i>. A missing or invalid <code>ConfigAktive</code> starts the device inactive; an active
+configuration that fails the pin checks also starts inactive.</p>
+<p>If <code>nvs_flash_init()</code> reports a full or incompatible NVS partition (for example after an interrupted
+erase), the partition is erased and initialised again; the device then starts like a new one.</p>
+<h4>Stored values</h4>
+<table class="compact">
+  <thead><tr><th>Group</th><th>Values</th></tr></thead>
+  <tbody>
+  <tr><td class="k">tester</td><td>tester UART TX/RX/baud, dongle UART TX/RX/baud, averaging length, device ID, MQTT enabled</td></tr>
+  <tr><td class="k">ota</td><td>AP password, SNTP server, manifest URL, web (login) password, primary tabs, tab order, HTTP OTA allowed, status LED enabled and GPIO, settings-password confirmation, SD languages, session duration (1/7 days), browser login enabled</td></tr>
+  <tr><td class="k">sd</td><td>bus (0 = 4-bit SDMMC, 1 = SPI), SDMMC and SPI frequency, card-detect GPIO, mount point, CLK/CMD/D0–D3, MISO/MOSI/CS/CLK</td></tr>
+  <tr><td class="k">rtc</td><td>DS3231 always enabled in FactoryMode; default off and editable in MakerMode. INT GPIO14 (reserved input), I2C SDA GPIO15, I2C SCL GPIO16.</td></tr>
+  </tbody>
+</table>
+<h4>Other NVS namespaces</h4>
+<table class="compact">
+  <thead><tr><th>Namespace</th><th>Content</th><th>Reset device configuration</th></tr></thead>
+  <tbody>
+  <tr><td class="k"><code>ebc_cfg</code></td><td>Device configuration, mode, ConfigAktive</td><td>erased</td></tr>
+  <tr><td class="k"><code>network</code></td><td>Wi-Fi station credentials</td><td>kept</td></tr>
+  <tr><td class="k"><code>tester</code></td><td>Tester model, current battery, plan, manual values, DCIR parameters</td><td>kept</td></tr>
+  <tr><td class="k"><code>ha_mqtt</code></td><td>Broker settings</td><td>kept</td></tr>
+  <tr><td class="k"><code>debug_log</code></td><td>Debug-log setting</td><td>kept</td></tr>
+  <tr><td class="k">others</td><td>MariaDB settings, Wi-Fi driver data, OTA state</td><td>kept</td></tr>
+  </tbody>
+</table>
+<p><span class="ui">Erase all NVS settings including Wi-Fi</span> calls <code>nvs_flash_erase()</code> for the whole
+partition. Both resets end with <code>esp_restart()</code>; the next start runs the complete first-start
+sequence.</p>
+</only>
+<only factory>
+<p>The configuration is protected by a CRC-32 checksum and a structure version. If the stored data is damaged, the
+firmware creates a new configuration from its defaults at the next start. Wi-Fi credentials, the tester model,
+the current battery and plan, and the settings of the optional services are stored separately and are not
+affected by <span class="ui">Reset device configuration</span>.</p>
+</only>
+
+<h3>Firmware defaults</h3>
+<p>A new configuration takes these values from the firmware build. <only factory>They match the original
+board.</only><only maker>The release firmware uses the pin assignment of the original board, so that it works
+in FactoryMode without any setting. On a Maker device they are only a proposal in Maker Settings.</only></p>
+<table class="compact keep">
+  <thead><tr><th>Setting</th><th>Default</th><th>Setting</th><th>Default</th></tr></thead>
+  <tbody>
+  <tr><td class="k">Tester UART TX / RX</td><td>GPIO 10 / 11, 9600 Bd</td><td class="k">SD bus</td><td>4-bit SDMMC, 10 MHz</td></tr>
+  <tr><td class="k">Dongle UART TX / RX</td><td>GPIO 8 / 9, 9600 Bd</td><td class="k">SD CLK / CMD</td><td>GPIO 6 / 7</td></tr>
+  <tr><td class="k">Averaging length</td><td>20 frames</td><td class="k">SD D0 / D1 / D2 / D3</td><td>GPIO 5 / 4 / 18 / 17</td></tr>
+  <tr><td class="k">Device ID</td><td><code>EBC-A20</code></td><td class="k">Card detect</td><td>GPIO 13 (low = card inserted)</td></tr>
+  <tr><td class="k">Status LED</td><td>on, GPIO 48</td><td class="k">Mount point</td><td><code>/sdcard</code></td></tr>
+  <tr><td class="k">Access-point password</td><td><code>ebctester</code></td><td class="k">Login password</td><td><code>ebctester</code>, 24 h, login required</td></tr>
+  <tr><td class="k">SNTP server</td><td><code>pool.ntp.org</code></td><td class="k">Settings confirmation</td><td>on</td></tr>
+  <tr><td class="k">MQTT</td><td>off</td><td class="k">HTTP OTA</td><td>off</td></tr>
+  </tbody>
+</table>
+<only maker><div class="caution"><b>Caution</b>Firmware 1.99.3 evaluates the card-detect input as active-high
+only. The switch of the original board is active-low (GPIO 13 reads low with a card inserted). On a Maker device
+with this circuit, enter <code>−1</code> for the card-detect GPIO until a polarity option is available.</div></only>
+
+<h2 class="chapter">Hardware</h2>
+<p>The EBCTester board is a compact controller board. It contains no measurement circuit of its own – all
+measurement and power electronics are in the ZKE tester. The board provides the microcontroller, power supply,
+SD card, real-time clock and a level-shifted serial interface.</p>
+<table>
+  <tbody>
+  <tr><td class="k">Microcontroller</td><td>ESP32-S3-WROOM-1U-N16R8: dual-core 240 MHz, 16 MB flash, 8 MB octal PSRAM, Wi-Fi 2.4 GHz with u.FL antenna connector</td></tr>
+  <tr><td class="k">Power supply</td><td>19 V via J4 (EBC-A20 adapter) or 5 V via USB-C, both may be connected</td></tr>
+  <tr><td class="k">Storage</td><td>microSD socket, 4-bit SD mode, card-detect switch</td></tr>
+  <tr><td class="k">Real-time clock</td><td>DS3231 with CR2032 backup cell (not used by firmware 1.99.3)</td></tr>
+  <tr><td class="k">Tester interface</td><td>2 × UART, 5 V TTL via TXS0104E level shifter</td></tr>
+  <tr><td class="k">Indicators</td><td>Power LED, 2 × WS2812B RGB LED (status, reserved)</td></tr>
+  <tr><td class="k">Board size</td><td>80 × 80 mm, 4 × M3 mounting holes (connected to GND)</td></tr>
+  <tr><td class="k">Revision</td><td>Schematic revision 1 (2 November 2026), PCB marking B1.1, date code 20261103</td></tr>
+  </tbody>
+</table>
+
+<only maker>
+<h3>Block diagram</h3>
+<figure>
+<svg viewBox="0 0 620 300" xmlns="http://www.w3.org/2000/svg" font-family="Inter, DejaVu Sans, sans-serif" font-size="9.5">
+  <defs><marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="#1e4d3a"/></marker></defs>
+  <g fill="#fff" stroke="#2d7a57">
+    <rect x="10" y="20" width="110" height="38" rx="5"/><rect x="160" y="20" width="120" height="38" rx="5"/>
+    <rect x="320" y="20" width="120" height="38" rx="5"/><rect x="480" y="20" width="130" height="38" rx="5"/>
+    <rect x="10" y="80" width="110" height="38" rx="5"/><rect x="160" y="80" width="120" height="38" rx="5"/>
+    <rect x="230" y="140" width="170" height="70" rx="6" fill="#eaf6ef" stroke-width="1.5"/>
+    <rect x="460" y="120" width="150" height="38" rx="5"/><rect x="460" y="172" width="150" height="38" rx="5"/>
+    <rect x="10" y="150" width="150" height="38" rx="5"/><rect x="10" y="240" width="150" height="40" rx="5"/>
+    <rect x="230" y="240" width="170" height="40" rx="5"/><rect x="460" y="240" width="150" height="40" rx="5"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="65" y="36" font-weight="700">19 V input</text><text x="65" y="49" fill="#4f5e56">J4 pin 2, TVS D3</text>
+    <text x="220" y="36" font-weight="700">U2 AP63205</text><text x="220" y="49" fill="#4f5e56">19 V → 5 V buck</text>
+    <text x="380" y="36" font-weight="700">D1/D2 SS34</text><text x="380" y="49" fill="#4f5e56">diode OR → +5 V</text>
+    <text x="545" y="36" font-weight="700">U3 AP63203</text><text x="545" y="49" fill="#4f5e56">5 V → 3.3 V buck</text>
+    <text x="65" y="96" font-weight="700">USB-C J2</text><text x="65" y="109" fill="#4f5e56">VBUS, D+/D−</text>
+    <text x="220" y="96" font-weight="700">D4 USBLC6</text><text x="220" y="109" fill="#4f5e56">USB ESD protection</text>
+    <text x="315" y="162" font-weight="700">U4 ESP32-S3-WROOM-1U</text><text x="315" y="176" fill="#4f5e56">N16R8 · 16 MB / 8 MB</text>
+    <text x="315" y="190" fill="#4f5e56">Wi-Fi (u.FL antenna)</text><text x="315" y="203" fill="#4f5e56">SW1 BOOT · SW2 RESET</text>
+    <text x="535" y="136" font-weight="700">J1 microSD</text><text x="535" y="149" fill="#4f5e56">4-bit SDMMC + detect</text>
+    <text x="535" y="188" font-weight="700">U1 DS3231 RTC</text><text x="535" y="201" fill="#4f5e56">I²C, CR2032 backup</text>
+    <text x="85" y="166" font-weight="700">JP1 → GPIO 47</text><text x="85" y="179" fill="#4f5e56">Factory/Maker selection</text>
+    <text x="85" y="256" font-weight="700">J3 expansion</text><text x="85" y="269" fill="#4f5e56">power, I²C, GPIO 38–42</text>
+    <text x="315" y="256" font-weight="700">U5 TXS0104E</text><text x="315" y="269" fill="#4f5e56">3.3 V ↔ 5 V → J4 (2 × UART)</text>
+    <text x="535" y="256" font-weight="700">LED1/LED2 WS2812B</text><text x="535" y="269" fill="#4f5e56">GPIO 48, chain → J5</text>
+  </g>
+  <g stroke="#1e4d3a" stroke-width="1.2" fill="none">
+    <line x1="120" y1="39" x2="158" y2="39" marker-end="url(#a3)"/><line x1="280" y1="39" x2="318" y2="39" marker-end="url(#a3)"/>
+    <line x1="440" y1="39" x2="478" y2="39" marker-end="url(#a3)"/>
+    <line x1="120" y1="99" x2="158" y2="99" marker-end="url(#a3)"/><polyline points="65,80 65,68 380,68 380,60" marker-end="url(#a3)"/>
+    <polyline points="280,99 315,99 315,138" marker-end="url(#a3)"/><polyline points="545,58 545,90 400,90 380,138" marker-end="url(#a3)"/>
+    <line x1="400" y1="160" x2="458" y2="140" marker-end="url(#a3)"/><line x1="400" y1="190" x2="458" y2="190" marker-end="url(#a3)"/>
+    <line x1="160" y1="170" x2="228" y2="172" marker-end="url(#a3)"/><line x1="300" y1="212" x2="300" y2="238" marker-end="url(#a3)"/>
+    <polyline points="240,212 120,238" marker-end="url(#a3)"/><polyline points="380,212 470,238" marker-end="url(#a3)"/>
+  </g>
+</svg>
+<figcaption>Block diagram of the EBCTester board</figcaption>
+</figure>
+
+<h3>Circuit description</h3>
+<h4>Power supply</h4>
+<p>The 19 V input (from the EBC-A20 power supply via J4) is protected by the unidirectional TVS diode D3
+(SMBJ20A, cathode to +19 V; stand-off voltage 20 V, clamping voltage 32.4 V – below the 35 V absolute maximum input
+of U2). D3 also protects against reverse polarity by conducting, so the supply should be current-limited or
+fused. The synchronous buck converter U2 (AP63205, fixed 5 V, up to 2 A) with L1 (4.7 µH) produces 5 V. This
+output and the USB supply (VBUS) are combined by the Schottky diodes D1 and D2 (SS34) into the +5 V rail, which
+is about 4.6–4.7 V after the diode drop. The board can therefore run from the 19 V input, from USB, or from both at
+the same time. With USB only, the total current is limited to the 500 mA of the USB port.</p>
+<p>A second buck converter U3 (AP63203, fixed 3.3 V) with L2 supplies the ESP32-S3 and all logic from the +5 V rail,
+so 3.3 V is available from either source. Input and output capacitors follow the Diodes Inc. data sheet: 10 µF/50 V
+at the 19 V side, 2 × 22 µF at each output, 100 nF bootstrap capacitors. The data sheet suggests 3.9 µH for the
+3.3 V version; 4.7 µH is within the permitted range (2.2–10 µH).</p>
+<h4>Microcontroller and USB</h4>
+<p>U4 is an ESP32-S3-WROOM-1U-N16R8 module with 16 MB flash and 8 MB octal PSRAM. The "U" variant has no PCB antenna
+but a u.FL connector – an external 2.4 GHz antenna is mandatory. GPIO 35–37 are used internally by the octal PSRAM
+and must not be used. The USB-C connector J2 is wired to the native USB of the ESP32-S3 (GPIO 19/20) for flashing
+and the console; D4 (USBLC6-2SC6) protects the data lines against ESD. R10/R11 (5.1 kΩ on CC1/CC2) identify the
+board as a USB device to USB-C power supplies.</p>
+<p>SW1 (BOOT, GPIO 0, pull-up R12) and SW2 (RESET, EN, pull-up R13 with C16 for a defined power-on reset) allow
+manual download mode: hold BOOT, press and release RESET, release BOOT.</p>
+<h4>microSD card</h4>
+<p>J1 (Hirose DM3AT) is connected in 4-bit SD mode. All data and command lines have 10 kΩ pull-ups (R1–R5) as
+required by the SD specification. The card-detect switch is normally open and closes when a card is inserted;
+with pull-up R6, the signal SD_CD reads low with a card present.</p>
+<h4>Real-time clock</h4>
+<p>U1 (DS3231SN) is a temperature-compensated RTC (±2 ppm) on I²C with 4.7 kΩ pull-ups (R7/R8). Its INT/SQW output
+(open drain, pull-up R9) goes to GPIO 14 and can be used as an interrupt or deep-sleep wake-up source. A
+non-rechargeable CR2032 cell (BT1) on VBAT keeps the time when the board is unpowered; the cell voltage can be
+measured at TP11. From firmware 1.99.18, the RTC can be enabled in Maker Settings. It stores UTC and synchronises
+device time at startup and every six hours without NTP. Successful NTP responses take priority and update both
+clocks every six hours. Invalid time or a stopped oscillator is rejected. The header shows time above date beside
+EBC RX using the browser's time zone. INT is reserved; alarms and wakeup are not implemented. From 1.99.19,
+FactoryMode always enables RTC and enforces the original-board pins GPIO14/GPIO15/GPIO16; MakerMode defaults to off and can enable it in Maker Settings. Missing RTC
+hardware is logged without blocking other services; NTP supplies time if available.</p>
+<h4>Serial interface</h4>
+<p>The tester uses 5 V TTL levels, but ESP32-S3 inputs are not 5 V tolerant. U5 (TXS0104E) is a 4-bit bidirectional,
+auto-direction level shifter between 3.3 V (VCCA) and the +5 V rail (VCCB). It carries UART1 (tester) and UART2
+(reserved for the PC dongle) to connector J4. The TXS0104E is suited to push-pull signals at the low baud rate
+used (9600 Bd).</p>
+<h4>Status LEDs</h4>
+<p>LED1 and LED2 are WS2812B RGB LEDs with integrated driver, connected in a chain to GPIO 48 through the series
+resistor R15 (470 Ω). Each LED has a 100 nF decoupling capacitor (C17, C18). The WS2812B runs on the +5 V rail, but the
+ESP32 drives the data line with 3.3 V. To keep this level above the input-high threshold of LED1 (0.7 × VDD), LED1 is
+supplied through the Schottky diode D5, which lowers its supply by about 0.3 V. LED2 receives the regenerated 5 V
+signal from LED1. The data output of LED2 is led through R16 (470 Ω) to connector J5, so that further WS2812B LEDs
+can be added to the chain. Firmware 1.99.3 drives LED1 only.</p>
+<h4>Power-OK LED and mode jumper</h4>
+<p>D6 is connected to +3.3 V through R14 (470 Ω) and lights up as soon as the 3.3 V supply is present – independently
+of the firmware. The three-pad solder jumper JP1 ties GPIO 47 to +3.3 V (pads 1–2, bridged as delivered) or to GND
+(pads 2–3) and selects the firmware mode at the first start.</p>
+</only>
+
+<h3>Connectors</h3>
+<h4>J4 – tester connector (JST XH, 6-pin, 2.5 mm)</h4>
+<table class="compact">
+  <thead><tr><th>Pin</th><th>Signal</th><th>Description</th></tr></thead>
+  <tbody>
+  <tr><td>1</td><td>GND</td><td>Ground</td></tr>
+  <tr><td>2</td><td>VIN_19V</td><td>19 V supply input (from the EBC-A20 power adapter)</td></tr>
+  <tr><td>3</td><td>UART1_TX_5V</td><td>Data from EBCTester to the tester → tester RX</td></tr>
+  <tr><td>4</td><td>UART1_RX_5V</td><td>Data from the tester → tester TX</td></tr>
+  <tr><td>5</td><td>UART2_TX_5V</td><td>Reserved for the PC dongle bridge</td></tr>
+  <tr><td>6</td><td>UART2_RX_5V</td><td>Reserved for the PC dongle bridge</td></tr>
+  </tbody>
+</table>
+<p>TX/RX are named from the ESP32's point of view. UART2 is initialised by the firmware but the bridge between the
+manufacturer's PC software and the tester is not implemented yet.</p>
+<h4>J3 – expansion connector (JST XH, 14-pin, 2.5 mm)</h4>
+<table class="compact">
+  <thead><tr><th>Pin</th><th>Signal</th><th>Pin</th><th>Signal</th></tr></thead>
+  <tbody>
+  <tr><td>1</td><td>VIN_19V</td><td>8</td><td>GPIO 42</td></tr>
+  <tr><td>2</td><td>+3.3 V</td><td>9</td><td>GPIO 41</td></tr>
+  <tr><td>3</td><td>+5 V</td><td>10</td><td>GPIO 40</td></tr>
+  <tr><td>4</td><td>VBUS</td><td>11</td><td>GPIO 39</td></tr>
+  <tr><td>5</td><td>RTC_INT (GPIO 14)</td><td>12</td><td>GPIO 38</td></tr>
+  <tr><td>6</td><td>I2C_SDA (GPIO 15)</td><td>13</td><td>GND</td></tr>
+  <tr><td>7</td><td>I2C_SCL (GPIO 16)</td><td>14</td><td>GND</td></tr>
+  </tbody>
+</table>
+<p>J3 carries the power rails, the I²C bus with the RTC interrupt and five free GPIOs for extensions (for example a
+display or temperature sensors). It is not used by the current firmware. Its 3.3 V GPIOs are not 5 V tolerant.</p>
+<h4>J5 – LED chain extension (JST XH, 3-pin, 2.5 mm)</h4>
+<table class="compact">
+  <thead><tr><th>Pin</th><th>Signal</th><th>Description</th></tr></thead>
+  <tbody>
+  <tr><td>1</td><td>+5 V</td><td>Supply for external WS2812B LEDs (from the +5 V rail, approx. 4.6–4.7 V)</td></tr>
+  <tr><td>2</td><td>DATA</td><td>Data output of LED2 through R16 (470 Ω)</td></tr>
+  <tr><td>3</td><td>GND</td><td>Ground</td></tr>
+  </tbody>
+</table>
+<p>External LEDs draw their current from the +5 V rail. With USB-only supply, keep the total current within the
+500 mA of the USB port (a WS2812B draws up to approx. 60 mA at full white).</p>
+<h4>JP1 – solder jumper "Custom_Settings" (GPIO 47)</h4>
+<table class="compact">
+  <thead><tr><th>Position</th><th>GPIO 47</th><th>Mode at the first start</th></tr></thead>
+  <tbody>
+  <tr><td>Pads 1–2 bridged (as delivered)</td><td>high (3.3 V)</td><td>FactoryMode</td></tr>
+  <tr><td>Bridge 1–2 cut, pads 2–3 bridged</td><td>low (GND)</td><td>MakerMode</td></tr>
+  <tr><td>Bridge cut, all pads open</td><td>open</td><td>MakerMode</td></tr>
+  </tbody>
+</table>
+<p>GPIO 47 is not a strapping pin, so every position is safe for booting. A change takes effect only after a device
+reset (see <a href="#ref:Device reset">Device reset</a>).</p>
+
+<only maker>
+<h3>Test points</h3>
+<p>TP1–TP11 are round SMD pads (1.5 mm diameter) for probes. The silkscreen shows the signal name next to each test
+point.</p>
+<table class="compact">
+  <thead><tr><th>Test point</th><th>Signal</th><th>Expected value</th></tr></thead>
+  <tbody>
+  <tr><td>TP3</td><td>19 V input</td><td>approx. 19 V (when supplied via J4)</td></tr>
+  <tr><td>TP4</td><td>5 V buck output (before diode)</td><td>5.0 V</td></tr>
+  <tr><td>TP1</td><td>+5 V rail</td><td>4.6 – 4.7 V</td></tr>
+  <tr><td>TP6</td><td>USB VBUS</td><td>5 V with USB connected</td></tr>
+  <tr><td>TP2</td><td>+3.3 V</td><td>3.3 V</td></tr>
+  <tr><td>TP5</td><td>GND</td><td>reference</td></tr>
+  <tr><td>TP7 / TP8</td><td>BOOT (GPIO 0) / RESET (EN)</td><td>3.3 V idle, 0 V when pressed</td></tr>
+  <tr><td>TP9 / TP10</td><td>RXD0 (GPIO 44) / TXD0 (GPIO 43)</td><td>UART0: boot messages of the ESP32 (3.3 V level, 115200 Bd)</td></tr>
+  <tr><td>TP11</td><td>VBAT_RTC (CR2032)</td><td>approx. 3.0 V with the cell inserted</td></tr>
+  </tbody>
+</table>
+</only>
+
+<h3>GPIO assignment of the board</h3>
+<table class="compact">
+  <thead><tr><th>Function</th><th>GPIO</th><th>Function</th><th>GPIO</th></tr></thead>
+  <tbody>
+  <tr><td>UART1 TX / RX (tester)</td><td>10 / 11</td><td>SD CLK / CMD</td><td>6 / 7</td></tr>
+  <tr><td>UART2 TX / RX (dongle)</td><td>8 / 9</td><td>SD D0 / D1 / D2 / D3</td><td>5 / 4 / 18 / 17</td></tr>
+  <tr><td>I²C SDA / SCL (RTC)</td><td>15 / 16</td><td>SD card detect (low = card)</td><td>13</td></tr>
+  <tr><td>RTC INT/SQW</td><td>14</td><td>LED1/LED2 data (WS2812B)</td><td>48</td></tr>
+  <tr><td>JP1 mode selection</td><td>47</td><td>Strapping pins, keep free</td><td>3, 45, 46</td></tr>
+  <tr><td>USB D− / D+</td><td>19 / 20</td><td>Expansion J3</td><td>38 – 42</td></tr>
+  <tr><td>BOOT</td><td>0</td><td>PSRAM (do not use)</td><td>35 – 37</td></tr>
+  <tr><td>UART0 RXD0 / TXD0</td><td>44 / 43</td><td>Not connected</td><td>1, 2, 12, 21</td></tr>
+  </tbody>
+</table>
+
+<only maker>
+<h3>Pins and wiring rules</h3>
+<table class="compact">
+  <thead><tr><th>GPIO</th><th>Use</th><th>Accepted in Maker Settings</th></tr></thead>
+  <tbody>
+  <tr><td>0, 3, 45, 46</td><td>Strapping pins (boot mode, JTAG, flash voltage)</td><td>accepted, but avoid</td></tr>
+  <tr><td>19, 20</td><td>Native USB (flashing, console)</td><td>rejected</td></tr>
+  <tr><td>26 – 32</td><td>Internal SPI flash</td><td>rejected</td></tr>
+  <tr><td>33 – 37</td><td>Octal PSRAM (N16R8); 33/34 also flash on octal-flash modules</td><td>rejected</td></tr>
+  <tr><td>43, 44</td><td>UART0 console (boot messages)</td><td>rejected</td></tr>
+  <tr><td>47</td><td>Mode selection; read only at the first start</td><td>accepted (pin is released after detection)</td></tr>
+  <tr><td>48</td><td>RGB LED on DevKit boards and the original board</td><td>accepted</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li>Use a level shifter between the 5 V tester port and the ESP32. A plain resistor divider on the RX line works, but the TX line needs a real driver for reliable 5 V levels.</li>
+  <li>SD lines need 10 kΩ pull-ups to 3.3 V; keep the wires short (a few cm) or lower the SD frequency.</li>
+  <li>The card-detect input must be high when a card is inserted (firmware 1.99.3). Without a switch, enter −1.</li>
+  <li>For a WS2812 supplied with 5 V, make sure that 3.3 V data is recognised as high (supply the first LED via a diode as on the original board, or use a level shifter).</li>
+</ul>
+
+<h3>Bill of materials</h3>
+<p>26 line items, 57 components (53 SMD, 4 THT). Ready-to-upload BOM files for JLCPCB and PCBWay are in the
+repository (<code>docs/EBCTester_BOM_JLCPCB.csv</code>, <code>docs/EBCTester_BOM_PCBWay.xlsx</code>); check stock
+before ordering.</p>
+<table class="compact">
+  <thead><tr><th>Ref.</th><th>Qty</th><th>Value / function</th><th>Package</th><th>Manufacturer / MPN</th><th>LCSC</th></tr></thead>
+  <tbody>
+  <tr><td>U1</td><td>1</td><td>RTC with TCXO, I²C</td><td>SOIC-16W</td><td>Analog Devices DS3231SN#T&amp;R</td><td>C9866</td></tr>
+  <tr><td>U2</td><td>1</td><td>Buck 19 V → 5 V, 2 A</td><td>TSOT-23-6</td><td>Diodes AP63205WU-7</td><td>C2071056</td></tr>
+  <tr><td>U3</td><td>1</td><td>Buck 5 V → 3.3 V, 2 A</td><td>TSOT-23-6</td><td>Diodes AP63203WU-7</td><td>C780769</td></tr>
+  <tr><td>U4</td><td>1</td><td>ESP32-S3 module, 16 MB/8 MB, u.FL</td><td>Module</td><td>Espressif ESP32-S3-WROOM-1U-N16R8</td><td>C3013946</td></tr>
+  <tr><td>U5</td><td>1</td><td>Level shifter 3.3 V / 5 V</td><td>TSSOP-14</td><td>TI TXS0104EPWR</td><td>C44955</td></tr>
+  <tr><td>LED1, LED2</td><td>2</td><td>RGB LED with driver</td><td>5050</td><td>Worldsemi WS2812B-B/W</td><td>C114586</td></tr>
+  <tr><td>J1</td><td>1</td><td>microSD socket, card detect</td><td>SMD</td><td>Hirose DM3AT-SF-PEJM5</td><td>C114218</td></tr>
+  <tr><td>J2</td><td>1</td><td>USB-C receptacle (USB 2.0)</td><td>SMD</td><td>HRO TYPE-C-31-M-12</td><td>C165948</td></tr>
+  <tr><td>J3</td><td>1</td><td>Header 14-pin, 2.5 mm</td><td>THT</td><td>BOOMELE XH-14A</td><td>C20200</td></tr>
+  <tr><td>J4</td><td>1</td><td>Header 6-pin, 2.5 mm</td><td>THT</td><td>BOOMELE XH-6A</td><td>C5663</td></tr>
+  <tr><td>J5</td><td>1</td><td>Header 3-pin, 2.5 mm (LED chain)</td><td>THT</td><td>BOOMELE XH-3A</td><td>C2316</td></tr>
+  <tr><td>D1, D2, D5</td><td>3</td><td>Schottky 40 V / 3 A</td><td>SMA</td><td>MDD SS34</td><td>C8678</td></tr>
+  <tr><td>D3</td><td>1</td><td>TVS 20 V, 600 W</td><td>SMB</td><td>TWGMC SMBJ20A</td><td>C726828</td></tr>
+  <tr><td>D4</td><td>1</td><td>USB ESD protection</td><td>SOT-23-6</td><td>ST USBLC6-2SC6</td><td>C7519</td></tr>
+  <tr><td>D6</td><td>1</td><td>LED yellow-green, power OK</td><td>0603</td><td>XINGLIGHT XL-1608SYGC-04</td><td>C965806</td></tr>
+  <tr><td>L1, L2</td><td>2</td><td>4.7 µH power inductor</td><td>6 × 6 mm</td><td>Bourns SRN6045TA-4R7M</td><td>C2044594</td></tr>
+  <tr><td>SW1, SW2</td><td>2</td><td>Tactile switch BOOT / RESET</td><td>5.1 × 5.1 mm</td><td>XKB TS-1187A-B-A-B</td><td>C318884</td></tr>
+  <tr><td>BT1</td><td>1</td><td>CR2032 holder</td><td>THT</td><td>MYOUNG BS-07-A1BJ001</td><td>C2979167</td></tr>
+  <tr><td>C1–C5, C12–C15, C17, C18</td><td>11</td><td>100 nF 16 V X7R</td><td>0402</td><td>TDK C1005X7R1C104KT000F</td><td>C338032</td></tr>
+  <tr><td>C6, C9</td><td>2</td><td>10 µF 50 V X7S</td><td>1206</td><td>Samsung CL31Y106KBKVPNE</td><td>C2803389</td></tr>
+  <tr><td>C7, C8, C10, C11</td><td>4</td><td>22 µF 10 V X5R</td><td>0805</td><td>Samsung CL21A226KPCLRNC</td><td>C318688</td></tr>
+  <tr><td>C16</td><td>1</td><td>1 µF 10 V X7R</td><td>0402</td><td>Murata GRM155Z71A105KE01D</td><td>C528974</td></tr>
+  <tr><td>R1–R6, R9, R12, R13</td><td>9</td><td>10 kΩ 1 %</td><td>0402</td><td>Vishay CRCW040210K0FKED</td><td>C71617</td></tr>
+  <tr><td>R7, R8</td><td>2</td><td>4.7 kΩ 1 %</td><td>0402</td><td>Vishay RCC04024K70FKED</td><td>C1858949</td></tr>
+  <tr><td>R10, R11</td><td>2</td><td>5.1 kΩ 1 %</td><td>0402</td><td>Vishay CRCW04025K10FKTD</td><td>C4333224</td></tr>
+  <tr><td>R14, R15, R16</td><td>3</td><td>470 Ω 5 %</td><td>0402</td><td>Vishay CRCW0402470RJNED</td><td>C482183</td></tr>
+  </tbody>
+</table>
+<p>Not assembled: antenna cable u.FL to SMA female bulkhead (kinghelm KH-IPEX-SMA-W-150, LCSC C2683343), 2.4 GHz
+antenna with SMA male (DreamLNK W10-2.4G, C381198), CR2032 cell, mating cables for J4 and J3 (XH housings with
+XH-T crimp contacts, UL1007 24 AWG). Use standard SMA, not RP-SMA. Insert the CR2032 with "+" facing up.</p>
+
+<h3>Printed circuit board</h3>
+<figure class="w65">
+  <img src="../images/pcb-layout.png" alt="PCB layout">
+  <figcaption>Layout, top side (copper and silkscreen)</figcaption>
+</figure>
+<table class="compact">
+  <tbody>
+  <tr><td class="k">Size</td><td>80 × 80 mm</td></tr>
+  <tr><td class="k">Layers</td><td>2 copper layers, board thickness 1.6 mm, 35 µm copper</td></tr>
+  <tr><td class="k">Assembly</td><td>All components on the top side: 53 SMD parts and 4 through-hole parts (J3, J4, J5, BT1)</td></tr>
+  <tr><td class="k">Copper areas</td><td>Continuous GND plane on the bottom side; areas for +19 V, the 5 V buck output, +5 V and GND on the top side</td></tr>
+  <tr><td class="k">Mounting holes</td><td>H1–H4, 3.2 mm for M3 screws, plated and connected to GND</td></tr>
+  </tbody>
+</table>
+<table class="compact">
+  <thead><tr><th>Hole</th><th>x (mm)</th><th>y (mm)</th><th>Position</th></tr></thead>
+  <tbody>
+  <tr><td>H1</td><td>64.0</td><td>5.0</td><td>top right, left of J3</td></tr>
+  <tr><td>H2</td><td>76.0</td><td>74.5</td><td>bottom right corner</td></tr>
+  <tr><td>H3</td><td>5.5</td><td>25.0</td><td>left edge, below the microSD socket</td></tr>
+  <tr><td>H4</td><td>20.5</td><td>73.5</td><td>bottom, right of the RESET button</td></tr>
+  </tbody>
+</table>
+<p>Positions of the hole centres are measured from the top left corner of the board (orientation as in the layout
+figure, J3/J4 on the right). Because the mounting holes are connected to GND, a metal housing is connected to the
+ground of the board. The schematic is published as <code>docs/EBCTester_Schematic.pdf</code>.</p>
+</only>
+
+<h2 class="chapter">Firmware installation<only maker> and build</only></h2>
+<h3>Installing a release</h3>
+<p>Each GitHub release contains <code>EBCTester-&lt;version&gt;-full-install.bin</code> with bootloader, partition
+table and application. Flash it at address <code>0x0</code> with esptool (see <only factory>below</only><only maker><a href="#ref:Installing the firmware">Installing the firmware</a></only>).
+Updates are normally installed over Wi-Fi; a USB installation is only needed for the first installation, after a
+change of the partition table or for recovery.</p>
+<only factory><pre>esptool.py --chip esp32s3 --port COM5 write_flash 0x0 EBCTester-1.99.3-full-install.bin</pre>
+<p>Writing the full image does not erase the settings memory. To start like a new device afterwards, use the
+device reset or the USB erase described in <a href="#ref:Troubleshooting">Troubleshooting</a>.</p></only>
+
+<only maker>
+<h3>Building from source</h3>
+<p>Requirements: VS Code with the ESP-IDF extension, ESP-IDF 6.0.1, Git and an Internet connection for the first
+build (managed components and the SQLite source are downloaded and hash-checked).</p>
+<pre>git clone --recurse-submodules https://github.com/Gemelon/EBCTester.git
+# existing checkout:
+git submodule update --init --recursive</pre>
+<ol class="steps">
+  <li>Open the project in VS Code and select the ESP-IDF environment and target <code>esp32s3</code>.</li>
+  <li>Review the defaults in menuconfig (see below).</li>
+  <li>Build with <span class="ui">ESP-IDF: Build your project</span>.</li>
+  <li>For the first installation, flash bootloader, partition table and application over USB.</li>
+</ol>
+<p>A ZIP download of the repository does not contain the submodules. Do not run
+<code>git submodule update --remote</code> without reviewing the changes – the main repository records the tested
+versions. <code>sdkconfig.defaults</code> provides portable defaults; an existing local <code>sdkconfig</code> takes
+priority. Size optimisation (<code>-Os</code>) is the default.</p>
+
+<h3>Build configuration (menuconfig)</h3>
+<p>Since firmware 1.99.3 the following options only define the <b>defaults of a new configuration</b>. After the
+first start, the firmware uses the values stored in NVS. Changing an option therefore has no effect on a device
+that already has a valid configuration – reset the device configuration to apply new defaults.</p>
+<table class="compact">
+  <thead><tr><th>Menu</th><th>Option (sdkconfig)</th><th>Default</th></tr></thead>
+  <tbody>
+  <tr><td>EBCTester → EBC battery tester UARTs</td><td>Tester / dongle UART TX, RX, baud (<code>CONFIG_EBC_TESTER_UART_*</code>, <code>CONFIG_EBC_DONGLE_UART_*</code>)</td><td>see <a href="#ref:Firmware defaults">Firmware defaults</a></td></tr>
+  <tr><td>EBCTester → Battery test control</td><td>Averaging length (<code>CONFIG_TEST_CONTROL_AVERAGING_LENGTH</code>)</td><td>20</td></tr>
+  <tr><td>EBCTester → Battery test store</td><td>Device ID; max. pending samples (build option only)</td><td>EBC-A20; 3000</td></tr>
+  <tr><td>EBCTester → Home Assistant MQTT</td><td>Initial MQTT state (<code>CONFIG_EBCTESTER_HA_MQTT_ENABLE</code>)</td><td>off</td></tr>
+  <tr><td>SD Card Manager</td><td>Bus mode, frequencies, pins, card detect, mount point</td><td>see <a href="#ref:Firmware defaults">Firmware defaults</a></td></tr>
+  <tr><td>OTA Suite network</td><td>AP SSID prefix (build option only), AP password (empty = random), SNTP server</td><td>BatteryTester, ebctester, pool.ntp.org</td></tr>
+  <tr><td>OTA Suite web interface</td><td>Initial web password, settings confirmation, SD languages, primary tabs, tab order</td><td>ebctester, on, on</td></tr>
+  <tr><td>OTA Suite update checks</td><td>Firmware manifest URL</td><td>release channel</td></tr>
+  <tr><td>OTA Suite firmware updates</td><td>Allow unencrypted HTTP OTA</td><td>off</td></tr>
+  <tr><td>OTA Suite status LED</td><td>Enable WS2812 LED, GPIO</td><td>on, 48</td></tr>
+  </tbody>
+</table>
+
+<h3>Partition table</h3>
+<table class="compact">
+  <thead><tr><th>Name</th><th>Type</th><th>Offset</th><th>Size</th><th>Use</th></tr></thead>
+  <tbody>
+  <tr><td>nvs</td><td>data/nvs</td><td>0x9000</td><td>24 KB</td><td>Settings (device configuration, Wi-Fi, model, plan, battery …)</td></tr>
+  <tr><td>otadata</td><td>data/ota</td><td>0xF000</td><td>8 KB</td><td>Active firmware slot</td></tr>
+  <tr><td>phy_init</td><td>data/phy</td><td>0x11000</td><td>4 KB</td><td>RF calibration</td></tr>
+  <tr><td>ota_0 / ota_1</td><td>app</td><td>0x20000 / 0x590000</td><td>2 × 5.4 MB</td><td>Two firmware slots for safe updates</td></tr>
+  <tr><td>storage</td><td>data</td><td>0xB00000</td><td>5 MB</td><td>Reserved, currently unused</td></tr>
+  </tbody>
+</table>
+<p>A changed partition table cannot be installed over the air; it requires flashing over USB. Back up settings and
+data before repartitioning.</p>
+
+<h3>Status LED</h3>
+<p>The firmware drives one WS2812 RGB LED (GRB) on the configured GPIO; on the original board this is LED1.
+Brightness is limited to 24/255. The LED task updates every 50 ms and never starts an update.</p>
+<table class="compact">
+  <thead><tr><th>State</th><th>LED</th></tr></thead>
+  <tbody>
+  <tr><td>Normal operation</td><td>Smooth 30-second colour cycle</td></tr>
+  <tr><td>Firmware download</td><td>Blue pulse (2 seconds)</td></tr>
+  <tr><td>Verification</td><td>Yellow pulse (may be brief)</td></tr>
+  <tr><td>Waiting for restart</td><td>Solid green</td></tr>
+  <tr><td>Update failed</td><td>Red blink (0.5 s on/off) until a new attempt or restart</td></tr>
+  <tr><td>Configuration inactive or LED disabled</td><td>Off</td></tr>
+  </tbody>
+</table>
+
+<h2 class="chapter">Communication with the tester</h2>
+<h3>Serial interface</h3>
+<p>UART1 is connected to the tester with 9600 baud, 8 data bits, odd parity, 1 stop bit (8O1) at 5 V TTL level.
+Frames start with <code>0xFA</code> and end with <code>0xF8</code>. Status frames are 19 bytes long. An XOR checksum
+over bytes 1–16 is verified before any data is used. The EBC-A20 transmits checksums in the range 0xF0–0xFF with
+the upper nibble cleared, to avoid the frame markers; this variant is also accepted.</p>
+<p>Set-points are transmitted as two bytes in base 240 (value = high × 240 + low) with a resolution of 0.01 A or
+0.01 V. The range is sufficient for 50 A; the 10 mA resolution has not been verified on real A50L hardware yet. The
+discharge command also carries a time limit in whole minutes.</p>
+<h3>Model detection</h3>
+<p>Byte 16 of each status frame contains the model identifier (normalised as raw value modulo 100). For status
+bytes of at least 100, bytes 10 and 11 contain the tester's firmware version (B10 × 240 + B11), which distinguishes
+variants with the same identifier.</p>
+<table class="compact">
+  <thead><tr><th>Ident (dec / hex)</th><th>Firmware version</th><th>Model</th><th>Enabled</th></tr></thead>
+  <tbody>
+  <tr><td>5 / 0x05</td><td>302 / other</td><td>EBC-A05+ / EBC-A05</td><td>no</td></tr>
+  <tr><td>6 / 0x06</td><td>310 / other</td><td>EBC-A10+ / EBC-A10H</td><td>no</td></tr>
+  <tr><td>9 / 0x09</td><td>311 / other</td><td>EBC-A20+ / EBC-A20</td><td>A20 only</td></tr>
+  <tr><td>10 / 0x0A</td><td>311 / other</td><td>EBC-A50L / EBC-A40L</td><td>yes</td></tr>
+  <tr><td>20 / 0x14</td><td>310 / other</td><td>EBD-M10 / EBD-A10H</td><td>no</td></tr>
+  <tr><td>25 / 0x19</td><td>310 / 315 / other</td><td>EBD-M03+ / EBD-M05 / EBD-M03</td><td>no</td></tr>
+  <tr><td>38 / 0x26</td><td>310 / 311 / other</td><td>EBD-A100L / EBC-A100L / EBD-A100</td><td>no</td></tr>
+  </tbody>
+</table>
+<p>While the firmware version of an ident-10 tester is not yet known, it is shown as "EBC-A40L/A50L (Version
+unknown)" and the conservative A40L limits are used. The model check runs on every valid frame. On a mismatch with
+the selected model, the connection and measurement state are cleared, pending commands are discarded, Disconnect
+is sent and automatic reconnection is suppressed.</p>
+<h3>Operating modes</h3>
+<table class="compact">
+  <thead><tr><th>Code</th><th>Mode</th><th>Code</th><th>Mode</th><th>Code</th><th>Mode</th></tr></thead>
+  <tbody>
+  <tr><td>0x00</td><td>D-CC stopped</td><td>0x0A</td><td>D-CC active</td><td>0x14</td><td>D-CC completed</td></tr>
+  <tr><td>0x01</td><td>D-CP stopped</td><td>0x0B</td><td>D-CP active</td><td>0x15</td><td>D-CP completed</td></tr>
+  <tr><td>0x02</td><td>C-CV stopped</td><td>0x0C</td><td>C-CV active</td><td>0x16</td><td>C-CV completed</td></tr>
+  </tbody>
+</table>
+</only>
+<only factory>
+<h3>Tester interface</h3>
+<p>UART1 is connected to the tester with 9600 baud, 8 data bits, odd parity and 1 stop bit (8O1) at 5 V TTL level.
+Every status frame is checked (frame markers, XOR checksum, model identifier) before its data is used.</p>
+</only>
+
+<h2 class="chapter">Data storage</h2>
+<h3>SQLite database on the SD card</h3>
+<p>The database file is <code>/sdcard/ebc_a20.db</code>. It is created when a card is mounted; if the device starts
+without a card, it is created as soon as one is inserted. The card is never formatted and an existing database is
+never deleted. A file without a valid SQLite header is preserved under the name
+<code>ebc_a20.db.invalid-XXXXXXXX</code> before a new database is created.</p>
+<table class="compact">
+  <thead><tr><th>Table</th><th>Content</th></tr></thead>
+  <tbody>
+  <tr><td>ebc_battery</td><td>Batteries (label, manufacturer, serial number, date, nominal capacity, notes)</td></tr>
+  <tr><td>ebc_test_plan / ebc_test_plan_step</td><td>Saved test plans and their steps</td></tr>
+  <tr><td>ebc_test_run</td><td>Test runs (battery, plan, start/end, status, current step, cycle, firmware, notes, display name)</td></tr>
+  <tr><td>ebc_run_segment</td><td>Segments of a run (mode, step, cycle, set-points)</td></tr>
+  <tr><td>ebc_measurement</td><td>Measurements (time UTC and uptime, current, voltage, capacity …)</td></tr>
+  <tr><td>ebc_resistance_result</td><td>Three DCIR results per test (times, U1/I1, U2/I2, mΩ, validity)</td></tr>
+  <only maker><tr><td>ebc_schema_metadata, ebc_sync_state</td><td>Schema version; MariaDB synchronisation progress</td></tr></only>
+  </tbody>
+</table>
+<only maker>
+<p>The views <code>ebc_measurement_view</code> and <code>ebc_resistance_result_view</code> make evaluation easier.
+SQLite runs with <code>synchronous=FULL</code>, real <code>fsync()</code>, foreign keys and an integrity check at
+start-up.</p>
+<table class="compact">
+  <thead><tr><th>Schema</th><th>Firmware</th><th>Change</th></tr></thead>
+  <tbody>
+  <tr><td>1</td><td>–</td><td>Base tables (corresponds to MariaDB migrations 001–005)</td></tr>
+  <tr><td>2</td><td>DCIR support</td><td>Table ebc_resistance_result</td></tr>
+  <tr><td>3</td><td>1.4.67 and later</td><td>Column display_name for custom run names</td></tr>
+  </tbody>
+</table>
+<p>Migrations run automatically in a transaction at the first start with a card. Older firmware refuses a newer
+schema: keep a database backup before an update if you might need to downgrade.</p>
+</only>
+<p>Time stamps are stored in UTC and require a synchronised clock (SNTP or an enabled, valid DS3231). Without it, the device uptime is
+recorded instead; no calendar time is invented.</p>
+
+<h3>MariaDB backup database</h3>
+<p>The MariaDB synchroniser copies plans, steps, batteries, runs, segments, measurements and DCIR results to an
+existing MariaDB schema (for example <code>ebc_a20</code>). Progress is tracked per run; only new data is sent<only maker>
+in batches of 200 rows with <code>INSERT IGNORE</code></only>.</p>
+<ul>
+  <li>The base schema (migrations 001–005) must exist on the server. The repository contains migration <code>sql/006_resistance_results_mariadb.sql</code> for DCIR results, not a complete initial schema.</li>
+  <only maker><li>The user needs a <code>mysql_native_password</code> account with SELECT/INSERT/UPDATE on <code>ebc_test_plan</code>, <code>ebc_battery</code>, <code>ebc_test_run</code>, additionally DELETE on <code>ebc_test_plan_step</code>, and INSERT on <code>ebc_run_segment</code> and <code>ebc_measurement</code>, plus rights on the DCIR result table.</li></only>
+  <li>The connection is plain TCP without TLS.</li>
+</ul>
+<only maker><pre>SELECT battery_label, test_started_at_utc, requested_seconds,
+       actual_seconds, resistance_mohm, valid, error
+FROM ebc_resistance_result_view
+ORDER BY test_started_at_utc DESC, run_id, result_number;</pre></only>
+
+<h2 class="chapter">Interfaces</h2>
+<h3>HTTP API</h3>
+<p>The web interface uses a JSON API that can also be used by your own scripts. With browser login enabled, all
+endpoints require a login session (cookie); POST requests additionally require the CSRF token from
+<code>GET /api/status</code> in the header <code>X-CSRF-Token</code>. Saving settings also requires
+<code>X-Admin-Password</code> when the password confirmation is enabled.</p>
+<table class="compact">
+  <thead><tr><th style="width:36%">Endpoint</th><th>Method</th><th>Purpose</th></tr></thead>
+  <tbody>
+  <tr><td>/api/auth/login, /api/auth/logout</td><td>POST</td><td>Login (JSON user name/password, header <code>X-Web-Login: 1</code>) and logout</td></tr>
+  <tr><td>/api/status</td><td>GET</td><td>Device, network and update status, CSRF token, <code>configActive</code>, <code>firmwareMode</code> (<code>factory</code>/<code>maker</code>), tabs</td></tr>
+  <tr><td>/api/tester/status</td><td>GET</td><td>Live values, connection, model and limits, plan, recorder</td></tr>
+  <tr><td>/api/tester/command</td><td>POST</td><td>connect, disconnect, stop, auto_connect, charge, discharge_cc, discharge_cp</td></tr>
+  <tr><td>/api/tester/plan, /api/tester/plan/action</td><td>POST</td><td>Save plan; start, abort, reset, load_db, save_db</td></tr>
+  <tr><td>/api/db/runs, /api/db/run?id=, /api/db/measurements?id=&amp;max=</td><td>GET</td><td>Run catalogue, run details and segments, measurement series</td></tr>
+  <only maker>
+  <tr><td>/api/auth/settings</td><td>POST</td><td>Login settings: <code>sessionDays</code> (1/7), <code>loginEnabled</code>, optional new password</td></tr>
+  <tr><td>/api/tester/settings, /api/tester/catalog</td><td>GET</td><td>Manual values, battery, plan; saved batteries and plans</td></tr>
+  <tr><td>/api/tester/battery, /api/tester/model</td><td>POST</td><td>Battery actions; tester model selection</td></tr>
+  <tr><td>/api/tester/resistance(/history)</td><td>GET/POST</td><td>DCIR configuration, status, start/abort; history</td></tr>
+  <tr><td>/api/test-runs(/rename|/delete)</td><td>GET/POST</td><td>Test-run management</td></tr>
+  <tr><td>/api/maker/config</td><td>GET/POST</td><td>Maker Settings (MakerMode only, otherwise HTTP 403). GET returns the field list with ranges; passwords only as <code>configured</code>. POST: <code>{"active":bool,"tester":{…},"ota":{…},"sd":{…}}</code>, restarts the device</td></tr>
+  <tr><td>/api/config/reset</td><td>POST</td><td>Device reset: <code>{"scope":"config"|"all","confirm":true}</code>, restarts the device; HTTP 409 while a test or update is running</td></tr>
+  <tr><td>/api/mariadb/…, /api/mqtt/…, /api/debug/…</td><td>GET/POST</td><td>Status and settings of the optional services</td></tr>
+  <tr><td>/api/sd/…, /api/updates/check, /api/ota</td><td>GET/POST</td><td>SD card file operations; update check and installation</td></tr>
+  </only>
+  </tbody>
+</table>
+<only maker><p><code>GET /api/db/measurements</code> returns points <code>[segment, uptimeMs, epochMs, I, U, Ah]</code>,
+reduced to <code>max</code> points (200–6000).</p></only>
+
+<h3>Home Assistant MQTT topics</h3>
+<p>On connection the device publishes a retained discovery document to
+<code>homeassistant/device/ebctester_&lt;MAC&gt;/config</code>, its availability (<code>online</code> /
+<code>offline</code> as Last Will) to <code>&lt;prefix&gt;/availability</code>, and every recorded measurement
+(voltage, current, capacity) as a non-retained QoS 0 message to <code>&lt;prefix&gt;/state</code>. Mode, plan status
+and battery entities are already announced but do not yet receive values. Commands are accepted on
+<code>&lt;prefix&gt;/command</code> as a JSON object:</p>
+<pre>{"command":"start_plan"}        (only if remote start is allowed)
+{"command":"stop"}
+{"command":"abort"}
+{"command":"select_plan","name":"Plan name"}
+{"command":"select_battery","name":"Battery label"}</pre>
+<p>MQTT cannot set free set-points or create database entries. Invalid commands are ignored. Failed connections are
+retried with increasing intervals from 1 to 60 seconds.</p>
+
+<only maker>
+<h2 class="chapter">Firmware updates and publishing</h2>
+<h3>Update procedure</h3>
+<ul>
+  <li>The device downloads only the manifest <code>firmware.json</code> (after Wi-Fi connects, every six hours, when the UI is opened). HTTPS checks wait for a synchronised clock. Inactive Maker devices do not check.</li>
+  <li>Versions must be strictly numeric <code>major.minor.patch</code> and newer than the installed one.</li>
+  <li>Manifest and image must be delivered directly (HTTP 200, no redirects). HTTPS validates certificate chain, host name and dates. HTTP is only possible with the explicit option for a trusted test network.</li>
+  <li>The image is streamed into the inactive slot; exact size and SHA-256 are checked before it is selected for booting. Project name and target must match.</li>
+  <li>After restart the new firmware must run for 10 seconds; an earlier reset or crash rolls back to the previous version.</li>
+</ul>
+<h3>Manifest format</h3>
+<pre>{
+  "project": "EBCTester",
+  "target": "esp32s3",
+  "version": "1.99.4",
+  "url": "https://updates.example.org/BatteryTester/EBCTester-1.99.4.bin",
+  "size": 2825440,
+  "sha256": "&lt;64 lower-case hex digits&gt;",
+  "notes": "Release notes"
+}</pre>
+<p>All seven fields are mandatory; the manifest must be smaller than 2048 bytes, notes at most 512 bytes. The image
+URL must be in the same directory as the manifest and named <code>&lt;project&gt;-&lt;version&gt;.bin</code>.</p>
+<h3>Publishing your own builds</h3>
+<p>Publishing is disabled in a fresh checkout. It is enabled with a local, Git-ignored file
+<code>CMakeUserConfig.cmake</code> (see README). A successful build then creates the immutable versioned image, a
+compatibility copy and finally the manifest, optionally uploaded by SFTP. A published version is never overwritten
+with different content – increase the version first. Always distribute the license directory together with the
+firmware.</p>
+</only>
+
+<h2 class="chapter">Security and limitations</h2>
+<h3>Security</h3>
+<ul>
+  <li><b>Login:</b> user <code>admin</code> with the login password (initially <code>ebctester</code>). The password, the session duration and the login switch are stored in the device configuration<only maker> (<code>ebc_cfg</code>)</only>. Sessions use a random 256-bit cookie (<code>HttpOnly</code>, <code>SameSite=Lax</code>), last exactly 1 or 7 days and are held in RAM (a restart ends them). At most 8 sessions at a time; failed logins are delayed by one second.</li>
+  <li><b>Settings protection:</b> all changing requests require a CSRF token; settings additionally require the current login password, independent of whether browser login is enabled. Password or login-policy changes invalidate all sessions.</li>
+  <li><b>Access point:</b> <only factory>the access-point password is defined by the firmware and cannot be changed in the browser on a Factory device. Keep the access point in a trusted environment and connect the device to your own Wi-Fi.</only><only maker>set a personal access-point password in Maker Settings; the firmware default is the same on every device.</only></li>
+  <li><b>Transport:</b> the web interface, MQTT and MariaDB are unencrypted. Use only trusted networks, never forward port 80 to the Internet.</li>
+  <li><b>Storage:</b> NVS and flash are not encrypted by default; protect physical access and the USB port (the start-up log shows a generated access-point password). Change the shared initial login password <code>ebctester</code> on first use.</li>
+  <li><b>Firmware:</b> SHA-256 protects against corruption, not against deliberate replacement. Secure Boot, signed images and flash encryption are separate deployment decisions.</li>
+</ul>
+<h3>Known limitations (firmware 1.99.3)</h3>
+<ul>
+  <li>Firmware 1.99.3 is a beta version of V2. The hardware acceptance tests on the original board are still pending.</li>
+  <li>The UART2 bridge for the manufacturer's PC software is not implemented.</li>
+  <li>The optional DS3231 RTC is implemented from 1.99.18; physical validation and backup-cell retention tests are pending.</li>
+  <li>Only EBC-A20, EBC-A40L and EBC-A50L can be controlled; physical tests with the A50L are pending.</li>
+  <li>No battery-chemistry profiles and no temperature measurement.</li>
+  <li>MQTT publishes measurements only; status entities do not yet receive values.</li>
+  <li>LED2 of the original board is not driven yet.</li>
+  <only maker><li>The card-detect input is active-high only.</li></only>
+  <li>A forgotten login password can only be reset by erasing the settings memory over USB.</li>
+</ul>
+<h3>License</h3>
+<p>Copyright 2026 Thomas Stoll. EBCTester, OTA Suite and SD Card Manager are licensed under the Apache License 2.0 –
+commercial use, modification and sale are permitted under its terms; its warranty and liability disclaimers apply.
+Third-party components keep their own licenses: Bootstrap 5.3.3 and Chart.js 4.4.9 (MIT), SQLite (public domain),
+ESP-IDF (Apache 2.0) and others, listed in <code>THIRD_PARTY_NOTICES.md</code>. EBCTester is an independent project
+and not an official ZKETECH product; product names are trademarks of their respective owners.</p>

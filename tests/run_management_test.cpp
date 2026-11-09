@@ -61,6 +61,11 @@ int main(int argc, char **argv)
     sql(db, "INSERT INTO ebc_battery(label,created_at_utc) VALUES('Unused','2026-10-31');");
     assert(delete_unused_battery(db, "unused") == SQLITE_OK);
     assert(delete_unused_battery(db, "Unused") == SQLITE_NOTFOUND);
+    assert(rename_battery_label(db, "Cell A", "Cell A renamed") == SQLITE_OK);
+    assert(number(db, "SELECT COUNT(*) FROM ebc_test_run r JOIN ebc_battery b ON b.battery_id = r.battery_id "
+                      "WHERE r.run_id='done' AND b.label='Cell A renamed'") == 1);
+    assert((rename_battery_label(db, "Cell B", "Cell A renamed") & 0xff) == SQLITE_CONSTRAINT);
+    assert(rename_battery_label(db, "missing", "Fresh") == SQLITE_NOTFOUND);
     assert(number(db, "SELECT COUNT(*) FROM ebc_battery") == 2);
     assert(number(db, "SELECT COUNT(*) FROM ebc_test_run") == 2);
     const std::string migration = file(root + "/components/battery_database/run_management_schema.sql");

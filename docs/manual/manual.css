@@ -1,0 +1,111 @@
+/* SPDX-FileCopyrightText: 2026 Thomas Stoll
+   SPDX-License-Identifier: Apache-2.0 */
+
+@page {
+  size: A4;
+  margin: 22mm 18mm 20mm 18mm;
+  @top-left { content: "EBCTester – " string(edition); font-size: 7.5pt; color: #6b7a72; }
+  @top-right { content: string(chapter); font-size: 7.5pt; color: #6b7a72; }
+  @bottom-left { content: "Firmware " string(fw); font-size: 7.5pt; color: #6b7a72; }
+  @bottom-right { content: counter(page) " / " counter(pages); font-size: 7.5pt; color: #6b7a72; }
+}
+@page cover { margin: 0; @top-left { content: none; } @top-right { content: none; }
+  @bottom-left { content: none; } @bottom-right { content: none; } }
+@page part { @top-right { content: none; } }
+
+html { font-family: "Inter", "DejaVu Sans", sans-serif; font-size: 9.4pt; line-height: 1.45; color: #1d2621; }
+body { margin: 0; }
+.meta-edition { string-set: edition content(); position: absolute; color: transparent; font-size: 1pt; }
+.meta-fw { string-set: fw content(); position: absolute; color: transparent; font-size: 1pt; }
+
+/* Cover */
+.cover { page: cover; height: 297mm; background: #1e4d3a; color: #fff; position: relative;
+  background-image: linear-gradient(160deg, #2d7a57 0%, #1e4d3a 45%, #143527 100%); }
+.cover .logo { position: absolute; top: 28mm; left: 18mm; background: #fff; border-radius: 4mm; padding: 5mm 7mm; }
+.cover .logo img { width: 78mm; display: block; }
+.cover h1 { color: #fff; white-space: nowrap; position: absolute; top: 92mm; left: 18mm; margin: 0; font-size: 34pt; font-weight: 700; letter-spacing: -0.5pt; }
+.cover .edition-tag { position: absolute; top: 112mm; left: 18mm; font-size: 15pt; font-weight: 600; color: #bfe7d1; }
+.cover .subtitle { position: absolute; top: 126mm; left: 18mm; width: 150mm; font-size: 11.5pt; color: #d9efe3; }
+.cover table { position: absolute; top: 172mm; left: 18mm; width: 170mm; border: none; font-size: 8.5pt; color: #d9efe3; }
+.cover td { border: none; padding: 1.2mm 0; background: none !important; }
+.cover td:first-child { width: 42mm; color: #9fd0b5; }
+.cover .legal { position: absolute; bottom: 16mm; left: 18mm; width: 172mm; font-size: 7.5pt; color: #9fd0b5; }
+
+/* Table of contents */
+.toc { page-break-after: always; }
+.toc h2 { string-set: chapter "Contents"; }
+.toc ul { list-style: none; padding: 0; margin: 0; }
+.toc li { margin: 0; }
+.toc a { color: inherit; text-decoration: none; }
+.toc li.part > a { display: block; font-weight: 700; color: #1e4d3a; margin-top: 3.5mm; }
+.toc li.ch > a { display: block; font-weight: 600; margin-top: 1.6mm; }
+.toc li.sec > a { display: block; padding-left: 9mm; font-size: 8.8pt; color: #33403a; }
+.toc a::after { content: leader(". ") target-counter(attr(href), page); color: #6b7a72; }
+
+/* Parts and chapters */
+.part-page { page: part; page-break-before: always; page-break-after: always; padding-top: 70mm; }
+.part-page h1 { font-size: 24pt; color: #1e4d3a; margin: 0 0 6mm 0; string-set: chapter ""; }
+.part-page p { font-size: 11pt; max-width: 120mm; color: #33403a; }
+h1, h2, h3, h4 { color: #1e4d3a; line-height: 1.2; }
+h2.chapter { font-size: 17pt; page-break-before: always; border-bottom: 1.5pt solid #2d7a57; padding-bottom: 2mm;
+  margin: 0 0 5mm 0; string-set: chapter content(text); }
+h2.chapter .num, h3 .num { color: #2d7a57; margin-right: 2mm; }
+h3 { font-size: 12.5pt; margin: 6mm 0 2.5mm 0; page-break-after: avoid; }
+h4 { font-size: 10pt; margin: 4.5mm 0 1.5mm 0; page-break-after: avoid; color: #24402f; }
+p { margin: 0 0 2.4mm 0; orphans: 3; widows: 3; }
+ul, ol { margin: 0 0 2.6mm 0; padding-left: 5.5mm; }
+li { margin-bottom: 0.8mm; }
+a { color: #2d7a57; text-decoration: none; }
+code, .mono { font-family: "DejaVu Sans Mono", monospace; font-size: 8.2pt; background: #eef4f0; padding: 0 1mm; border-radius: 1mm; }
+pre { font-family: "DejaVu Sans Mono", monospace; font-size: 7.8pt; background: #eef4f0; border-left: 2pt solid #2d7a57;
+  padding: 2.5mm 3mm; white-space: pre-wrap; page-break-inside: avoid; margin: 0 0 3mm 0; }
+.ui { font-weight: 600; }
+kbd { font-family: "DejaVu Sans Mono", monospace; font-size: 7.8pt; border: 0.6pt solid #9aa9a1; border-radius: 1mm; padding: 0 1mm; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; margin: 1mm 0 4mm 0; font-size: 8.4pt; page-break-inside: auto; }
+thead { display: table-header-group; }
+tr { page-break-inside: avoid; }
+th { text-align: left; background: #e3efe8; color: #1e4d3a; font-weight: 600; padding: 1.6mm 2mm; border-bottom: 0.8pt solid #2d7a57; }
+td { padding: 1.5mm 2mm; border-bottom: 0.5pt solid #d6e2db; vertical-align: top; }
+td.k, th.k { width: 30%; font-weight: 600; }
+table.compact td, table.compact th { padding: 1mm 1.6mm; }
+td.c, th.c { text-align: center; } td.r, th.r { text-align: right; }
+
+/* Callouts */
+.note, .caution, .warning, .tip { border-left: 3pt solid; border-radius: 1mm; padding: 2.4mm 3.5mm; margin: 2mm 0 4mm 0; page-break-inside: avoid; }
+.note { background: #eaf3fb; border-color: #3a7dc0; }
+.tip { background: #eaf6ef; border-color: #2d7a57; }
+.caution { background: #fdf6e3; border-color: #d39b1c; }
+.warning { background: #fbeceb; border-color: #c0392b; }
+.note > b:first-child, .caution > b:first-child, .warning > b:first-child, .tip > b:first-child { display: block; margin-bottom: 0.8mm; }
+.note > b:first-child { color: #2b5f93; } .caution > b:first-child { color: #8a6210; }
+.warning > b:first-child { color: #9b2a1f; } .tip > b:first-child { color: #1e4d3a; }
+.note p:last-child, .caution p:last-child, .warning p:last-child, .tip p:last-child { margin-bottom: 0; }
+
+/* Numbered steps */
+ol.steps { list-style: none; counter-reset: step; padding-left: 0; }
+ol.steps > li { counter-increment: step; position: relative; padding-left: 8mm; margin-bottom: 2mm; }
+ol.steps > li::before { content: counter(step); position: absolute; left: 0; top: -0.2mm; width: 5mm; height: 5mm;
+  border-radius: 50%; background: #2d7a57; color: #fff; font-size: 7.5pt; font-weight: 700; text-align: center; line-height: 5mm; }
+
+/* Figures */
+figure { margin: 3mm 0 5mm 0; text-align: center; page-break-inside: avoid; }
+figure img { max-width: 100%; border: 0.6pt solid #c9d6cf; border-radius: 1mm; }
+figure img.noborder { border: none; }
+figure.w80 img { width: 80%; } figure.w65 img { width: 65%; } figure.w50 img { width: 50%; } figure.w40 img { width: 40%; }
+figure.tall img { max-height: 205mm; width: auto; }
+figure.xtall img { max-height: 225mm; width: auto; }
+figcaption { font-size: 8pt; color: #4f5e56; margin-top: 1.6mm; counter-increment: figure; }
+figcaption::before { content: "Figure " counter(figure) ": "; font-weight: 600; color: #1e4d3a; }
+body { counter-reset: figure; }
+figure svg { max-width: 100%; }
+.pb { page-break-before: always; }
+.keep { page-break-inside: avoid; }
+.two-col { columns: 2; column-gap: 7mm; }
+.small { font-size: 8.2pt; }
+.muted { color: #5b6a62; }
+.badge { display: inline-block; font-size: 7.4pt; font-weight: 600; border-radius: 1mm; padding: 0.2mm 1.4mm; color: #fff; background: #2d7a57; }
+.badge.maker { background: #b4621a; } .badge.factory { background: #2d7a57; }
+dl.glossary dt { font-weight: 700; color: #1e4d3a; float: left; width: 30mm; clear: left; }
+dl.glossary dd { margin: 0 0 1.8mm 32mm; }

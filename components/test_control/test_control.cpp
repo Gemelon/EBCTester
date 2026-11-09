@@ -14,6 +14,7 @@
 
 #include "cJSON.h"
 #include "ebc_link.h"
+#include "ebc_config.h"
 #include "ebc_model.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -28,7 +29,8 @@ constexpr char NVS_NAMESPACE[] = "tester";
 constexpr uint8_t MANUAL_BLOB_VERSION = 1;
 constexpr int64_t STEP_START_TIMEOUT_US = 10 * 1000 * 1000;
 constexpr time_t VALID_TIME_THRESHOLD = 1700000000;
-constexpr int AVERAGING_LENGTH = CONFIG_TEST_CONTROL_AVERAGING_LENGTH;
+int averaging_length;
+bool initialized;
 
 struct StoredManual {
     uint8_t version;
@@ -169,7 +171,7 @@ template <typename Writer> void save_setting(Writer writer)
     }
 }
 
-/* NVS is initialized later by the network manager, so settings are loaded lazily. */
+/* Load tester selections on first use after the shared NVS initialization. */
 void ensure_settings_loaded()
 {
     if (settings_loaded) {
@@ -290,7 +292,7 @@ void add_to_average(const ebc_frame_t &frame)
     averager.capacity += frame.capacity_ah;
     averager.last = sample;
     averager.time_valid = time_valid;
-    if (averager.count >= AVERAGING_LENGTH) {
+    if (averager.count >= averaging_length) {
         flush_average();
     }
 }
@@ -303,7 +305,7 @@ void end_capture(const char *status, const char *notes)
     plan_capture = false;
 }
 
-void update_capture(const ebc_frame_t &frame)
+void update_capture(const ebc_frame_t &frame, bool plan_step_changed)
 {
     const bool plan_running = plan_status.state == RunState::Running;
     if (!capturing && (ebc_link_mode_is_active(frame.mode) || plan_running)) {
@@ -321,6 +323,19 @@ void update_capture(const ebc_frame_t &frame)
     }
     if (plan_capture) {
         if (plan_status.state == RunState::Running) {
+            if (plan_step_changed || plan_status.step_index >= settings.plan.steps.size()) {
+                return;
+            }
+            const test_store::PlanStep &step = settings.plan.steps[plan_status.step_index];
+            if (step.mode == 5) {
+                return;
+            }
+            if (step.mode >= 1 && step.mode <= 3) {
+                static constexpr uint8_t active_modes[] = {0, 0x0A, 0x0B, 0x0C};
+                if (frame.mode != active_modes[step.mode]) {
+                    return;
+                }
+            }
             add_to_average(frame);
             return;
         }
@@ -458,8 +473,13 @@ void on_frame(const ebc_frame_t *frame, void *)
     if (ebc_link_mode_is_active(frame->mode)) {
         manual_start_deadline_us = 0;
     }
+    const uint8_t previous_step = plan_status.step_index;
+    const uint16_t previous_cycle = plan_status.cycle_pass;
     run_plan(frame, esp_timer_get_time());
-    update_capture(*frame);
+    const bool plan_step_changed = plan_capture &&
+                                   (plan_status.step_index != previous_step ||
+                                    plan_status.cycle_pass != previous_cycle);
+    update_capture(*frame, plan_step_changed);
 }
 
 void on_connection_lost(void *)
@@ -898,6 +918,53 @@ std::string delete_battery(const std::string &label)
     return "";
 }
 
+std::string rename_battery(const std::string &old_label, const std::string &new_label)
+{
+    std::lock_guard<std::recursive_mutex> guard(state_mutex);
+    ensure_settings_loaded();
+    if (capturing || resistance_test::busy() || test_store::recorder_status().active ||
+        manual_start_deadline_us != 0 || plan_status.state == RunState::Running) {
+        return "The battery cannot be renamed during recording.";
+    }
+    if (old_label.empty() || new_label.empty()) {
+        return "A battery label is required.";
+    }
+    if (old_label == new_label) {
+        return "";
+    }
+    if (old_label != settings.battery.label) {
+        return "The current battery changed. Reload it before renaming.";
+    }
+    int result = SQLITE_OK;
+    struct Context {
+        const std::string &old_label;
+        const std::string &new_label;
+        int &result;
+    } context{old_label, new_label, result};
+    const esp_err_t err = battery_database_execute([](sqlite3 *database, void *arg) {
+        auto *context = static_cast<Context *>(arg);
+        context->result = rename_battery_label(database,
+                                               context->old_label.c_str(),
+                                               context->new_label.c_str());
+        if (context->result != SQLITE_OK) {
+            ESP_LOGW(TAG, "Cannot rename battery: SQLite %d (%s)",
+                     context->result, sqlite3_errmsg(database));
+            return ESP_FAIL;
+        }
+        return ESP_OK;
+    }, &context, pdMS_TO_TICKS(5000));
+    if ((result & 0xff) == SQLITE_CONSTRAINT) {
+        return "Battery label already exists in the SD database.";
+    }
+    if (result == SQLITE_NOTFOUND) {
+        return "Battery not found in the SD database.";
+    }
+    if (err != ESP_OK) {
+        return "Could not rename battery in the SD database.";
+    }
+    return "";
+}
+
 std::string set_plan(const test_store::Plan &plan)
 {
     std::lock_guard<std::recursive_mutex> guard(state_mutex);
@@ -932,6 +999,9 @@ std::string start_plan()
     }
     if (controls_busy()) {
         return "An operation is active or a command is pending. Please stop it first.";
+    }
+    if (settings.battery.label.empty()) {
+        return "Please select a battery first.";
     }
     const std::string error = validate_plan_for_model(settings.plan.steps, current_model_limits());
     if (!error.empty()) {
@@ -988,6 +1058,11 @@ std::string reset_plan()
 extern "C" esp_err_t test_control_init(void)
 {
     using namespace test_control;
+    if (!ebc_config_is_active()) {
+        ESP_LOGW(TAG, "Tester control disabled: device configuration is inactive");
+        return ESP_ERR_INVALID_STATE;
+    }
+    averaging_length = ebc_config_get()->tester.averaging_length;
     esp_err_t err = test_store_init();
     if (err == ESP_OK) {
         test_store::set_sample_written_callback(dispatch_persisted_sample);
@@ -1007,7 +1082,22 @@ extern "C" esp_err_t test_control_init(void)
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Tester control start failed: %s", esp_err_to_name(err));
     }
+    initialized = err == ESP_OK;
     return err;
+}
+
+extern "C" bool test_control_configuration_busy(void)
+{
+    using namespace test_control;
+    if (!initialized) return false;
+    const auto recorder = test_store::recorder_status();
+    return controls_busy() || recorder.active || recorder.samples_pending != 0;
+}
+
+extern "C" bool test_control_automatic_operation_running(void)
+{
+    std::lock_guard<std::recursive_mutex> guard(test_control::state_mutex);
+    return test_control::plan_status.state == test_control::RunState::Running;
 }
 
 extern "C" void test_control_set_persisted_sample_callback(

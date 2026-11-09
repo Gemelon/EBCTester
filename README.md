@@ -3,6 +3,8 @@
 
 # EBCTester
 
+> EBCTester V2 is the current stable release line.
+
 <p align="center">
   <img src="docs/images/readme-logo.png" alt="EBCTester logo" width="720">
 </p>
@@ -17,8 +19,13 @@ Wi-Fi network.
 
 ## User manuals
 
-[English User Manual (PDF)](docs/EBCTester_User_Manual_EN.pdf) ·
-[Benutzerhandbuch auf Deutsch (PDF)](docs/EBCTester_Benutzerhandbuch_DE.pdf)
+- [User Manual – Factory Edition (PDF)](docs/EBCTester_Manual_Factory_EN.pdf):
+  original EBCTester board, normal user interface and a compact technical reference.
+- [User Manual – Maker Edition (PDF)](docs/EBCTester_Manual_Maker_EN.pdf):
+  self-built devices, Maker Settings and the detailed technical reference.
+
+Both manuals are in English. Translations are available on request. Sources:
+[docs/manual](docs/manual/README.md).
 
 See [CHANGELOG.md](CHANGELOG.md) for user-visible changes by firmware version.
 
@@ -134,8 +141,7 @@ card, without requiring a cloud service.
 
 Check for firmware updates and follow download progress in the browser.
 Installation requires an explicit action and confirmation; updates are
-never installed automatically. The screenshot shows HTTP test mode;
-use HTTPS for normal firmware distribution.
+never installed automatically. Use HTTPS for normal firmware distribution.
 
 <p align="center">
   <a href="docs/images/firmware-updates.png">
@@ -144,6 +150,15 @@ use HTTPS for normal firmware distribution.
 </p>
 
 ### Add conveniences without making them dependencies
+
+Under **Settings > LED function groups**, set the total WS2812 LED count
+(1-16, including extensions) and select each LED's normal display:
+**Tester mode**, **Message frame status**, or **Off**. Enable **OTA override**
+per LED to show update progress instead during an update. Defaults are two
+board LEDs: LED1 = Tester mode + OTA; LED2 = Message frame status.
+Assignments apply immediately and persist across restarts, in Maker and
+Factory firmware alike. LED hardware enablement and GPIO remain hardware
+configuration settings.
 
 Configure Wi-Fi, optional MariaDB backups, the live debug log, and optional
 Home Assistant MQTT integration in one place. MQTT provides live values
@@ -448,11 +463,66 @@ unsupported. The optional WS2812 LED defaults to GPIO 48; some boards need 38.
 
 ### First access and daily operation
 
-1. Start the device and read the setup AP password from the serial log.
-   Without a configured password, a random one is generated once.
+The hardware configuration is stored in NVS. On a new or invalid configuration,
+GPIO47 selects the initial mode: externally HIGH selects **FactoryMode** with
+peripherals enabled; LOW, open, or inconsistent readings select **MakerMode**
+with peripherals disabled. A valid saved configuration bypasses GPIO47.
+
+**Maker Settings** is available only in MakerMode; the existing **Settings**
+tab remains available in both modes. Configure UARTs, SD bus/pins, networking,
+OTA, LED, recording, optional RTC and MQTT defaults here, enable **ConfigAktive**, and save.
+The device restarts before enabling the hardware. While inactive, only the AP
+and web interface run: no tester/dongle UART, SD, LED, station Wi-Fi, SNTP,
+update checking, RTC, recorder, or MQTT starts. Flash/PSRAM and the SDK console
+are outside this application-peripheral guarantee.
+
+### Optional DS3231 clock
+
+The RTC is **always enabled in FactoryMode**, including existing installations
+after an update. FactoryMode also enforces the original-board RTC pin mapping
+INT/SDA/SCL = GPIO14/GPIO15/GPIO16. Normal users do not need access to Maker
+Settings.
+In **MakerMode**, it is **disabled by default**; use
+**Maker Settings → Real-time clock** to enable it and configure the I2C pins
+before saving and restarting.
+SDK and original-board defaults are **RTC INT GPIO14, SDA GPIO15, SCL GPIO16**.
+INT is a reserved input (or `-1` when disconnected); alarms and wakeup are not
+implemented. Use external I2C pull-ups to 3.3 V (the original board has them).
+GPIO conflicts with enabled peripherals are rejected.
+
+With RTC enabled, startup reads a valid RTC immediately, then a successful
+NTP response synchronizes device time and the RTC. NTP synchronization repeats
+every **six hours**. Without a new NTP response, device time is refreshed from
+the RTC every six hours. A stopped oscillator, invalid calendar, or missing RTC
+is logged and never replaces device time with an invented timestamp.
+NTP remains usable even when RTC hardware is missing.
+
+RTC and device time use **UTC**. When RTC is enabled or synchronized time is
+available, the header shows time above date immediately beside **EBC RX**.
+Display conversion uses the browser's current time zone, including daylight
+saving time, not the browser's clock. Unavailable or stale device time is shown
+as placeholders. With RTC disabled, existing NTP behavior is unchanged.
+Configuration upgrades preserve existing settings: FactoryMode enables RTC,
+while MakerMode preserves its saved selection (off when migrating from v1).
+An inactive configuration still disables all peripherals, including RTC.
+
+If an enabled RTC is physically missing, bounded I2C failures are logged and
+NTP continues to provide device time. UI, recording and other services remain
+available; RTC operations retry on subsequent synchronization attempts.
+Without either NTP or a valid RTC, calendar time stays unavailable and recording
+continues using the existing uptime-based behavior.
+
+Hardware validation on the original PCB is pending; no hardware is flashed or
+battery test started by the host checks.
+
+### Connecting to the device
+
+1. Start the device using the setup AP password configured for the firmware.
+   The standard project default is `ebctester`; change it before deployment.
 2. Connect a phone or computer to `BatteryTester-XXXXXX`.
 3. Open `http://192.168.4.1` and log in as `admin` with the initial web password
-   `ebctester` (`CONFIG_OTA_SUITE_WEB_PASSWORD` in `sdkconfig`).
+   `ebctester`. SDK configuration supplies initial defaults only; subsequent
+   starts use the saved NVS configuration.
 4. Optionally configure home Wi-Fi. Local operation and recording do not
    require that connection.
 5. Insert a FAT32 card, check database readiness, create a battery, and connect
@@ -484,12 +554,23 @@ login invalidate existing sessions; the interface reloads automatically.
 Saving device settings asks for the configured login password by default, including
 Wi-Fi, login settings, debug logging, MariaDB and MQTT settings. Canceling the
 prompt or entering an incorrect password does not save changes. Disable this
-additional confirmation at build time with
-`CONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD=n` under **OTA Suite web interface**
-in `menuconfig`. CSRF protection remains mandatory, as does a valid session
+additional confirmation in **Maker Settings** on Maker devices. The SDK option
+sets only the first-start default. CSRF protection remains mandatory, as does a valid session
 when browser login is enabled. Test controls,
 OTA actions, SD operations, and the browser-only language selection do not
 require this additional password.
+
+**Settings → Device reset** offers two confirmed resets. **Reset device
+configuration** erases only `ebc_cfg`; saved station Wi-Fi and other namespaces
+remain. **Erase all NVS settings including Wi-Fi** clears the complete NVS
+partition. Both restart and repeat GPIO47 detection; neither erases SD data.
+Stop running tests and wait for pending recordings before saving hardware
+configuration or resetting.
+
+The first installation of this configuration format seeds the listed hardware
+and OTA values from SDK defaults, not older per-module settings. Verify those
+defaults before updating an existing device. In particular, keep GPIO47 HIGH
+on original boards that should start immediately.
 
 Plans support D-CC, D-CP, C-CV, waits, and repetitions. After a restart, an
 interrupted plan is not resumed blindly. Stop and Abort remain available;

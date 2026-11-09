@@ -9,12 +9,16 @@
 #include "test_control.h"
 #include "../components/test_control/test_control_internal.h"
 #include "ebc_link.h"
+#include "ebc_config.h"
+
+static ebc_config_t mock_config{};
+extern "C" const ebc_config_t *ebc_config_get(void) { return &mock_config; }
+extern "C" bool ebc_config_is_active(void) { return true; }
 
 #define ESP_LOGI(...) ((void)0)
 #define ESP_LOGW(...) ((void)0)
 #define ESP_LOGE(...) ((void)0)
 #define ESP_LOGD(...) ((void)0)
-#define CONFIG_TEST_CONTROL_AVERAGING_LENGTH 20
 #define NVS_READONLY 0
 #define NVS_READWRITE 1
 #define ESP_ERR_NVS_NOT_INITIALIZED 4
@@ -27,8 +31,9 @@ static uint8_t persisted_model, staged_model;
 static bool model_stored, fail_open, fail_write, fail_commit, resistance_busy;
 static ebc_link_status_t mock_link{};
 static test_store::RecorderStatus mock_recorder;
+static test_store::Sample captured_sample{};
 static resistance_test::Config saved_resistance;
-static unsigned connect_calls, resistance_saves;
+static unsigned connect_calls, resistance_saves, captured_sample_count;
 
 static esp_err_t nvs_open(const char *, nvs_open_mode_t, nvs_handle_t *handle)
 {
@@ -66,6 +71,14 @@ static int64_t esp_timer_get_time() { return 1000000; }
 
 #include "../components/test_control/test_control.cpp"
 
+const char *sqlite3_errmsg(sqlite3 *) { return "mock"; }
+int delete_unused_battery(sqlite3 *, const char *) { return SQLITE_OK; }
+int rename_battery_label(sqlite3 *, const char *, const char *) { return SQLITE_OK; }
+extern "C" esp_err_t battery_database_execute(battery_database_operation_t, void *, TickType_t)
+{
+    return ESP_ERR_INVALID_STATE;
+}
+
 extern "C" {
 esp_err_t test_store_init() { return ESP_OK; }
 esp_err_t ebc_link_init(const ebc_link_listener_t *) { return ESP_OK; }
@@ -88,7 +101,7 @@ std::string plan_to_definition(const std::vector<PlanStep> &) { return ""; }
 bool plan_from_definition(const std::string &, std::vector<PlanStep> &) { return true; }
 const char *step_mode_name(uint8_t) { return "mock"; }
 esp_err_t begin_run(const Battery &, const Plan *, std::string &, const char *) { return ESP_OK; }
-void add_sample(const Sample &) {}
+void add_sample(const Sample &sample) { captured_sample = sample; captured_sample_count++; }
 void set_sample_written_callback(SampleWrittenCallback) {}
 void finish_run(const char *, const char *) {}
 RecorderStatus recorder_status() { return mock_recorder; }
@@ -165,7 +178,10 @@ int main()
     assert(set_plan(plan).empty());
     assert(set_model(0x10).empty());
     assert(get_settings().plan.steps[0].p2 == 1800);
+    settings.battery.label = "Test battery";
     assert(!start_plan().empty());
+    settings.battery.label.clear();
+    assert(start_plan() == "Please select a battery first.");
     assert(!validate_plan_for_model(get_settings().plan.steps, current_model_limits()).empty());
 
     fail_open = true;
@@ -209,5 +225,39 @@ int main()
     settings_loaded = false;
     settings = {};
     assert(get_settings().model == 0x10 && mock_link.expected_model == 0x10);
+
+    settings_loaded = true;
+    settings = {};
+    settings.model = 0x10;
+    settings.plan.steps = {{1, 2000, 3000, 10}, {3, 500, 3000, 10}};
+    plan_status = {};
+    plan_status.state = RunState::Running;
+    plan_status.cycle_pass = 1;
+    step_started = true;
+    seen_active = true;
+    capturing = true;
+    plan_capture = true;
+    averaging_length = 1;
+    mock_link.connected = true;
+    captured_sample_count = 0;
+    captured_sample = {};
+
+    ebc_frame_t frame{};
+    frame.model = 10;
+    frame.mode = 0x14;
+    on_frame(&frame, nullptr);
+    assert(plan_status.step_index == 1 && captured_sample_count == 0);
+
+    on_frame(&frame, nullptr);
+    assert(captured_sample_count == 0);
+
+    frame.mode = 0x0C;
+    frame.setpoint_1 = 0.5f;
+    on_frame(&frame, nullptr);
+    assert(captured_sample_count == 1);
+    assert(captured_sample.step == 2 && captured_sample.mode == 0x0C);
+    assert(captured_sample.setpoint_1 == 0.5f);
+    capturing = false;
+    plan_capture = false;
     puts("Tester control tests passed: offline model limits, exact boundaries, persistence/reload, unsupported models, storage failures, preserved plans and operation/recording locks.");
 }

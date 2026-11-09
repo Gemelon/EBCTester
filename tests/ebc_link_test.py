@@ -27,10 +27,17 @@ with tempfile.TemporaryDirectory(prefix="ebctester-link-") as temporary:
         "#define ESP_OK 0\n"
         "#define ESP_ERR_INVALID_ARG 1\n"
         "#define ESP_ERR_INVALID_STATE 2\n"
-        "#define ESP_ERR_NO_MEM 3\n",
+        "#define ESP_ERR_NO_MEM 3\n#define ESP_FAIL -1\n",
         encoding="ascii",
     )
-    includes = [work, root / "components" / "ebc_link" / "include"]
+    (work / "freertos" / "FreeRTOS.h").write_text(
+        "#pragma once\ntypedef int TickType_t;\n#define pdMS_TO_TICKS(v) (v)\n", encoding="ascii")
+    (work / "sqlite3.h").write_text(
+        "#pragma once\ntypedef struct sqlite3 sqlite3;\n#define SQLITE_OK 0\n"
+        "#define SQLITE_CONSTRAINT 19\n#define SQLITE_NOTFOUND 12\n"
+        "const char *sqlite3_errmsg(sqlite3 *);\n", encoding="ascii")
+    includes = [work, root / "components" / "ebc_link" / "include",
+                root / "components" / "ebc_config" / "include"]
     sources = [root / "tests" / "ebc_link_test.c", root / "components" / "ebc_link" / "ebc_model.c"]
     executable = work / "ebc-link-test"
     if Path(compiler).name.lower() in ("cl", "cl.exe"):
@@ -47,7 +54,7 @@ with tempfile.TemporaryDirectory(prefix="ebctester-link-") as temporary:
         (work / name).write_text("", encoding="ascii")
     cjson = root / "managed_components" / "espressif__cjson" / "cJSON"
     includes += [root / "components" / component / "include"
-                 for component in ("test_control", "test_store", "resistance_test")]
+                 for component in ("test_control", "test_store", "resistance_test", "battery_database")]
     includes.append(cjson)
     test_source = root / "tests" / "test_control_test.cpp"
     model_source = root / "components" / "ebc_link" / "ebc_model.c"

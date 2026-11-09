@@ -3,6 +3,7 @@
  */
 
 #include "battery_database.h"
+#include "ebc_config.h"
 
 #include <atomic>
 #include <errno.h>
@@ -34,6 +35,7 @@ static constexpr TickType_t RETRY_INTERVAL = pdMS_TO_TICKS(2000);
 static constexpr UBaseType_t DATABASE_TASK_PRIORITY = tskIDLE_PRIORITY + 1;
 static constexpr char DATABASE_FILE_NAME[] = "/ebc_a20.db";
 static std::atomic<bool> database_ready{false};
+static char mount_point[EBC_CONFIG_MOUNT_POINT_MAX];
 
 static void log_heap_state(const char *stage)
 {
@@ -130,7 +132,7 @@ static esp_err_t preserve_invalid_database_file(const char *database_path)
         return ESP_OK;
     }
 
-    char preserved_path[sizeof(CONFIG_SD_CARD_MANAGER_MOUNT_POINT) +
+    char preserved_path[EBC_CONFIG_MOUNT_POINT_MAX +
                         sizeof("/ebc_a20.db.invalid-00000000")];
     int path_length = snprintf(preserved_path, sizeof(preserved_path),
                                "%s.invalid-%08" PRIx32, database_path, esp_random());
@@ -222,9 +224,9 @@ static int validate_schema(sqlite3 *database)
 static esp_err_t initialize_database_locked(void)
 {
     ESP_LOGI(TAG, "Opening SQLite database on mounted SD card");
-    char database_path[sizeof(CONFIG_SD_CARD_MANAGER_MOUNT_POINT) + sizeof(DATABASE_FILE_NAME)];
+    char database_path[EBC_CONFIG_MOUNT_POINT_MAX + sizeof(DATABASE_FILE_NAME)];
     int path_length = snprintf(database_path, sizeof(database_path), "%s%s",
-                               CONFIG_SD_CARD_MANAGER_MOUNT_POINT, DATABASE_FILE_NAME);
+                               mount_point, DATABASE_FILE_NAME);
     if (path_length <= 0 || (size_t)path_length >= sizeof(database_path)) {
         ESP_LOGE(TAG, "Database path exceeds buffer");
         return ESP_ERR_INVALID_SIZE;
@@ -449,9 +451,9 @@ esp_err_t battery_database_execute(battery_database_operation_t operation, void 
     if (err != ESP_OK) {
         return err;
     }
-    char database_path[sizeof(CONFIG_SD_CARD_MANAGER_MOUNT_POINT) + sizeof(DATABASE_FILE_NAME)];
+    char database_path[EBC_CONFIG_MOUNT_POINT_MAX + sizeof(DATABASE_FILE_NAME)];
     snprintf(database_path, sizeof(database_path), "%s%s",
-             CONFIG_SD_CARD_MANAGER_MOUNT_POINT, DATABASE_FILE_NAME);
+             mount_point, DATABASE_FILE_NAME);
     sqlite3 *database = NULL;
     int result = sqlite3_open_v2(database_path, &database, SQLITE_OPEN_READWRITE, "esp-fatfs");
     if (result == SQLITE_OK) {
@@ -482,6 +484,8 @@ esp_err_t battery_database_execute(battery_database_operation_t operation, void 
 
 esp_err_t battery_database_init(void)
 {
+    if (!ebc_config_is_active()) return ESP_ERR_INVALID_STATE;
+    memcpy(mount_point, ebc_config_get()->sd.mount_point, sizeof(mount_point));
     if (xTaskCreate(database_worker, "battery_db_init", 8192, NULL,
                     DATABASE_TASK_PRIORITY, NULL) != pdPASS) {
         ESP_LOGE(TAG, "Cannot create database initialization task");

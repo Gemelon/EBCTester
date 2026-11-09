@@ -71,6 +71,27 @@ menu "EBCTester"
         comment "Broker connection details are configured in the device web interface."
     endmenu
 
+    menu "DS3231 real-time clock"
+        comment "FactoryMode always enables RTC; MakerMode defaults to off (editable in Maker Settings)."
+
+        config EBCTESTER_RTC_INT_GPIO
+            int "RTC INT GPIO (-1: not connected)"
+            range -1 48
+            default 14
+            help
+                Reserved as an input. Alarms and interrupt-driven wakeup are not used.
+
+        config EBCTESTER_I2C_SDA_GPIO
+            int "RTC I2C SDA GPIO"
+            range 0 48
+            default 15
+
+        config EBCTESTER_I2C_SCL_GPIO
+            int "RTC I2C SCL GPIO"
+            range 0 48
+            default 16
+    endmenu
+
     menu "Legacy settings"
         config BATTERY_AP_PASSWORD
             string "Legacy access point / web admin password"

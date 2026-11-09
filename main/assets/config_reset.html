@@ -1,0 +1,11 @@
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
+<div class="card"><div class="card-body">
+  <h2 class="h4">Device reset</h2>
+  <p>Both reset options restart the device and detect IO47 again. SD card data is not erased.</p>
+  <div class="d-flex gap-2 flex-wrap">
+    <button id="config-reset" type="button" class="btn btn-outline-danger">Reset device configuration</button>
+    <button id="config-reset-all" type="button" class="btn btn-danger">Erase all NVS settings including Wi-Fi</button>
+  </div>
+  <p id="config-reset-message" class="alert d-none mt-3" role="status"></p>
+</div></div>

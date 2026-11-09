@@ -20,7 +20,7 @@
 #define HTTP_POST 1
 #define NVS_READONLY 0
 #define NVS_READWRITE 1
-#define CONFIG_OTA_SUITE_WEB_PASSWORD "test-admin-password"
+#define TEST_WEB_PASSWORD "test-admin-password"
 
 typedef int esp_err_t;
 typedef int nvs_handle_t;
@@ -48,11 +48,6 @@ typedef struct {
 
 static int64_t clock_us = 5000000;
 static unsigned random_sequence;
-static uint8_t stored_days;
-static unsigned char stored_settings[128];
-static unsigned char pending_settings[128];
-static size_t stored_settings_size;
-static size_t pending_settings_size;
 static bool storage_failure;
 static httpd_uri_t registered[5];
 static size_t registered_count;
@@ -64,49 +59,31 @@ static void esp_fill_random(void *data, size_t size)
     unsigned char *bytes = data;
     for (size_t i = 0; i < size; ++i) bytes[i] = (unsigned char)++random_sequence;
 }
-static esp_err_t nvs_open(const char *name, int mode, nvs_handle_t *handle)
+typedef struct {
+    const char *password;
+    unsigned session_days;
+    bool login_enabled;
+    bool settings_require_password;
+    esp_err_t (*save_login)(const char *, unsigned, bool);
+} web_interface_runtime_config_t;
+static char saved_password[64] = TEST_WEB_PASSWORD;
+static esp_err_t save_login(const char *password, unsigned days, bool enabled);
+static web_interface_runtime_config_t runtime = {
+    .password = saved_password, .session_days = 1, .login_enabled = true,
+#ifdef TEST_REQUIRE_SETTINGS_PASSWORD
+    .settings_require_password = true,
+#endif
+    .save_login = save_login,
+};
+static const web_interface_runtime_config_t *web_interface_get_runtime_config(void) { return &runtime; }
+static esp_err_t save_login(const char *password, unsigned days, bool enabled)
 {
-    assert(strcmp(name, "web_auth") == 0);
-    *handle = 1;
-    return mode == NVS_READONLY && stored_days == 0 && stored_settings_size == 0 ?
-           ESP_ERR_NVS_NOT_FOUND : ESP_OK;
-}
-static esp_err_t nvs_get_u8(nvs_handle_t handle, const char *key, uint8_t *value)
-{
-    (void)handle;
-    assert(strcmp(key, "session_days") == 0);
-    if (stored_days == 0) return ESP_ERR_NVS_NOT_FOUND;
-    *value = stored_days;
-    return ESP_OK;
-}
-static esp_err_t nvs_get_blob(nvs_handle_t handle, const char *key, void *value, size_t *size)
-{
-    (void)handle;
-    assert(strcmp(key, "settings") == 0);
-    if (stored_settings_size == 0) return ESP_ERR_NVS_NOT_FOUND;
-    assert(*size >= stored_settings_size);
-    memcpy(value, stored_settings, stored_settings_size);
-    *size = stored_settings_size;
-    return ESP_OK;
-}
-static esp_err_t nvs_set_blob(nvs_handle_t handle, const char *key, const void *value, size_t size)
-{
-    (void)handle;
-    assert(strcmp(key, "settings") == 0);
-    assert(size <= sizeof(pending_settings));
-    memcpy(pending_settings, value, size);
-    pending_settings_size = size;
-    return ESP_OK;
-}
-static esp_err_t nvs_commit(nvs_handle_t handle)
-{
-    (void)handle;
     if (storage_failure) return ESP_FAIL;
-    memcpy(stored_settings, pending_settings, pending_settings_size);
-    stored_settings_size = pending_settings_size;
+    strcpy(saved_password, password);
+    runtime.session_days = days;
+    runtime.login_enabled = enabled;
     return ESP_OK;
 }
-static void nvs_close(nvs_handle_t handle) { (void)handle; }
 static esp_err_t httpd_req_get_hdr_value_str(httpd_req_t *req, const char *name, char *value, size_t size)
 {
     const char *source = NULL;
@@ -193,17 +170,17 @@ int main(void)
     assert(web_auth_init() == ESP_OK);
     assert(web_auth_session_days() == 1);
     assert(web_auth_login_enabled());
-    assert(strcmp(settings.password, CONFIG_OTA_SUITE_WEB_PASSWORD) == 0);
-    stored_days = 7;
+    assert(strcmp(settings.password, TEST_WEB_PASSWORD) == 0);
+    runtime.session_days = 7;
     assert(web_auth_init() == ESP_OK);
     assert(web_auth_session_days() == 7);
     assert(web_auth_login_enabled());
-    stored_days = 0;
+    runtime.session_days = 1;
     assert(web_auth_init() == ESP_OK);
     assert(web_auth_register(NULL) == ESP_OK);
     assert(registered_count == 5);
     assert(strlen(web_auth_csrf_token()) == 32);
-#ifdef CONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD
+#ifdef TEST_REQUIRE_SETTINGS_PASSWORD
     assert(web_auth_settings_password_required());
 #else
     assert(!web_auth_settings_password_required());
@@ -237,7 +214,7 @@ int main(void)
     assert(web_interface_authorize_request(&req, true));
 
     req = request("/api/auth/settings", "{\"sessionDays\":7}", cookie);
-#ifdef CONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD
+#ifdef TEST_REQUIRE_SETTINGS_PASSWORD
     assert(!web_interface_authorize_settings_request(&req));
     req.password = "incorrect";
     assert(!web_interface_authorize_settings_request(&req));
@@ -249,7 +226,7 @@ int main(void)
     strcpy(req.status, "200 OK");
     assert(settings_handler(&req) == ESP_OK);
     assert(strcmp(req.status, "200 OK") == 0);
-    assert(web_auth_session_days() == 7 && stored_settings_size == sizeof(settings));
+    assert(web_auth_session_days() == 7 && runtime.session_days == 7);
     req = request("/api/auth/settings", "{\"sessionDays\":1}", cookie);
     req.csrf = "invalid";
     req.password = "test-admin-password";
@@ -280,7 +257,7 @@ int main(void)
     settings_handler(&req);
     assert(strcmp(req.status, "500 Internal Server Error") == 0);
     assert(web_auth_session_days() == 7);
-    assert(stored_settings[1] == 7);
+    assert(runtime.session_days == 7);
     storage_failure = false;
 
     const int64_t weekly_login_at = clock_us;
@@ -317,7 +294,7 @@ int main(void)
     assert(!web_auth_login_enabled());
     req = request("/api/status", NULL, cookie);
     assert(request_session(&req) == NULL);
-    assert(strcmp(settings.password, CONFIG_OTA_SUITE_WEB_PASSWORD) == 0);
+    assert(strcmp(settings.password, TEST_WEB_PASSWORD) == 0);
     assert(web_auth_init() == ESP_OK);
     assert(!web_auth_login_enabled());
     req = request("/", NULL, NULL);
@@ -334,7 +311,7 @@ int main(void)
     assert(web_interface_authorize_request(&req, true));
 
     req = request("/api/auth/settings", "{\"sessionDays\":1,\"password\":\"new-admin-password\"}", NULL);
-#ifdef CONFIG_OTA_SUITE_WEB_SETTINGS_REQUIRE_PASSWORD
+#ifdef TEST_REQUIRE_SETTINGS_PASSWORD
     settings_handler(&req);
     assert(strcmp(req.status, "403 Forbidden") == 0);
     req.password = "wrong";
@@ -429,17 +406,11 @@ int main(void)
     assert(!web_session_find(table, "ota_session=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef; ota_session=short", 101));
     assert(!web_session_find(table, "ota_session=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", 86500));
     assert(web_session_create(table, token, 86500, 7));
-    stored_settings_size--;
+    saved_password[0] = '\0';
     assert(web_auth_init() == ESP_ERR_INVALID_STATE);
-    stored_settings_size++;
-    stored_settings[2] = 2;
+    strcpy(saved_password, TEST_WEB_PASSWORD);
+    runtime.session_days = 3;
     assert(web_auth_init() == ESP_ERR_INVALID_STATE);
-    stored_settings[2] = 1;
-    stored_settings[stored_settings_size - 1] = 'x';
-    assert(web_auth_init() == ESP_ERR_INVALID_STATE);
-    stored_settings_size = 0;
-    stored_days = 3;
-    assert(web_auth_init() == ESP_ERR_INVALID_STATE);
-    puts("Authentication tests passed: expiry, CSRF, password changes, optional login, NVS migration, failed saves, restart.");
+    puts("Authentication tests passed: expiry, CSRF, runtime passwords, optional login, failed saves, restart.");
     return 0;
 }

@@ -3,8 +3,13 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-set(PROJECT_VER "1.4.72")
+set(PROJECT_VER "2.0.0")
 include("${CMAKE_CURRENT_LIST_DIR}/CMakeUserConfig.cmake" OPTIONAL)
+option(EBCTESTER_VALIDATE_ONLY "Build without publishing intermediate firmware" OFF)
+if(EBCTESTER_VALIDATE_ONLY)
+    set(EBCTESTER_PUBLISH_FIRMWARE OFF)
+    set(EBCTESTER_SFTP_UPLOAD OFF)
+endif()
 set(OTA_SUITE_DIR "${CMAKE_CURRENT_LIST_DIR}/external/ota-suite" CACHE PATH
     "Path to the reusable ota-suite package")
 if(NOT EXISTS "${OTA_SUITE_DIR}/components/device_app/CMakeLists.txt")
@@ -20,18 +25,6 @@ endif()
 set(EXTRA_COMPONENT_DIRS
     "${OTA_SUITE_DIR}/components"
     "${SD_CARD_MANAGER_DIR}/components")
-set(HA_MQTT_ENABLED FALSE)
-if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/sdkconfig")
-    file(READ "${CMAKE_CURRENT_LIST_DIR}/sdkconfig" HA_MQTT_SDKCONFIG)
-    string(FIND "${HA_MQTT_SDKCONFIG}" "CONFIG_EBCTESTER_HA_MQTT_ENABLE=y"
-           HA_MQTT_CONFIG_POSITION)
-    if(NOT HA_MQTT_CONFIG_POSITION EQUAL -1)
-        set(HA_MQTT_ENABLED TRUE)
-    endif()
-endif()
-if(NOT HA_MQTT_ENABLED)
-    list(APPEND EXCLUDE_COMPONENTS ha_mqtt)
-endif()
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(EBCTester)
 

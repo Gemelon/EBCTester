@@ -12,7 +12,7 @@
 
 #include "cJSON.h"
 #include "esp_log.h"
-#include "sdkconfig.h"
+#include "ebc_config.h"
 #include "sd_card_manager.h"
 #include "ui_localization.h"
 #include "web_interface.h"
@@ -25,7 +25,7 @@ extern const unsigned char js_end[] asm("_binary_languages_js_end");
 namespace {
 constexpr size_t MAX_FILE = 128 * 1024;
 constexpr size_t MAX_LANGUAGES = 16;
-constexpr const char *DIRECTORY = CONFIG_SD_CARD_MANAGER_MOUNT_POINT "/languages";
+std::string directory;
 constexpr const char *TAG = "ui_languages";
 using Json = std::unique_ptr<cJSON, decltype(&cJSON_Delete)>;
 
@@ -61,7 +61,7 @@ esp_err_t send_json(httpd_req_t *req, cJSON *root)
 
 bool read_language(const std::string &code, std::string &body, Json &json, std::string &error)
 {
-    const std::string file = std::string(DIRECTORY) + "/" + code + ".json";
+    const std::string file = directory + "/" + code + ".json";
     struct stat info = {};
     if (stat(file.c_str(), &info) != 0) { error = "Cannot inspect language file."; return false; }
     if (!S_ISREG(info.st_mode) || info.st_size < 2 || info.st_size > MAX_FILE) {
@@ -132,7 +132,7 @@ esp_err_t list(httpd_req_t *req)
     StorageLock lock;
     lock.held = sd_card_manager_storage_acquire(pdMS_TO_TICKS(1000)) == ESP_OK;
     if (!lock.held) return text(req, "503 Service Unavailable", "SD card is busy. Cannot read languages.");
-    DIR *dir = opendir(DIRECTORY);
+    DIR *dir = opendir(directory.c_str());
     if (!dir) {
         if (errno == ENOENT) { lock.release(); return send_json(req, root.get()); }
         ESP_LOGE(TAG, "Cannot open language directory: errno=%d", errno);
@@ -201,6 +201,7 @@ esp_err_t load(httpd_req_t *req)
 
 esp_err_t ui_localization_init(void)
 {
+    directory = std::string(ebc_config_get()->sd.mount_point) + "/languages";
     static const httpd_uri_t routes[] = {
         {.uri = "/api/i18n/languages", .method = HTTP_GET, .handler = list, .user_ctx = nullptr},
         {.uri = "/api/i18n/language", .method = HTTP_GET, .handler = load, .user_ctx = nullptr},
