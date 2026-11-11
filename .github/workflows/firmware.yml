@@ -58,6 +58,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          . "$IDF_PATH/export.sh"
           v="${{ steps.version.outputs.version }}"
           mkdir -p dist "$RUNNER_TEMP/release-package"
 
