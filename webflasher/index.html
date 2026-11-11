@@ -1,1 +1,20 @@
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EBCTester V2 – Web Installer</title>
+  <script type="module"
+    src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+  <style>
+    body { font-family: sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }
+  </style>
+</head>
+<body>
+  <h1>EBCTester V2 – Firmware Installer</h1>
+  <p>Connect the EBCTester via USB and click the button below.
+     Works with Chrome or Edge on desktop.</p>
+  <esp-web-install-button manifest="manifest.json"></esp-web-install-button>
+  <p><small>If the device is not detected, hold the BOOT button while plugging in USB.</small></p>
+</body>
+</html>
