@@ -18,6 +18,11 @@ By default, finishing firmware changes includes compiling and publishing a
 testable release to the configured publication directory, unless the user
 explicitly requests otherwise. A validation-only app build is not sufficient.
 
+Local builds must only prepare local firmware packages. Never upload firmware
+to the public update server from this workspace, including through SFTP or
+manual deployment commands. GitHub Actions exclusively handles public OTA
+deployment. Keep `EBCTESTER_SFTP_UPLOAD` disabled in local build configuration.
+
 Increment the build number in `PROJECT_VER` in `CMakeLists.txt` exactly once
 per new release, before its first compilation. Keep that number unchanged
 for subsequent builds, fixes, and publication retries until publication

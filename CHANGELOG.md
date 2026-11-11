@@ -3,6 +3,20 @@
 
 # Changelog
 
+## [2.0.7] – 2026-11-11
+
+### Fixed
+
+- Keep SQLite scratch buffers on the configured heap/PSRAM instead of the
+  recorder task stack, preventing stack overflows and device restarts while
+  recording measurements.
+
+### Validation
+
+- Full ESP-IDF build and local package verification succeeded. Host tests
+  verified heap-backed scratch buffers, 5,000 indexed writes, database integrity,
+  and existing run-management operations. No hardware test or local upload was run.
+
 ## [2.0.6] – 2026-11-11
 
 ### Changed
