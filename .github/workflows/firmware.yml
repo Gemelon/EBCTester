@@ -325,3 +325,66 @@ jobs:
               if manifest.get(key) != value:
                   raise SystemExit(f"Published manifest mismatch for {key}")
           PY
+
+  publish-webflasher:
+    name: Publish web flasher (GitHub Pages)
+    if: needs.release.outputs.ready == 'true' && github.ref == 'refs/heads/main'
+    needs: [build, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - name: Check out web flasher page
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: webflasher
+
+      - name: Assemble web flasher site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          site="$RUNNER_TEMP/site"
+          mkdir -p "$site"
+          cp webflasher/index.html "$site/"
+          gh release download "v${VERSION}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "EBCTester-${VERSION}-full-install.bin" \
+            --dir "$RUNNER_TEMP"
+          cp "$RUNNER_TEMP/EBCTester-${VERSION}-full-install.bin" "$site/firmware.bin"
+          cat > "$site/manifest.json" <<JSON
+          {
+            "name": "EBCTester V2",
+            "version": "${VERSION}",
+            "new_install_prompt_erase": true,
+            "builds": [
+              {
+                "chipFamily": "ESP32-S3",
+                "parts": [{ "path": "firmware.bin", "offset": 0 }]
+              }
+            ]
+          }
+          JSON
+          python3 -m json.tool "$site/manifest.json"
+          echo "site=$site" >> "$GITHUB_ENV"
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ env.site }}
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
