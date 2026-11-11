@@ -42,8 +42,8 @@ The dashboard combines time-series charts, capacity per segment, and a
 segment timeline so you can see how a battery behaved throughout a test.
 
 <p align="center">
-  <a href="docs/images/dashboard.png">
-    <img src="docs/images/dashboard.png" alt="Measurement dashboard with voltage, current, capacity charts, and a segment timeline" width="640">
+  <a href="docs/images/manual/dashboard.png">
+    <img src="docs/images/manual/dashboard.png" alt="Battery tester dashboard with measurements and voltage and current charts" width="640">
   </a>
 </p>
 
@@ -66,8 +66,8 @@ be deleted; remove those runs in test-run management first. Recording blocks
 deletion, and existing MariaDB backups are unchanged.
 
 <p align="center">
-  <a href="docs/images/battery-details.png">
-    <img src="docs/images/battery-details.png" alt="Battery details form and selection of saved batteries" width="640">
+  <a href="docs/images/manual/battery.png">
+    <img src="docs/images/manual/battery.png" alt="Battery details form with current battery settings and saved batteries" width="640">
   </a>
 </p>
 
@@ -79,8 +79,8 @@ status, and recording progress together; active tests are recorded
 automatically.
 
 <p align="center">
-  <a href="docs/images/manual-control.png">
-    <img src="docs/images/manual-control.png" alt="Manual charging and discharging controls with live tester measurements" width="640">
+  <a href="docs/images/manual/manual.png">
+    <img src="docs/images/manual/manual.png" alt="Manual control page with live measurements, connection status, charging, and discharging controls" width="640">
   </a>
 </p>
 
@@ -91,8 +91,8 @@ and rest periods. The sequence runs on the ESP32 without an open browser
 or a continuous Wi-Fi connection, as long as the device remains powered.
 
 <p align="center">
-  <a href="docs/images/automatic-plans.png">
-    <img src="docs/images/automatic-plans.png" alt="Automatic test plan with charge, rest, and discharge steps and a step editor" width="640">
+  <a href="docs/images/manual/auto.png">
+    <img src="docs/images/manual/auto.png" alt="Automatic test plan sequence, saved plan steps, and step editor" width="640">
   </a>
 </p>
 
@@ -104,8 +104,8 @@ state of charge or configure automatic preparation, and keep the results
 on SD alongside your other tests.
 
 <p align="center">
-  <a href="docs/images/internal-resistance.png">
-    <img src="docs/images/internal-resistance.png" alt="Internal resistance test parameters, protection limits, sequence status, and results" width="640">
+  <a href="docs/images/manual/resistance.png">
+    <img src="docs/images/manual/resistance.png" alt="Internal resistance load-pulse test parameters, sequence status, and results" width="640">
   </a>
 </p>
 
@@ -120,8 +120,8 @@ View the installed firmware version, Wi-Fi status, access point details,
 and clock synchronization from the administration section.
 
 <p align="center">
-  <a href="docs/images/device-information.png">
-    <img src="docs/images/device-information.png" alt="Device information and system status in the administration section" width="640">
+  <a href="docs/images/manual/overview.png">
+    <img src="docs/images/manual/overview.png" alt="Administration overview with device information and system status" width="640">
   </a>
 </p>
 
@@ -132,8 +132,8 @@ web interface. Measurements stay in the local SQLite database on the SD
 card, without requiring a cloud service.
 
 <p align="center">
-  <a href="docs/images/sd-card.png">
-    <img src="docs/images/sd-card.png" alt="SD card file manager showing folders, the SQLite database, and file actions" width="640">
+  <a href="docs/images/manual/sd-card.png">
+    <img src="docs/images/manual/sd-card.png" alt="SD card manager showing folders, the SQLite database, and file actions" width="640">
   </a>
 </p>
 
@@ -144,8 +144,8 @@ Installation requires an explicit action and confirmation; updates are
 never installed automatically. Use HTTPS for normal firmware distribution.
 
 <p align="center">
-  <a href="docs/images/firmware-updates.png">
-    <img src="docs/images/firmware-updates.png" alt="Manual OTA update page with availability, transport warnings, and download progress" width="640">
+  <a href="docs/images/manual/updates.png">
+    <img src="docs/images/manual/updates.png" alt="Firmware update page showing availability, download progress, and manual installation controls" width="640">
   </a>
 </p>
 
@@ -172,8 +172,8 @@ those credentials are not saved. Declining disables MariaDB backups only and
 does not interrupt device operation.
 
 <p align="center">
-  <a href="docs/images/settings.png">
-    <img src="docs/images/settings.png" alt="Settings for Wi-Fi, MariaDB backup, debug logging, Home Assistant MQTT, and languages" width="640">
+  <a href="docs/images/manual/settings.png">
+    <img src="docs/images/manual/settings.png" alt="Administration settings for tester, debug log, device reset, LEDs, MariaDB, Home Assistant MQTT, language, login, and Wi-Fi" width="640">
   </a>
 </p>
 
@@ -429,16 +429,9 @@ are design views, not photographs of a manufactured board. Click an image to
 open it at full size.
 
 <p align="center">
-  <a href="docs/images/pcb-assembled.png">
-    <img src="docs/images/pcb-assembled.png" alt="Top view rendering of the assembled EBCTester PCB" width="640">
-  </a>
-</p>
-
-<p align="center">
   <a href="docs/images/pcb-layout.png"><img src="docs/images/pcb-layout.png" alt="PCB layout view showing tracks, pads, and component labels" width="320"></a>
   <a href="docs/images/pcb-3d-top.png"><img src="docs/images/pcb-3d-top.png" alt="Three-dimensional top view of the assembled EBCTester PCB" width="320"></a>
   <a href="docs/images/pcb-3d-angle-1.png"><img src="docs/images/pcb-3d-angle-1.png" alt="Angled three-dimensional view of the EBCTester PCB" width="320"></a>
-  <a href="docs/images/pcb-3d-angle-2.png"><img src="docs/images/pcb-3d-angle-2.png" alt="Second angled three-dimensional view of the EBCTester PCB" width="320"></a>
 </p>
 
 The editable KiCad schematic, PCB layout, and design files are maintained
