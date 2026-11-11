@@ -210,9 +210,9 @@ in FactoryMode without any setting. On a Maker device they are only a proposal i
 <table class="compact keep">
   <thead><tr><th>Setting</th><th>Default</th><th>Setting</th><th>Default</th></tr></thead>
   <tbody>
-  <tr><td class="k">Tester UART TX / RX</td><td>GPIO 10 / 11, 9600 Bd</td><td class="k">SD bus</td><td>4-bit SDMMC, 10 MHz</td></tr>
-  <tr><td class="k">Dongle UART TX / RX</td><td>GPIO 8 / 9, 9600 Bd</td><td class="k">SD CLK / CMD</td><td>GPIO 6 / 7</td></tr>
-  <tr><td class="k">Averaging length</td><td>20 frames</td><td class="k">SD D0 / D1 / D2 / D3</td><td>GPIO 5 / 4 / 18 / 17</td></tr>
+  <tr><td class="k">Tester UART TX / RX</td><td>GPIO 10 / 11, 9600 Bd</td><td class="k">SD bus</td><td>SPI, 10 MHz</td></tr>
+  <tr><td class="k">Dongle UART TX / RX</td><td>GPIO 8 / 9, 9600 Bd</td><td class="k">SD SPI CLK / MOSI / MISO / CS</td><td>GPIO 6 / 7 / 5 / 17</td></tr>
+  <tr><td class="k">Averaging length</td><td>20 frames</td><td class="k">SDMMC CLK / CMD / D0–D3</td><td>GPIO 6 / 7 / 5 / 4 / 18 / 17</td></tr>
   <tr><td class="k">Device ID</td><td><code>EBC-A20</code></td><td class="k">Card detect</td><td>GPIO 13 (low = card inserted)</td></tr>
   <tr><td class="k">Status LED</td><td>on, GPIO 48</td><td class="k">Mount point</td><td><code>/sdcard</code></td></tr>
   <tr><td class="k">Access-point password</td><td><code>ebctester</code></td><td class="k">Login password</td><td><code>ebctester</code>, 24 h, login required</td></tr>
