@@ -1,10 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Thomas Stoll
 # SPDX-License-Identifier: Apache-2.0
 #
-# Builds the EBCTester firmware with ESP-IDF on every push and pull request.
-# Pushing a tag such as "v1.4.72" additionally creates a GitHub release with
-# the firmware images attached. The tag must match PROJECT_VER in
-# CMakeLists.txt, otherwise the release is not created.
+# Builds the firmware on pushes and pull requests. A push to main publishes a
+# GitHub release when PROJECT_VER does not have a release yet.
 
 name: Firmware
 
@@ -14,6 +12,10 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: firmware-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -36,8 +38,8 @@ jobs:
         shell: bash
         run: |
           version=$(sed -n 's/^set(PROJECT_VER "\(.*\)")/\1/p' CMakeLists.txt)
-          if [ -z "$version" ]; then
-            echo "::error::PROJECT_VER not found in CMakeLists.txt"
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Invalid or missing PROJECT_VER in CMakeLists.txt"
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -52,20 +54,61 @@ jobs:
           idf.py build
           idf.py merge-bin -o merged.bin
 
-      - name: Collect firmware images
+      - name: Package release files
         shell: bash
         run: |
+          set -euo pipefail
           v="${{ steps.version.outputs.version }}"
-          mkdir -p dist
-          # OTA image: install via the device web UI (firmware update page).
-          cp build/EBCTester.bin "dist/EBCTester-${v}-ota.bin"
-          # Complete image: flash at offset 0x0 to a blank ESP32-S3.
-          cp build/merged.bin "dist/EBCTester-${v}-full.bin"
-          cp build/EBCTester.elf "dist/EBCTester-${v}.elf"
-          (cd dist && sha256sum * > SHA256SUMS.txt)
-          ls -l dist
+          mkdir -p dist "$RUNNER_TEMP/release-package"
 
-      - name: Upload build artifacts
+          cp build/EBCTester.bin "dist/EBCTester-${v}.bin"
+          cp build/merged.bin "dist/EBCTester-${v}-full-install.bin"
+
+          cmake \
+            "-DPROJECT_SOURCE_DIR=$GITHUB_WORKSPACE" \
+            "-DOTA_SUITE_DIR=$GITHUB_WORKSPACE/external/ota-suite" \
+            "-DSD_CARD_MANAGER_DIR=$GITHUB_WORKSPACE/external/sd-card-manager" \
+            "-DDESTINATION_DIR=$RUNNER_TEMP/release-package" \
+            "-DFIRMWARE_VERSION=$v" \
+            -P cmake/copy_license_bundle.cmake
+
+          python - "$RUNNER_TEMP/release-package/licenses/EBCTester-${v}" \
+            "dist/licenses-EBCTester-${v}.zip" <<'PY'
+          import os
+          import sys
+          import zipfile
+
+          source, archive_path = sys.argv[1:]
+          root = os.path.dirname(source)
+          with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
+              for directory, _, filenames in os.walk(source):
+                  for filename in filenames:
+                      path = os.path.join(directory, filename)
+                      archive.write(path, os.path.relpath(path, root))
+          PY
+
+          image="dist/EBCTester-${v}.bin"
+          size=$(stat -c '%s' "$image")
+          sha256=$(sha256sum "$image" | cut -d ' ' -f 1)
+          cat > dist/firmware.json <<EOF
+          {
+            "project": "EBCTester",
+            "target": "esp32s3",
+            "version": "$v",
+            "url": "https://ebctester.gemelon.de/EBCTester-${v}.bin",
+            "size": $size,
+            "sha256": "$sha256",
+            "notes": "Manifest-based update availability; manual installation only."
+          }
+          EOF
+
+          test -s "dist/EBCTester-${v}.bin"
+          test -s "dist/EBCTester-${v}-full-install.bin"
+          test -s "dist/firmware.json"
+          test -s "dist/licenses-EBCTester-${v}.zip"
+          ls -lh dist
+
+      - name: Upload release files
         uses: actions/upload-artifact@v4
         with:
           name: EBCTester-${{ steps.version.outputs.version }}
@@ -74,30 +117,86 @@ jobs:
 
   release:
     name: Publish GitHub release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Check that tag matches PROJECT_VER
+      - name: Check version and existing release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
-          if [ "${GITHUB_REF_NAME}" != "v${{ needs.build.outputs.version }}" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match PROJECT_VER ${{ needs.build.outputs.version }}"
+          set -euo pipefail
+          tag="v${VERSION}"
+
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "$tag" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match PROJECT_VER $VERSION"
             exit 1
           fi
 
-      - name: Download build artifacts
+          release_error="$RUNNER_TEMP/release-error"
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" >/dev/null 2>"$release_error"; then
+            echo "Release $tag already exists; refusing to overwrite it."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          elif ! grep -Fq 'HTTP 404' "$release_error"; then
+            cat "$release_error" >&2
+            exit 1
+          fi
+
+          latest_error="$RUNNER_TEMP/latest-release-error"
+          if latest_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name' 2>"$latest_error"); then
+            latest_version="${latest_tag#v}"
+            newest_version=$(printf '%s\n%s\n' "$latest_version" "$VERSION" | sort -V | tail -n 1)
+            if [[ "$newest_version" != "$VERSION" ]]; then
+              echo "::error::PROJECT_VER $VERSION is not newer than the latest release $latest_tag"
+              exit 1
+            fi
+          elif ! grep -Fq 'HTTP 404' "$latest_error"; then
+            cat "$latest_error" >&2
+            exit 1
+          fi
+
+          if [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            tag_error="$RUNNER_TEMP/tag-error"
+            if existing_tag=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --jq '.object.sha' 2>"$tag_error"); then
+              if [[ "$existing_tag" != "$GITHUB_SHA" ]]; then
+                echo "::error::Tag $tag already points to $existing_tag, not $GITHUB_SHA"
+                exit 1
+              fi
+            elif ! grep -Fq 'HTTP 404' "$tag_error"; then
+              cat "$tag_error" >&2
+              exit 1
+            fi
+          fi
+
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+
+      - name: Download release files
+        if: steps.release.outputs.publish == 'true'
         uses: actions/download-artifact@v4
         with:
           name: EBCTester-${{ needs.build.outputs.version }}
           path: dist
 
-      - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: EBCTester ${{ github.ref_name }}
-          generate_release_notes: true
-          files: |
-            dist/*.bin
-            dist/SHA256SUMS.txt
+      - name: Create GitHub release
+        if: steps.release.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "v${VERSION}" \
+            "dist/EBCTester-${VERSION}.bin" \
+            "dist/EBCTester-${VERSION}-full-install.bin" \
+            "dist/firmware.json" \
+            "dist/licenses-EBCTester-${VERSION}.zip" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "EBCTester ${VERSION}" \
+            --notes "Firmware release ${VERSION}.
+
+          For a complete installation, flash \`EBCTester-${VERSION}-full-install.bin\` at address \`0x0\`. The versioned BIN is for OTA updates. Distribute the accompanying license bundle with the firmware."

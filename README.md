@@ -618,8 +618,8 @@ does not survive its startup window.
 The default manifest address is a placeholder. Set your HTTPS URL in
 menuconfig under **OTA Suite update checks**.
 
-Firmware publishing is disabled in a fresh checkout. To enable SFTP, create the
-Git-ignored `CMakeUserConfig.cmake`:
+Local firmware publishing is disabled in a fresh checkout. To enable SFTP,
+create the Git-ignored `CMakeUserConfig.cmake`:
 
 ```cmake
 set(EBCTESTER_PUBLISH_FIRMWARE ON)
@@ -655,6 +655,12 @@ Publishing copies license documentation before the image to
 **Distribute the complete license directory with firmware**, not just `.bin`.
 The OTA manifest format is unchanged. See
 [third-party notices](THIRD_PARTY_NOTICES.md).
+
+On GitHub, a push to `main` automatically builds a release when the version in
+`CMakeLists.txt` is newer than the latest release and has not already been
+published. The release includes the OTA image, full-install image, update
+manifest, and license bundle. Existing versions are never replaced. Update
+`CHANGELOG.md` and `PROJECT_VER` before publishing a new version.
 
 ## Limitations, safety, and contributions
 
