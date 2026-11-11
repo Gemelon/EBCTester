@@ -16,7 +16,7 @@ function elements() {
   return (id) => {
     if (!entries.has(id)) entries.set(id, {
       value: "", checked: false, disabled: false, textContent: "", className: "", listeners: {},
-      classList: { add() {}, remove() {} },
+      classList: { add() {}, remove() {}, toggle() {} },
       addEventListener(name, callback) { this.listeners[name] = callback; },
       focus() {},
     });

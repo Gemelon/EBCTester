@@ -3,6 +3,76 @@
 
 # Changelog
 
+## [2.0.4] – 2026-11-11
+
+### Fixed
+
+- Keep MariaDB settings usable after failed administrator confirmation and
+  refresh the displayed configuration after saving or declining migration.
+
+### Validation
+
+- Full ESP-IDF build and SFTP publication succeeded. The published
+  `EBCTester-2.0.4.bin` is 2,883,152 bytes with SHA256
+  `66e73c9de500f5ce69ec45c3f29c964ed9a8238b3d4ed86bcd28dad130742bf9`.
+
+## [2.0.3] – 2026-11-11
+
+### Fixed
+
+- Retry the non-blocking startup schema check when network connectivity becomes
+  available, including installations with saved MariaDB settings.
+
+### Validation
+
+- Full ESP-IDF build and SFTP publication succeeded. The published
+  `EBCTester-2.0.3.bin` is 2,882,976 bytes with SHA256
+  `bacd82946c8b5296e9b1b5670c70f9c8807c9f86e0d0c4f0d668576ec9060b33`.
+
+## [2.0.2] – 2026-11-11
+
+### Fixed
+
+- Make schema setup compatible with existing MariaDB identifier types while
+  adding missing non-key fields and unique indexes without deleting data.
+- Declining schema setup now disables both automatic and manual MariaDB
+  operations until the integration is re-enabled in settings.
+
+### Validation
+
+- Full ESP-IDF build and SFTP publication succeeded. The published
+  `EBCTester-2.0.2.bin` is 2,882,832 bytes with SHA256
+  `d5d7c3e5930b99b6727c16396dd97320d845c45e9353482eb7eb11f695d04f4e`.
+
+### Limitations
+
+- Automatic setup does not add foreign keys; incompatible existing key fields
+  still require manual repair after a database backup.
+
+## [2.0.1] – 2026-11-11
+
+### Added
+
+- Check the required MariaDB backup schema during startup without blocking
+  device services. Offer one-time creation and repair from MariaDB settings
+  using separate administrator credentials that are not saved on the device.
+
+### Fixed
+
+- MariaDB initialization failures and declined schema setup no longer stop
+  startup or affect testing, recording, or the web interface.
+
+### Validation
+
+- Full ESP-IDF build and SFTP publication succeeded. The published
+  `EBCTester-2.0.1.bin` is 2,883,344 bytes with SHA256
+  `3e52c067e73cca4d8e6ec89322d95b85741518ff47d54223d3f172c1c59388b0`.
+
+### Limitations
+
+- Incompatible existing key fields or field types are not rewritten
+  automatically; they require manual repair after a database backup.
+
 ## [2.0.0] – 2026-11-09
 
 ### Changed

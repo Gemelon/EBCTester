@@ -128,7 +128,10 @@ void app_main(void)
         ESP_ERROR_CHECK(sd_card_manager_init());
         ESP_ERROR_CHECK(battery_database_init());
         ESP_ERROR_CHECK(battery_dashboard_init());
-        ESP_ERROR_CHECK(mariadb_sync_init());
+        const esp_err_t mariadb_err = mariadb_sync_init();
+        if (mariadb_err != ESP_OK) {
+            ESP_LOGW(TAG, "MariaDB module unavailable: %s", esp_err_to_name(mariadb_err));
+        }
         ESP_ERROR_CHECK(ha_mqtt_web_init());
         test_control_set_persisted_sample_callback(publish_persisted_sample);
         ESP_ERROR_CHECK(test_control_init());

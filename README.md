@@ -166,6 +166,11 @@ and control, not a copy of the SD database; remote plan start is disabled
 by default. English and German are built in, with additional languages
 loadable from SD.
 
+MariaDB checks its required schema in the background. If setup is needed, the
+settings page offers a one-time migration using separate elevated credentials;
+those credentials are not saved. Declining disables MariaDB backups only and
+does not interrupt device operation.
+
 <p align="center">
   <a href="docs/images/settings.png">
     <img src="docs/images/settings.png" alt="Settings for Wi-Fi, MariaDB backup, debug logging, Home Assistant MQTT, and languages" width="640">

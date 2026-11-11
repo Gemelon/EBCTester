@@ -23,11 +23,14 @@ struct Settings {
 };
 
 enum class State { Idle, Testing, Syncing, Ok, Error };
+enum class SchemaState { Unknown, Ready, NeedsMigration, Incompatible, Disabled, Error };
 
 struct Status {
     State state = State::Idle;
     bool busy = false;
     std::string message;
+    SchemaState schema_state = SchemaState::Unknown;
+    std::string schema_message;
     time_t last_success = 0;
     time_t last_attempt = 0;
     uint32_t last_runs = 0;
@@ -40,6 +43,8 @@ enum Command : uint32_t {
     COMMAND_TEST = 1u << 0,
     COMMAND_SYNC = 1u << 1,
     COMMAND_FULL_SYNC = 1u << 2,
+    COMMAND_SCHEMA_CHECK = 1u << 3,
+    COMMAND_SCHEMA_MIGRATION = 1u << 4,
 };
 
 Settings get_settings();
@@ -48,6 +53,8 @@ esp_err_t save_settings(const Settings &settings, bool keep_password);
 Status get_status();
 /* Returns ESP_ERR_INVALID_STATE while a job is already running. */
 esp_err_t request(uint32_t command);
+esp_err_t request_schema_migration(const std::string &user, const std::string &password);
+esp_err_t disable_after_migration_declined();
 esp_err_t start_worker();
 esp_err_t register_web_extension();
 
