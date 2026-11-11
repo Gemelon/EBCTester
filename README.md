@@ -659,9 +659,17 @@ The OTA manifest format is unchanged. See
 On GitHub, a push to `main` automatically builds a release when the version in
 `CMakeLists.txt` is newer than the latest release and has not already been
 published. The release includes the OTA image, full-install image, update
-manifest pointing to its GitHub OTA image, and license bundle. Existing
+manifest, and license bundle; the public OTA server receives the versioned
+image, compatibility image, license bundle, and manifest. Existing
 versions are never replaced. Update `CHANGELOG.md` and `PROJECT_VER` before
 publishing a new version.
+
+To enable public OTA deployment from GitHub Actions, add these repository
+secrets: `OTA_SFTP_HOST`, `OTA_SFTP_USER`, `OTA_SFTP_REMOTE_DIR`,
+`OTA_SFTP_PRIVATE_KEY`, and `OTA_SFTP_KNOWN_HOSTS`. Set the optional
+`OTA_SFTP_PORT` secret only when the server does not use port 22. The deploy
+job uses strict host-key checking and refuses to replace an existing version
+with different firmware bytes.
 
 ## Limitations, safety, and contributions
 

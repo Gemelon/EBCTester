@@ -96,7 +96,7 @@ jobs:
             "project": "EBCTester",
             "target": "esp32s3",
             "version": "$v",
-            "url": "https://github.com/${GITHUB_REPOSITORY}/releases/download/v${v}/EBCTester-${v}.bin",
+            "url": "https://ebctester.gemelon.de/EBCTester-${v}.bin",
             "size": $size,
             "sha256": "$sha256",
             "notes": "Manifest-based update availability; manual installation only."
@@ -123,6 +123,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      published: ${{ steps.release.outputs.publish }}
     steps:
       - name: Check version and existing release
         id: release
@@ -201,3 +203,113 @@ jobs:
             --notes "Firmware release ${VERSION}.
 
           For a complete installation, flash \`EBCTester-${VERSION}-full-install.bin\` at address \`0x0\`. The versioned BIN is for OTA updates. Distribute the accompanying license bundle with the firmware."
+
+  publish-ota-server:
+    name: Publish public OTA update
+    if: needs.release.outputs.published == 'true'
+    needs: [build, release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release files
+        uses: actions/download-artifact@v4
+        with:
+          name: EBCTester-${{ needs.build.outputs.version }}
+          path: dist
+
+      - name: Configure SFTP credentials
+        env:
+          OTA_SFTP_PRIVATE_KEY: ${{ secrets.OTA_SFTP_PRIVATE_KEY }}
+          OTA_SFTP_KNOWN_HOSTS: ${{ secrets.OTA_SFTP_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OTA_SFTP_PRIVATE_KEY" || { echo "::error::Set the OTA_SFTP_PRIVATE_KEY repository secret"; exit 1; }
+          test -n "$OTA_SFTP_KNOWN_HOSTS" || { echo "::error::Set the OTA_SFTP_KNOWN_HOSTS repository secret"; exit 1; }
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$OTA_SFTP_PRIVATE_KEY" > "$HOME/.ssh/ota_deploy_key"
+          printf '%s\n' "$OTA_SFTP_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/ota_deploy_key" "$HOME/.ssh/known_hosts"
+
+      - name: Publish OTA image and manifest
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          OTA_SFTP_HOST: ${{ secrets.OTA_SFTP_HOST }}
+          OTA_SFTP_USER: ${{ secrets.OTA_SFTP_USER }}
+          OTA_SFTP_REMOTE_DIR: ${{ secrets.OTA_SFTP_REMOTE_DIR }}
+          OTA_SFTP_PORT: ${{ secrets.OTA_SFTP_PORT }}
+        run: |
+          set -euo pipefail
+          for name in OTA_SFTP_HOST OTA_SFTP_USER OTA_SFTP_REMOTE_DIR; do
+            test -n "${!name}" || { echo "::error::Set the $name repository secret"; exit 1; }
+          done
+          OTA_SFTP_PORT="${OTA_SFTP_PORT:-22}"
+          [[ "$OTA_SFTP_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$OTA_SFTP_USER" =~ ^[A-Za-z0-9._-]+$ ]]
+          [[ "$OTA_SFTP_PORT" =~ ^[0-9]+$ ]]
+          [[ "$OTA_SFTP_REMOTE_DIR" =~ ^/?[A-Za-z0-9._/-]+$ ]]
+          [[ ! "$OTA_SFTP_REMOTE_DIR" =~ (^|/)\.\.?(/|$) ]]
+          [[ "$OTA_SFTP_PORT" -ge 1 && "$OTA_SFTP_PORT" -le 65535 ]]
+
+          remote="${OTA_SFTP_REMOTE_DIR%/}"
+          image="dist/EBCTester-${VERSION}.bin"
+          package="$RUNNER_TEMP/ota-publication"
+          mkdir -p "$package"
+          cp "$image" "$package/EBCTester-${VERSION}.bin"
+          cp "$image" "$package/EBCTester.bin"
+          cp "dist/licenses-EBCTester-${VERSION}.zip" "$package/licenses-EBCTester-${VERSION}.zip"
+
+          printf '%s\n' "-get \"$remote/EBCTester-${VERSION}.bin\" \"$RUNNER_TEMP/existing-ota.bin\"" \
+            "-quit" > "$RUNNER_TEMP/preflight.sftp"
+          sftp -i "$HOME/.ssh/ota_deploy_key" -oBatchMode=yes -oStrictHostKeyChecking=yes \
+            -P "$OTA_SFTP_PORT" -b "$RUNNER_TEMP/preflight.sftp" \
+            "$OTA_SFTP_USER@$OTA_SFTP_HOST"
+          if [[ -f "$RUNNER_TEMP/existing-ota.bin" ]]; then
+            if ! cmp -s "$image" "$RUNNER_TEMP/existing-ota.bin"; then
+              echo "::error::Refusing to overwrite immutable firmware version ${VERSION} with different bytes"
+              exit 1
+            fi
+          fi
+
+          printf '%s\n' "-mkdir \"$remote/licenses\"" \
+            "put \"$package/EBCTester-${VERSION}.bin\" \"$remote/EBCTester-${VERSION}.bin.uploading\"" \
+            "rename \"$remote/EBCTester-${VERSION}.bin.uploading\" \"$remote/EBCTester-${VERSION}.bin\"" \
+            "put \"$package/EBCTester.bin\" \"$remote/EBCTester.bin.uploading\"" \
+            "rename \"$remote/EBCTester.bin.uploading\" \"$remote/EBCTester.bin\"" \
+            "put \"$package/licenses-EBCTester-${VERSION}.zip\" \"$remote/licenses/licenses-EBCTester-${VERSION}.zip.uploading\"" \
+            "rename \"$remote/licenses/licenses-EBCTester-${VERSION}.zip.uploading\" \"$remote/licenses/licenses-EBCTester-${VERSION}.zip\"" \
+            "put \"dist/firmware.json\" \"$remote/firmware.json.uploading\"" \
+            "rename \"$remote/firmware.json.uploading\" \"$remote/firmware.json\"" \
+            "-quit" > "$RUNNER_TEMP/publish.sftp"
+          sftp -i "$HOME/.ssh/ota_deploy_key" -oBatchMode=yes -oStrictHostKeyChecking=yes \
+            -P "$OTA_SFTP_PORT" -b "$RUNNER_TEMP/publish.sftp" \
+            "$OTA_SFTP_USER@$OTA_SFTP_HOST"
+
+          printf '%s\n' "get \"$remote/EBCTester-${VERSION}.bin\" \"$RUNNER_TEMP/published-ota.bin\"" \
+            "get \"$remote/firmware.json\" \"$RUNNER_TEMP/published-firmware.json\"" \
+            "-quit" > "$RUNNER_TEMP/verify.sftp"
+          sftp -i "$HOME/.ssh/ota_deploy_key" -oBatchMode=yes -oStrictHostKeyChecking=yes \
+            -P "$OTA_SFTP_PORT" -b "$RUNNER_TEMP/verify.sftp" \
+            "$OTA_SFTP_USER@$OTA_SFTP_HOST"
+          cmp "$image" "$RUNNER_TEMP/published-ota.bin"
+          python - "$RUNNER_TEMP/published-firmware.json" "$VERSION" "$image" <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+
+          manifest_path, version, image_path = sys.argv[1:]
+          with open(manifest_path, encoding="utf-8") as manifest_file:
+              manifest = json.load(manifest_file)
+          with open(image_path, "rb") as image_file:
+              image = image_file.read()
+          expected = {
+              "project": "EBCTester",
+              "target": "esp32s3",
+              "version": version,
+              "url": f"https://ebctester.gemelon.de/EBCTester-{version}.bin",
+              "size": len(image),
+              "sha256": hashlib.sha256(image).hexdigest(),
+          }
+          for key, value in expected.items():
+              if manifest.get(key) != value:
+                  raise SystemExit(f"Published manifest mismatch for {key}")
+          PY
