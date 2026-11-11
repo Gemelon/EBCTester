@@ -3,10 +3,10 @@
 
 # EBCTester technical reference
 
-Implementation details for firmware 1.4.61. Commands and file paths below
+Implementation details for firmware 2.0.0. Commands and file paths below
 are relative to the project root. For operating instructions, see the
-[English User Manual](EBCTester_User_Manual_EN.pdf) or
-[German Benutzerhandbuch](EBCTester_Benutzerhandbuch_DE.pdf). For purpose,
+[Factory User Manual](EBCTester_Manual_Factory_EN.pdf) or
+[Maker User Manual](EBCTester_Manual_Maker_EN.pdf). For purpose,
 setup, safety and licensing, see [README](../README.md) and
 [third-party notices](../THIRD_PARTY_NOTICES.md).
 
@@ -484,14 +484,14 @@ currently discovered but do not yet receive state updates.
 
 ## SD card
 
-The SD-card component defaults to 4-bit SDMMC with CLK=GPIO14, CMD=GPIO15,
-D0=GPIO2, D1=GPIO4, D2=GPIO5 and D3=GPIO6. In **menuconfig → SD Card Manager
-→ SD card bus mode**, select either **4-bit SDMMC** or **SPI**. SPI defaults to
-MISO=GPIO2, MOSI=GPIO15, CS=GPIO6 and CLK=GPIO14; GPIO 7 remains the separate,
-active-high card-detect input in either mode. SPI and SDMMC clock rates and
-their pin assignments can be configured in the same menu. Both clocks default
-to 10 MHz. Ensure the chosen pins are available on the board and use suitable
-external pull-ups on the SD signal lines (3.3 V only).
+The V2 `sdkconfig` selects SPI at 10 MHz: CLK=GPIO6, MOSI=GPIO7, MISO=GPIO5
+and CS=GPIO17. The configured card-detect input is GPIO13. The alternative
+4-bit SDMMC mapping is CLK=GPIO6, CMD=GPIO7, D0=GPIO5, D1=GPIO4, D2=GPIO18
+and D3=GPIO17. Both bus modes support configurable pins and a 10 MHz clock.
+Firmware expects card detect to be high when a card is inserted. The original
+board's switch is active-low; configure card detect as `-1` for that wiring in
+Maker Settings. Ensure the chosen pins are available on the board and use
+suitable external pull-ups on the SD signal lines (3.3 V only).
 
 Format cards as FAT32. The ESP-IDF 6.0.1 bundled FatFs configuration disables
 exFAT, which this component therefore does not support. FatFs API UTF-8 encoding

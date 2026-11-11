@@ -71,10 +71,12 @@ You can close the browser at any time: the test continues and keeps being record
   <li><b>Test plans</b> with up to 10 steps: constant-current discharge, constant-power discharge, CC/CV charge, wait and repeat.</li>
   <li><b>Internal resistance (DCIR)</b> by a load-pulse test with three separate results (by default after 1, 5 and 10 seconds), optionally with automatic preparation to a target state of charge.</li>
   <li><b>Test-run management:</b> search, filter, rename and delete recorded runs.</li>
+  <li><b>Real-time clock:</b> the DS3231 keeps date and time without Internet access, so measurements receive correct time stamps even when the device runs only on its own access point.<only maker> Optional on self-built devices.</only> The current device time is shown in the header.</li>
+  <li><b>Configurable status LEDs:</b> each WS2812 LED – the two on the board and up to 14 more in an extension chain – can show the tester mode or the message traffic with the tester, and optionally the firmware-update state.</li>
   <li><b>Optional</b> backup to a MariaDB server (for example on a NAS), Home Assistant integration via MQTT and a live debug log.</li>
   <li><b>Manual firmware updates</b> over Wi-Fi: new versions are announced, but only installed after you confirm.</li>
   <li><b>Languages:</b> English and German built in; additional languages can be loaded from the SD card.</li>
-  <only maker><li><b>Maker Settings:</b> all hardware-related settings (UART and SD pins, LED, network and update defaults) are configured in the browser and stored on the device – no rebuild of the firmware is needed for your own wiring.</li></only>
+  <only maker><li><b>Maker Settings:</b> all hardware-related settings (UART, SD and RTC pins, LED, network and update defaults) are configured in the browser and stored on the device – no rebuild of the firmware is needed for your own wiring.</li></only>
 </ul>
 
 <h3>Factory and Maker devices</h3>
@@ -131,12 +133,13 @@ share your results via the GitHub project so the model can be enabled.</div>
   <li>An ESP32-S3 module or board with <b>16 MB flash</b> (for example ESP32-S3-WROOM-1(U)-N16R8 or an ESP32-S3-DevKitC-1 N16R8). The partition table does not fit smaller flash sizes.</li>
   <li>A bidirectional <b>3.3 V ↔ 5 V level shifter</b> for the tester UART (the tester uses 5 V TTL; ESP32 pins are not 5 V tolerant).</li>
   <li>A microSD socket wired for 4-bit SDMMC or SPI, with 10 kΩ pull-ups on the data and command lines.</li>
-  <li>Optionally a WS2812 RGB LED as status indicator.</li>
+  <li>Optionally one or more WS2812 RGB LEDs as status indicators.</li>
+  <li>Optionally a DS3231 real-time clock (module or chip) with backup cell, for correct time stamps without Internet.</li>
   <li>A supported ZKE tester, a suitable cable and a 5 V or USB supply for the ESP32.</li>
   <li>A PC with a USB cable for the first installation of the firmware.</li>
 </only>
   <li>A microSD card formatted as FAT32 (exFAT is not supported). 4–32 GB is ideal.</li>
-  <only factory><li>A CR2032 coin cell for the real-time clock (optional).</li></only>
+  <only factory><li>A CR2032 coin cell for the real-time clock (recommended – without it the clock loses the time whenever the board is unpowered).</li></only>
   <li>A phone, tablet or computer with a current web browser.</li>
 </ul>
 

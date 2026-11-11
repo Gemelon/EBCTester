@@ -37,17 +37,19 @@ EXT = {
     "languages": (C / "ui_localization/assets", "languages", "Language", "settings"),
     "config-reset": (ROOT / "main/assets", "config_reset", "Device reset", "settings"),
     "maker-settings": (ROOT / "main/assets", "maker_settings", "Maker Settings", "tab"),
+    "led-settings": (ROOT / "main/assets", "led_settings", "LEDs", "settings"),
 }
 # Registration order follows main.c: debug and config UI first, then the peripheral services.
-ORDER = ["debug-settings", "debug", "config-reset", "maker-settings", "sd-card", "dashboard", "test-runs",
+ORDER = ["debug-settings", "debug", "config-reset", "maker-settings", "led-settings", "sd-card", "dashboard", "test-runs",
          "mariadb", "mqtt", "battery", "manual", "auto", "resistance", "tester", "languages"]
-INACTIVE_OK = {"debug-settings", "debug", "config-reset", "maker-settings"}
+INACTIVE_OK = {"debug-settings", "debug", "config-reset", "maker-settings", "led-settings"}
 
 BATTERY = "LFP-50Ah #01"
 PLAN = "LFP 50 Ah capacity test"
 LIMITS = dict(chargeVoltage=18, chargeCurrent=5, dischargeVoltage=30, dischargeCurrent=20, power=85)
 STEPS = [[3, 500, 365, 50], [4, 0, 0, 30], [1, 2000, 250, 0], [4, 0, 0, 30], [3, 500, 340, 50]]
 T0 = 1793736000000  # 2026-11-03 20:00 UTC (start of the example run)
+CLOCK_UTC = 1793780400 + 1325  # device clock in the screenshots
 
 
 def lfp_ocv(soc):
@@ -166,7 +168,9 @@ DEBUG_LINES = [
     "I (412) ebc_config: Configuration validation: valid",
     "I (413) ebc_config: Firmware mode: Factory; configuration active: 1",
     "I (958) network: Connected to Wi-Fi \"Workshop\" (IP 192.168.1.47)",
+    "I (436) rtc_clock: DS3231 time valid: 2026-11-04 08:11:58 UTC",
     "I (2140) sntp: Time synchronized: 2026-11-04 08:12:05 UTC",
+    "I (2141) rtc_clock: RTC updated from NTP",
     "I (2381) sd_card: SD card mounted (SDMMC 4-bit, 10 MHz), 29.7 GB free",
     "I (2433) battery_db: Database ready, schema 3",
     "I (5120) ebc_link: Tester connected: EBC-A20 (ident 0x09)",
@@ -222,6 +226,10 @@ def maker_fields():
                                ("spi_miso_gpio", "SPI MISO GPIO", -1), ("spi_mosi_gpio", "SPI MOSI GPIO", -1),
                                ("spi_cs_gpio", "SPI CS GPIO", -1), ("spi_clk_gpio", "SPI CLK GPIO", -1)]:
         add("sd", name, label, "number", value, -1, 48)
+    add("rtc", "enabled", "Enable DS3231 RTC", "checkbox", MODE == "maker-active", 0, 1)
+    add("rtc", "int_gpio", "RTC INT GPIO (-1: not connected; reserved input)", "number", 14, -1, 48)
+    add("rtc", "sda_gpio", "I2C SDA GPIO", "number", 15, -1, 48)
+    add("rtc", "scl_gpio", "I2C SCL GPIO", "number", 16, -1, 48)
     return f
 
 
@@ -268,7 +276,7 @@ def status():
     order = "dashboard,battery,manual,auto,resistance,overview,test-runs,sd-card,updates,settings,debug"
     connected = ACTIVE
     return dict(
-        project="EBCTester", version="1.99.3", csrfToken="fixture", sessionDays=1, loginEnabled=True,
+        project="EBCTester", version="2.0.0", csrfToken="fixture", sessionDays=1, loginEnabled=True,
         settingsPasswordRequired=True,
         tabOrder=order if ACTIVE or not MAKER else "maker-settings,settings,overview",
         primaryTabs="dashboard,battery,manual,auto,resistance" if ACTIVE else "",
@@ -280,8 +288,9 @@ def status():
         bootConfirmed=True, otaReady=True, otaBusy=MODE == "ota", otaState="downloading" if MODE == "ota" else "idle",
         otaMessage="Ready. OTA starts only after clicking Start update.", bytesRead=0, totalBytes=0,
         updateConfigured=True, updateChecking=False, updateAvailable=True, updateStale=False,
-        availableVersion="1.99.4", updateNotes="Example release notes: bug fixes and improvements.",
-        updateMessage="Firmware 1.99.4 is available.", updateLastSuccess=1793780400, updateLastSuccessUptime=0,
+        availableVersion="2.0.1", updateNotes="Example release notes: bug fixes and improvements.",
+        updateMessage="Firmware 2.0.1 is available.", updateLastSuccess=1793780400, updateLastSuccessUptime=0,
+        clockEnabled=ACTIVE, clockUtc=CLOCK_UTC if ACTIVE else 0,
         tabs=tabs)
 
 
@@ -405,6 +414,12 @@ class Handler(BaseHTTPRequestHandler):
                                      totalBytes=31_902_400_512, freeBytes=31_887_589_376, message="SD card ready."))
         if p == "/api/sd/list":
             return self.respond(dict(path=q.get("path", ["/"])[0], items=SD_ITEMS, nextOffset=0, hasMore=False))
+        if p == "/api/leds/settings":
+            return self.respond(dict(count=2, maxCount=16, hardwareEnabled=ACTIVE,
+                                     groups=[dict(id="off", label="Off"), dict(id="tester", label="Tester mode"),
+                                             dict(id="frames", label="Message frame status")],
+                                     leds=[dict(group="tester", ota=True), dict(group="frames", ota=False)] +
+                                          [dict(group="off", ota=False)] * 14))
         if p == "/api/maker/config":
             return self.respond(dict(fields=maker_fields(), active=ACTIVE, mode="maker"))
         return self.respond("Fixture route not found: " + p, "text/plain", 404)

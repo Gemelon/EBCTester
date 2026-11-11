@@ -32,7 +32,7 @@ restart that follows <span class="ui">Save and restart</span>.</p>
   <tr><td class="k">SNTP server</td><td>host name</td><td>Time server (default <code>pool.ntp.org</code>). The time is needed for date stamps and HTTPS update checks.</td></tr>
   <tr><td class="k">Firmware manifest URL</td><td>HTTPS URL</td><td>Address of <code>firmware.json</code> that announces new firmware. Empty disables update checks. <code>http://</code> is accepted only when unencrypted updates are allowed.</td></tr>
   <tr><td class="k">Allow unencrypted HTTP firmware updates</td><td>on/off</td><td>Only for a trusted test network. Default off.</td></tr>
-  <tr><td class="k">Enable status LED / Status LED GPIO</td><td>on/off, −1 … 48</td><td>WS2812 status LED and its data pin.</td></tr>
+  <tr><td class="k">Enable status LED / Status LED GPIO</td><td>on/off, −1 … 48</td><td>Data pin of the WS2812 LED chain. The number of LEDs and their functions are set in <span class="ui">Settings → LEDs</span>.</td></tr>
   <tr><td class="k">Web password</td><td>8 … 63 printable ASCII</td><td>Login password for user <code>admin</code>; the same password as in Login Settings. No spaces at the beginning or end. Leave empty to keep it.</td></tr>
   <tr><td class="k">Confirm settings changes with password</td><td>on/off</td><td>When on (default), every settings change asks for the login password, also with browser login switched off.</td></tr>
   <tr><td class="k">Load additional languages from SD</td><td>on/off</td><td>Allows UI translations from the <code>/languages</code> folder of the SD card.</td></tr>
@@ -47,7 +47,7 @@ restart that follows <span class="ui">Save and restart</span>.</p>
   <tbody>
   <tr><td class="k">SD bus</td><td>4-bit SDMMC / SPI</td><td>Bus mode of the card socket. Only the pins of the selected bus are used.</td></tr>
   <tr><td class="k">SDMMC / SPI frequency</td><td>400 … 20000 kHz</td><td>Bus clock, default 10 000 kHz. Reduce it for long wires.</td></tr>
-  <tr><td class="k">Card-detect GPIO</td><td>−1 … 48</td><td>Input that is <b>high</b> when a card is inserted. <code>−1</code> = no card-detect switch; the card is then assumed to be present.</td></tr>
+  <tr><td class="k">Card-detect GPIO</td><td>−1 … 48</td><td>Input that is <b>high</b> when a card is inserted. <code>−1</code> = no card-detect switch; the card is then assumed to be present. For a switch that pulls the signal low with a card inserted (as on the original board), enter <code>−1</code>.</td></tr>
   <tr><td class="k">SD mount point</td><td><code>/name</code></td><td>Mount point of the file system, default <code>/sdcard</code>. One level only.</td></tr>
   <tr><td class="k">SDMMC CLK, CMD, D0 … D3 GPIO</td><td>−1 … 48</td><td>Pins for 4-bit SDMMC; all six are required with this bus.</td></tr>
   <tr><td class="k">SPI MISO, MOSI, CS, CLK GPIO</td><td>−1 … 48</td><td>Pins for SPI; all four are required with this bus.</td></tr>
@@ -58,19 +58,20 @@ restart that follows <span class="ui">Save and restart</span>.</p>
 <table>
   <thead><tr><th>Field</th><th>Default</th><th>Meaning</th></tr></thead>
   <tbody>
-  <tr><td class="k">Enable DS3231 RTC</td><td>off in MakerMode</td><td>Optional UTC clock and offline time source. FactoryMode always enables it. Requires active configuration; changes take effect after restart.</td></tr>
-  <tr><td class="k">RTC INT GPIO</td><td>14</td><td>Reserved input; use -1 if disconnected. Alarms and wakeup are not implemented.</td></tr>
-  <tr><td class="k">I2C SDA GPIO</td><td>15</td><td>RTC data pin; required when RTC is enabled.</td></tr>
-  <tr><td class="k">I2C SCL GPIO</td><td>16</td><td>RTC clock pin; required when RTC is enabled. The bus uses 100 kHz and external pull-ups to 3.3 V.</td></tr>
+  <tr><td class="k">Enable DS3231 RTC</td><td>off</td><td>Uses a DS3231 as offline time source. Takes effect after the restart and only with an active configuration. (FactoryMode always enables it with the pins of the original board.)</td></tr>
+  <tr><td class="k">RTC INT GPIO</td><td>14</td><td>INT/SQW output of the DS3231. Reserved as input only; alarms and wake-up are not used yet. <code>−1</code> if not connected.</td></tr>
+  <tr><td class="k">I2C SDA GPIO</td><td>15</td><td>I²C data line; required when the RTC is enabled.</td></tr>
+  <tr><td class="k">I2C SCL GPIO</td><td>16</td><td>I²C clock line; required when the RTC is enabled. The bus runs at 100 kHz and needs pull-ups to 3.3 V (on most DS3231 modules already fitted).</td></tr>
   </tbody>
 </table>
-<p>At startup, a valid RTC supplies device time until NTP is available. Successful NTP responses update device
-time and RTC every six hours; without NTP, device time is refreshed from the RTC every six hours. Invalid time,
-a stopped oscillator or missing hardware is reported in the log. The header shows time above date beside EBC RX
-using the browser's current time zone, including summer time. Both clocks store UTC. With RTC disabled, existing
-NTP operation is unchanged.</p>
-<p>Missing RTC hardware never blocks normal services. NTP remains available as a fallback; without NTP and
-a valid RTC, calendar time is unavailable and recording uses device uptime.</p>
+<p>At every start a valid RTC time is copied to the device clock before recording and the network services
+start. When NTP is reachable, it has priority: every successful synchronisation (at the latest every six hours)
+also writes the time to the RTC. Without NTP, the device clock is refreshed from the RTC every six hours. Both
+clocks run in UTC; the browser converts the time for display.</p>
+<p>An RTC that reports an invalid date or a stopped oscillator (for example after the backup cell was empty) is
+ignored until the next NTP synchronisation sets it again. A missing or faulty RTC is only reported in the log and
+never blocks the other functions. Without NTP and without a valid RTC, measurements are stored with the device
+uptime instead of a date.</p>
 
 <h3>Activation and validation</h3>
 <p>The checkbox <span class="ui">Configuration active (ConfigAktive)</span> decides whether the hardware is
@@ -156,7 +157,7 @@ know which cell or pack a measurement belongs to.</p>
   <tr><td class="k">Apply and save to database</td><td>Additionally saves the battery in the SD database so it can be selected again later. To rename a saved battery, load it, change <span class="ui">Label</span>, then click this button.</td></tr>
   <tr><td class="k">New battery</td><td>Clears the form for a new entry.</td></tr>
   <tr><td class="k">Delete battery</td><td>Deletes the saved battery shown in the form after confirmation and the login password. Not possible while it is used by recorded runs – delete those runs first in test-run management – or while a recording, plan or DCIR test is active. MariaDB backups are not changed.</td></tr>
-  <tr><td class="k">Load button / Refresh list</td><td>Under <span class="ui">Saved batteries</span>: select a battery and click the button below the list (labelled <span class="ui">Charge</span> in firmware 1.99.3) or double-click the entry to load it into the form. <span class="ui">Refresh list</span> re-reads the database.</td></tr>
+  <tr><td class="k">Load button / Refresh list</td><td>Under <span class="ui">Saved batteries</span>: select a battery and click the button below the list (labelled <span class="ui">Charge</span> in firmware 2.0.0 – it loads the battery and does not start charging) or double-click the entry to load it into the form. <span class="ui">Refresh list</span> re-reads the database.</td></tr>
   </tbody>
 </table>
 <p>Empty fields do not overwrite values that are already stored.</p>

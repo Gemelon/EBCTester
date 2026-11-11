@@ -104,6 +104,7 @@ def factory(browser):
                       ("#settings-ext-mqtt", "settings-mqtt.png"),
                       ("#settings-ext-debug-settings", "settings-debug.png"),
                       ("#settings-ext-languages", "settings-languages.png"),
+                      ("#settings-ext-led-settings", "settings-leds.png"),
                       ("#settings-ext-config-reset", "settings-reset.png")]:
         if want(name):
             section(page, sel, name)

@@ -327,7 +327,7 @@ filter/search the table, select one completed run, then rename or delete it.
 Running tests are protected. Names and deletions affect only the SD database;
 existing MariaDB backups remain unchanged. See
 [test run management and schema upgrades](docs/TECHNICAL_REFERENCE.md#test-run-management-and-schema-upgrades)
-before installing firmware 1.4.67 or downgrading to an older version.
+before installing firmware or downgrading to an older version.
 
 No build environment needed: download `EBCTester-<version>-full-install.bin`
 from the [latest release](https://github.com/Gemelon/EBCTester/releases/latest)
@@ -443,23 +443,35 @@ published board-documentation snapshot.
 
 ### Default connections
 
+The following assignments match the V2 `sdkconfig` in this workspace. Check
+your build's `sdkconfig` and saved Maker Settings before wiring; either can
+override them.
+
 | Connection | TX | RX | Settings |
 | --- | ---: | ---: | --- |
-| UART1 to tester | 17 | 18 | 9600 baud, 8O1 |
+| UART1 to tester | 10 | 11 | 9600 baud, 8O1 |
 | UART2 to PC dongle | 8 | 9 | 9600 baud, 8O1 |
 
 The dongle bridge is **not implemented yet**. UART2 is initialized, but traffic
 is not forwarded to the manufacturer's software.
 
-| SD signal | SDMMC GPIO |
-| --- | ---: |
-| CLK / CMD | 14 / 15 |
-| D0 / D1 / D2 / D3 | 2 / 4 / 5 / 6 |
-| Card detect | 7, active HIGH |
+The current V2 configuration selects SPI for the SD card:
 
-SPI is selectable: MISO 2, MOSI 15, CS 6, CLK 14. Both modes default to 10 MHz
-and configurable pins. Cards are **never formatted automatically**; exFAT is
-unsupported. The optional WS2812 LED defaults to GPIO 48; some boards need 38.
+| SD signal | SPI GPIO | 4-bit SDMMC GPIO |
+| --- | ---: | ---: |
+| CLK | 6 | 6 |
+| MOSI / CMD | 7 | 7 |
+| MISO / D0 | 5 | 5 |
+| CS / D1 | 17 | 4 |
+| — / D2 | — | 18 |
+| — / D3 | — | 17 |
+| Card detect | 13 | 13 |
+
+Both bus modes are configured for 10 MHz. Firmware expects the card-detect
+input to be high when a card is inserted. The original board's switch is
+active-low; configure card detect as `-1` for that wiring in Maker Settings.
+Cards are **never formatted automatically**; exFAT is unsupported. The RTC
+uses INT/SDA/SCL GPIO 14/15/16. The optional WS2812 LED uses GPIO 48.
 
 ### First access and daily operation
 

@@ -9,7 +9,7 @@
 </figure>
 <p>Shows the installed firmware version, the project name, the connected Wi-Fi network and IP address, the
 name of the setup access point (<code>BatteryTester-XXXXXX</code>), its address <code>http://192.168.4.1</code>,
-and whether the clock has been synchronised (<i>HTTPS clock</i>). <span class="ui">System status</span> shows the
+and whether a valid time is available (<i>HTTPS clock</i>; set by NTP or the real-time clock). <span class="ui">System status</span> shows the
 network message and leads to the update page.</p>
 
 <h3>Test run management</h3>
@@ -148,6 +148,28 @@ repeated or interrupted synchronisations do not create duplicates.</p>
 in MariaDB. The database tables must already exist on the server – see <a href="#ref:MariaDB backup database">MariaDB backup database</a>.
 The connection is unencrypted: use it only in your home network.</p>
 
+<h4>LED settings</h4>
+<figure>
+  <img src="../images/manual/settings-leds.png" alt="LED function groups">
+  <figcaption>LED function groups (as delivered)</figcaption>
+</figure>
+<p>Here you decide what each WS2812 status LED shows. <only factory>The board carries LED1 and LED2; further
+WS2812B LEDs can be connected to J5 and continue the chain (see <a href="#ref:Connectors">Connectors</a>).</only><only maker>The LEDs
+are numbered in chain order, starting at the LED connected to the configured GPIO.</only></p>
+<table>
+  <tbody>
+  <tr><td class="k">Total LED count</td><td>Number of LEDs in the chain, 1–16, including extensions. One row per LED appears below.</td></tr>
+  <tr><td class="k">LED 1 … LED n</td><td>Function group: <span class="ui">Tester mode</span>, <span class="ui">Message frame status</span> or <span class="ui">Off</span>. Several LEDs may show the same group. The colours are explained in <a href="#ref:LEDs">LEDs</a>.</td></tr>
+  <tr><td class="k">OTA override</td><td>During a firmware update this LED shows the update state instead of its function group.</td></tr>
+  </tbody>
+</table>
+<p><span class="ui">Save LED settings</span> applies the assignment immediately (after password confirmation) and keeps it
+across restarts and firmware updates. Defaults: two LEDs; LED 1 = Tester mode with OTA override, LED 2 = Message
+frame status.<only maker> If the status LED is disabled in Maker Settings or the configuration is inactive, a
+note is shown; the assignment is stored and used as soon as the LEDs are enabled.</only></p>
+<div class="note"><b>Note</b>Every WS2812 draws current from the 5 V supply (up to about 60 mA at full white; EBCTester
+uses low brightness). With USB-only supply keep extensions small.</div>
+
 <h4>Debug log</h4>
 <figure class="w80">
   <img src="../images/manual/settings-debug.png" alt="Debug log setting">
@@ -178,8 +200,8 @@ batteries, plans and language files – is never erased.</p>
   <thead><tr><th>Button</th><th>Resets</th><th>Keeps</th></tr></thead>
   <tbody>
   <tr><td class="k">Reset device configuration</td><td>Device configuration<only maker> (all Maker Settings and ConfigAktive)</only>, login password (back to <code>ebctester</code>), login options, access-point password, Firmware mode</td>
-      <td>Wi-Fi credentials, tester model, current battery and plan, MQTT and MariaDB settings, debug-log setting</td></tr>
-  <tr><td class="k">Erase all NVS settings including Wi-Fi</td><td>Everything stored on the device, including Wi-Fi credentials, tester model and all service settings</td>
+      <td>Wi-Fi credentials, tester model, current battery and plan, MQTT and MariaDB settings, debug-log setting, LED settings, the time in the real-time clock</td></tr>
+  <tr><td class="k">Erase all NVS settings including Wi-Fi</td><td>Everything stored on the device, including Wi-Fi credentials, tester model, LED settings and all service settings</td>
       <td>Only the firmware and the SD card</td></tr>
   </tbody>
 </table>
