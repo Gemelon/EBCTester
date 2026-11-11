@@ -3,7 +3,7 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-set(PROJECT_VER "2.0.4")
+set(PROJECT_VER "2.0.5")
 include("${CMAKE_CURRENT_LIST_DIR}/CMakeUserConfig.cmake" OPTIONAL)
 option(EBCTESTER_VALIDATE_ONLY "Build without publishing intermediate firmware" OFF)
 if(EBCTESTER_VALIDATE_ONLY)

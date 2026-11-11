@@ -118,13 +118,13 @@ jobs:
 
   release:
     name: Publish GitHub release
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     outputs:
-      published: ${{ steps.release.outputs.publish }}
+      ready: ${{ steps.release.outputs.ready }}
     steps:
       - name: Check version and existing release
         id: release
@@ -142,8 +142,9 @@ jobs:
 
           release_error="$RUNNER_TEMP/release-error"
           if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" >/dev/null 2>"$release_error"; then
-            echo "Release $tag already exists; refusing to overwrite it."
+            echo "Release $tag already exists; using its immutable assets."
             echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "ready=true" >> "$GITHUB_OUTPUT"
             exit 0
           elif ! grep -Fq 'HTTP 404' "$release_error"; then
             cat "$release_error" >&2
@@ -177,6 +178,7 @@ jobs:
           fi
 
           echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Download release files
         if: steps.release.outputs.publish == 'true'
@@ -206,16 +208,10 @@ jobs:
 
   publish-ota-server:
     name: Publish public OTA update
-    if: needs.release.outputs.published == 'true'
+    if: needs.release.outputs.ready == 'true' && github.ref == 'refs/heads/main'
     needs: [build, release]
     runs-on: ubuntu-latest
     steps:
-      - name: Download release files
-        uses: actions/download-artifact@v4
-        with:
-          name: EBCTester-${{ needs.build.outputs.version }}
-          path: dist
-
       - name: Configure SFTP credentials
         env:
           OTA_SFTP_PRIVATE_KEY: ${{ secrets.OTA_SFTP_PRIVATE_KEY }}
@@ -232,6 +228,7 @@ jobs:
       - name: Publish OTA image and manifest
         env:
           VERSION: ${{ needs.build.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
           OTA_SFTP_HOST: ${{ secrets.OTA_SFTP_HOST }}
           OTA_SFTP_USER: ${{ secrets.OTA_SFTP_USER }}
           OTA_SFTP_REMOTE_DIR: ${{ secrets.OTA_SFTP_REMOTE_DIR }}
@@ -250,6 +247,13 @@ jobs:
           [[ "$OTA_SFTP_PORT" -ge 1 && "$OTA_SFTP_PORT" -le 65535 ]]
 
           remote="${OTA_SFTP_REMOTE_DIR%/}"
+          mkdir -p dist
+          gh release download "v${VERSION}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "EBCTester-${VERSION}.bin" \
+            --pattern "firmware.json" \
+            --pattern "licenses-EBCTester-${VERSION}.zip" \
+            --dir dist
           image="dist/EBCTester-${VERSION}.bin"
           package="$RUNNER_TEMP/ota-publication"
           mkdir -p "$package"
@@ -262,23 +266,31 @@ jobs:
           sftp -i "$HOME/.ssh/ota_deploy_key" -oBatchMode=yes -oStrictHostKeyChecking=yes \
             -P "$OTA_SFTP_PORT" -b "$RUNNER_TEMP/preflight.sftp" \
             "$OTA_SFTP_USER@$OTA_SFTP_HOST"
+          publish_versioned=true
           if [[ -f "$RUNNER_TEMP/existing-ota.bin" ]]; then
             if ! cmp -s "$image" "$RUNNER_TEMP/existing-ota.bin"; then
               echo "::error::Refusing to overwrite immutable firmware version ${VERSION} with different bytes"
               exit 1
             fi
+            publish_versioned=false
           fi
 
-          printf '%s\n' "-mkdir \"$remote/licenses\"" \
-            "put \"$package/EBCTester-${VERSION}.bin\" \"$remote/EBCTester-${VERSION}.bin.uploading\"" \
-            "rename \"$remote/EBCTester-${VERSION}.bin.uploading\" \"$remote/EBCTester-${VERSION}.bin\"" \
+          {
+            printf '%s\n' "-mkdir \"$remote/licenses\""
+            if [[ "$publish_versioned" == true ]]; then
+              printf '%s\n' \
+                "put \"$package/EBCTester-${VERSION}.bin\" \"$remote/EBCTester-${VERSION}.bin.uploading\"" \
+                "rename \"$remote/EBCTester-${VERSION}.bin.uploading\" \"$remote/EBCTester-${VERSION}.bin\""
+            fi
+            printf '%s\n' \
             "put \"$package/EBCTester.bin\" \"$remote/EBCTester.bin.uploading\"" \
             "rename \"$remote/EBCTester.bin.uploading\" \"$remote/EBCTester.bin\"" \
             "put \"$package/licenses-EBCTester-${VERSION}.zip\" \"$remote/licenses/licenses-EBCTester-${VERSION}.zip.uploading\"" \
             "rename \"$remote/licenses/licenses-EBCTester-${VERSION}.zip.uploading\" \"$remote/licenses/licenses-EBCTester-${VERSION}.zip\"" \
             "put \"dist/firmware.json\" \"$remote/firmware.json.uploading\"" \
             "rename \"$remote/firmware.json.uploading\" \"$remote/firmware.json\"" \
-            "-quit" > "$RUNNER_TEMP/publish.sftp"
+            "-quit"
+          } > "$RUNNER_TEMP/publish.sftp"
           sftp -i "$HOME/.ssh/ota_deploy_key" -oBatchMode=yes -oStrictHostKeyChecking=yes \
             -P "$OTA_SFTP_PORT" -b "$RUNNER_TEMP/publish.sftp" \
             "$OTA_SFTP_USER@$OTA_SFTP_HOST"

@@ -669,7 +669,9 @@ secrets: `OTA_SFTP_HOST`, `OTA_SFTP_USER`, `OTA_SFTP_REMOTE_DIR`,
 `OTA_SFTP_PRIVATE_KEY`, and `OTA_SFTP_KNOWN_HOSTS`. Set the optional
 `OTA_SFTP_PORT` secret only when the server does not use port 22. The deploy
 job uses strict host-key checking and refuses to replace an existing version
-with different firmware bytes.
+with different firmware bytes. After adding or rotating the secrets, run the
+**Firmware** workflow manually on `main` to publish the existing release to the
+OTA server.
 
 ## Limitations, safety, and contributions
 

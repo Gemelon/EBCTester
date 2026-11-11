@@ -3,6 +3,13 @@
 
 # Changelog
 
+## [2.0.5] – 2026-11-11
+
+### Fixed
+
+- Configure clean firmware builds to check the production OTA manifest at
+  `https://ebctester.gemelon.de/firmware.json`.
+
 ## [2.0.4] – 2026-11-11
 
 ### Fixed
