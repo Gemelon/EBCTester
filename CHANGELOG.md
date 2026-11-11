@@ -3,6 +3,19 @@
 
 # Changelog
 
+## [2.0.6] – 2026-11-11
+
+### Changed
+
+- Disable manual MariaDB connection tests and synchronization while automatic
+  backup is enabled, and reject those requests through the API as well.
+
+### Validation
+
+- Full ESP-IDF build and SFTP publication succeeded. The published
+  `EBCTester-2.0.6.bin` is 2,884,512 bytes with SHA256
+  `3fdea39f02783b2e5dec1c52d17d81063037051149371b47c4b51d5b829efa58`.
+
 ## [2.0.5] – 2026-11-11
 
 ### Fixed

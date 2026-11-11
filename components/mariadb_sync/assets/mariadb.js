@@ -48,7 +48,15 @@
   };
   let formLoaded = false;
   let pollTimer = 0;
+  let manualOperationsBlockedByStatus = false;
+  let automaticBackupEnabled = false;
   const localText = (key) => (LOCAL_TEXT[I18n.code] || LOCAL_TEXT.en)[key] || LOCAL_TEXT.en[key] || key;
+  const manualOperationButtons = ["mdb-test", "mdb-sync", "mdb-full-sync"];
+
+  function updateManualOperationButtons() {
+    const disabled = manualOperationsBlockedByStatus || automaticBackupEnabled || $("mdb-enabled").checked;
+    for (const id of manualOperationButtons) $(id).disabled = disabled;
+  }
 
   function applyLocalText() {
     document.querySelectorAll("[data-mdb-text]").forEach((element) => {
@@ -92,6 +100,7 @@
   }
 
   function render(status) {
+    automaticBackupEnabled = Boolean(status.settings && status.settings.enabled);
     if (!formLoaded) {
       fillForm(status.settings || {});
       formLoaded = true;
@@ -113,11 +122,11 @@
         (status.pendingRuns ? I18n.f("text.8a11ce305408", {p0: status.pendingRuns}) : "")
       : "-";
     $("mdb-server").textContent = status.serverVersion ? `MariaDB ${status.serverVersion}` : "-";
-    for (const id of ["mdb-test", "mdb-sync", "mdb-full-sync", "mdb-save",
-      "mdb-migration-open", "mdb-migration-decline"]) $(id).disabled = status.busy;
-    if (status.schemaState === "disabled") {
-      for (const id of ["mdb-test", "mdb-sync", "mdb-full-sync"]) $(id).disabled = true;
+    for (const id of ["mdb-save", "mdb-migration-open", "mdb-migration-decline"]) {
+      $(id).disabled = status.busy;
     }
+    manualOperationsBlockedByStatus = status.busy || status.schemaState === "disabled";
+    updateManualOperationButtons();
     clearTimeout(pollTimer);
     if (status.busy) pollTimer = setTimeout(refresh, 1500);
   }
@@ -167,6 +176,7 @@
       intervalMinutes: Number($("mdb-interval").value),
     });
   });
+  $("mdb-enabled").addEventListener("change", updateManualOperationButtons);
   $("mdb-test").addEventListener("click", () => void post("/api/mariadb/test"));
   $("mdb-sync").addEventListener("click", () => void post("/api/mariadb/sync"));
   $("mdb-full-sync").addEventListener("click", () => void post("/api/mariadb/full-sync", null,

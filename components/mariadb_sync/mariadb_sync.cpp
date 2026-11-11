@@ -1041,7 +1041,11 @@ Status get_status()
 esp_err_t request(uint32_t command)
 {
     std::lock_guard<std::mutex> lock(state_mutex);
+    load_settings_locked();
     if (worker_handle == nullptr || current_status.busy) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (current_settings.enabled && (command & (COMMAND_TEST | COMMAND_SYNC)) != 0) {
         return ESP_ERR_INVALID_STATE;
     }
     if (current_status.schema_state == SchemaState::Disabled &&

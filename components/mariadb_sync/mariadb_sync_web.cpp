@@ -267,7 +267,12 @@ esp_err_t start_command(httpd_req_t *req, uint32_t command, const char *accepted
         return ESP_OK;
     }
     if (request(command) != ESP_OK) {
-        if (get_status().schema_state == SchemaState::Disabled) {
+        const Status status = get_status();
+        if (get_settings().enabled && !status.busy) {
+            return send_text(req, "409 Conflict",
+                             "Manual MariaDB operations are disabled while automatic backup is enabled.");
+        }
+        if (status.schema_state == SchemaState::Disabled) {
             return send_text(req, "409 Conflict", "MariaDB is disabled. Re-enable it in MariaDB settings.");
         }
         return send_text(req, "409 Conflict", "A MariaDB operation is already running.");
