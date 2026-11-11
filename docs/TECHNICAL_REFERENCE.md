@@ -626,24 +626,40 @@ in **Settings → MariaDB backup** (host, port, database, user, password,
 automatic interval in minutes; 0 = manual only). Settings are stored in NVS
 namespace `mariadb_sync`; the password is never returned to the browser.
 There is no default server address and sync is disabled on fresh installations.
-The base MariaDB schema from migrations 001-005 must already exist; this
-repository includes the additional DCIR migration
-[`sql/006_resistance_results_mariadb.sql`](../sql/006_resistance_results_mariadb.sql),
-not a replacement for that existing schema.
+At startup, a background worker checks the selected database for the seven
+required tables, field types, primary keys and unique indexes. Missing pieces
+are reported only in the MariaDB settings. The operator can decline and disable
+MariaDB, or open the one-time schema dialog and provide a separate administrator
+account. The elevated password is held only for that migration request and is
+not stored in NVS. Creating the complete backup schema requires CREATE, ALTER
+and INDEX privileges. Existing data is not deleted; missing
+non-key fields and indexes may be added, but incompatible fields are never
+rewritten automatically. Back up the database before applying a migration.
+Primary and unique indexes protect the identifiers used by synchronization;
+the automatic setup does not add foreign keys, avoiding assumptions about
+legacy identifier types.
+The DCIR table is created as part of this setup; the standalone
+[`sql/006_resistance_results_mariadb.sql`](../sql/006_resistance_results_mariadb.sql)
+remains available for databases managed manually.
 
 - Progress per run is tracked locally in `ebc_sync_state`; only new segments
   and measurements are sent (batches of 200, `INSERT IGNORE`), so repeated or
   interrupted syncs never duplicate data. "Resend all" resets it.
 - Automatic sync runs only with WLAN, a ready SD database and a stored password.
 - Runs deleted locally stay in MariaDB.
-- Requires a `mysql_native_password` account with SELECT/INSERT/UPDATE on
-  `ebc_test_plan`, `ebc_battery`, `ebc_test_run`, additionally DELETE on
-  `ebc_test_plan_step`, and INSERT on `ebc_run_segment`, `ebc_measurement`.
+- The regular firmware account requires `mysql_native_password`, SELECT/INSERT/
+  UPDATE on `ebc_test_plan`, `ebc_battery`, and `ebc_test_run`, DELETE on
+  `ebc_test_plan_step`, INSERT on `ebc_test_plan_step`, `ebc_run_segment`,
+  `ebc_measurement`, and `ebc_resistance_result`, plus UPDATE on
+  `ebc_resistance_result`.
 - The connection is plain TCP without TLS: use it only in the trusted LAN.
+- A schema mismatch or a declined migration prevents MariaDB synchronization
+  only. Device startup, test execution, recording and the web interface continue.
 
 API (login required, POST with CSRF token): `GET /api/mariadb/status`,
 `POST /api/mariadb/settings`, `/api/mariadb/test`, `/api/mariadb/sync`,
-`/api/mariadb/full-sync` (409 while a job is running).
+`/api/mariadb/full-sync`, `/api/mariadb/migrate`, and
+`/api/mariadb/decline-migration` (409 while a job is running).
 
 ## EBC-A20 tester
 

@@ -4,6 +4,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
 #include <string>
 
 #include "battery_database.h"
@@ -57,6 +58,24 @@ const char *state_name(State state)
     }
 }
 
+const char *schema_state_name(SchemaState state)
+{
+    switch (state) {
+    case SchemaState::Ready:
+        return "ready";
+    case SchemaState::NeedsMigration:
+        return "needsMigration";
+    case SchemaState::Incompatible:
+        return "incompatible";
+    case SchemaState::Disabled:
+        return "disabled";
+    case SchemaState::Error:
+        return "error";
+    default:
+        return "unknown";
+    }
+}
+
 esp_err_t status_handler(httpd_req_t *req)
 {
     if (!web_interface_authorize_request(req, false)) {
@@ -80,6 +99,8 @@ esp_err_t status_handler(httpd_req_t *req)
               cJSON_AddStringToObject(root, "state", state_name(status.state)) != nullptr &&
               cJSON_AddBoolToObject(root, "busy", status.busy) != nullptr &&
               cJSON_AddStringToObject(root, "message", status.message.c_str()) != nullptr &&
+              cJSON_AddStringToObject(root, "schemaState", schema_state_name(status.schema_state)) != nullptr &&
+              cJSON_AddStringToObject(root, "schemaMessage", status.schema_message.c_str()) != nullptr &&
               cJSON_AddNumberToObject(root, "lastSuccess", static_cast<double>(status.last_success)) != nullptr &&
               cJSON_AddNumberToObject(root, "lastAttempt", static_cast<double>(status.last_attempt)) != nullptr &&
               cJSON_AddNumberToObject(root, "lastRuns", status.last_runs) != nullptr &&
@@ -184,7 +205,60 @@ esp_err_t settings_handler(httpd_req_t *req)
         ESP_LOGE(TAG, "Cannot save settings: %s", esp_err_to_name(err));
         return send_text(req, "500 Internal Server Error", "Could not save settings.");
     }
+    const Settings saved_settings = get_settings();
+    if (saved_settings.enabled && !saved_settings.password.empty()) {
+        (void)request(COMMAND_SCHEMA_CHECK);
+    }
     return send_text(req, "200 OK", "MariaDB settings saved.");
+}
+
+esp_err_t migration_handler(httpd_req_t *req)
+{
+    if (!web_interface_authorize_settings_request(req)) {
+        return ESP_OK;
+    }
+    std::string body;
+    if (!read_body(req, body)) {
+        return ESP_OK;
+    }
+    cJSON *root = cJSON_ParseWithLength(body.c_str(), body.size());
+    if (root == nullptr) {
+        return send_text(req, "400 Bad Request", "Invalid JSON.");
+    }
+    std::string user;
+    std::string password;
+    const bool valid = read_string(root, "user", 64, user) &&
+                       read_string(root, "password", 64, password) &&
+                       !user.empty() && !password.empty() && printable(user) && printable(password);
+    cJSON *password_item = cJSON_GetObjectItemCaseSensitive(root, "password");
+    if (password_item != nullptr && cJSON_IsString(password_item) && password_item->valuestring != nullptr) {
+        memset(password_item->valuestring, 0, strlen(password_item->valuestring));
+    }
+    cJSON_Delete(root);
+    std::fill(body.begin(), body.end(), '\0');
+    if (!valid) {
+        std::fill(password.begin(), password.end(), '\0');
+        return send_text(req, "400 Bad Request", "A valid migration user and password are required.");
+    }
+    const esp_err_t err = request_schema_migration(user, password);
+    std::fill(password.begin(), password.end(), '\0');
+    if (err != ESP_OK) {
+        return send_text(req, "409 Conflict", "MariaDB is busy or migration credentials are incomplete.");
+    }
+    return send_text(req, "202 Accepted", "One-time schema migration started.");
+}
+
+esp_err_t migration_declined_handler(httpd_req_t *req)
+{
+    if (!web_interface_authorize_settings_request(req)) {
+        return ESP_OK;
+    }
+    const esp_err_t err = disable_after_migration_declined();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Cannot disable MariaDB after declined migration: %s", esp_err_to_name(err));
+        return send_text(req, "500 Internal Server Error", "Could not disable MariaDB.");
+    }
+    return send_text(req, "200 OK", "MariaDB disabled.");
 }
 
 esp_err_t start_command(httpd_req_t *req, uint32_t command, const char *accepted)
@@ -193,6 +267,9 @@ esp_err_t start_command(httpd_req_t *req, uint32_t command, const char *accepted
         return ESP_OK;
     }
     if (request(command) != ESP_OK) {
+        if (get_status().schema_state == SchemaState::Disabled) {
+            return send_text(req, "409 Conflict", "MariaDB is disabled. Re-enable it in MariaDB settings.");
+        }
         return send_text(req, "409 Conflict", "A MariaDB operation is already running.");
     }
     return send_text(req, "202 Accepted", accepted);
@@ -216,6 +293,8 @@ esp_err_t full_sync_handler(httpd_req_t *req)
 const httpd_uri_t routes[] = {
     {.uri = "/api/mariadb/status", .method = HTTP_GET, .handler = status_handler, .user_ctx = nullptr},
     {.uri = "/api/mariadb/settings", .method = HTTP_POST, .handler = settings_handler, .user_ctx = nullptr},
+    {.uri = "/api/mariadb/migrate", .method = HTTP_POST, .handler = migration_handler, .user_ctx = nullptr},
+    {.uri = "/api/mariadb/decline-migration", .method = HTTP_POST, .handler = migration_declined_handler, .user_ctx = nullptr},
     {.uri = "/api/mariadb/test", .method = HTTP_POST, .handler = test_handler, .user_ctx = nullptr},
     {.uri = "/api/mariadb/sync", .method = HTTP_POST, .handler = sync_handler, .user_ctx = nullptr},
     {.uri = "/api/mariadb/full-sync", .method = HTTP_POST, .handler = full_sync_handler, .user_ctx = nullptr},

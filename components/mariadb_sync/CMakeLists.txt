@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 idf_component_register(
-    SRCS "mariadb_client.cpp" "mariadb_sync.cpp" "mariadb_sync_web.cpp"
+    SRCS "mariadb_schema.cpp" "mariadb_client.cpp" "mariadb_sync.cpp" "mariadb_sync_web.cpp"
     INCLUDE_DIRS "include"
     PRIV_REQUIRES battery_database web_interface network_manager esp_http_server espressif__cjson
                   nvs_flash mbedtls lwip esp_timer

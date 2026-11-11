@@ -43,6 +43,37 @@
       </div>
     </form>
     <hr>
+    <div id="mdb-schema-alert" class="alert alert-warning d-none" role="alert">
+      <h3 class="h6" data-mdb-text="schemaTitle">MariaDB database structure needs attention</h3>
+      <p id="mdb-schema-message" class="mb-2"></p>
+      <p class="mb-2" data-mdb-text="schemaQuestion">Create or repair the required tables and indexes now?</p>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="mdb-migration-open" class="btn btn-warning" type="button" data-mdb-text="schemaYes">Set up database structure</button>
+        <button id="mdb-migration-decline" class="btn btn-outline-secondary" type="button" data-mdb-text="schemaNo">No, disable MariaDB</button>
+      </div>
+    </div>
+    <dialog id="mdb-migration-dialog" class="border-0 rounded shadow p-0">
+      <div class="p-4" style="min-width:min(90vw, 32rem)">
+        <h3 class="h5" data-mdb-text="migrationTitle">One-time MariaDB schema setup</h3>
+        <p data-mdb-text="migrationRights">Creating tables and indexes requires additional MariaDB privileges, typically CREATE, ALTER, and INDEX.</p>
+        <p data-mdb-text="migrationTemporary">These separate administrator credentials are used only for this migration and are not saved on the device. Existing data is not deleted. Incompatible columns are not rewritten.</p>
+        <form id="mdb-migration-form" autocomplete="off">
+          <div class="mb-3">
+            <label for="mdb-migration-user" class="form-label" data-mdb-text="migrationUser">Migration user</label>
+            <input id="mdb-migration-user" class="form-control" maxlength="64" required autocomplete="off">
+          </div>
+          <div class="mb-3">
+            <label for="mdb-migration-password" class="form-label" data-mdb-text="migrationPassword">Migration password</label>
+            <input id="mdb-migration-password" class="form-control" type="password" maxlength="64" required autocomplete="new-password">
+          </div>
+          <div class="d-flex justify-content-end gap-2">
+            <button id="mdb-migration-cancel" class="btn btn-outline-secondary" type="button" data-mdb-text="cancel">Cancel</button>
+            <button class="btn btn-warning" type="submit" data-mdb-text="migrationRun">Create structure</button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+    <hr>
     <dl class="row mb-3">
       <dt class="col-sm-4"><span data-i18n="text.630d1a734a83">State</span></dt>
       <dd class="col-sm-8"><span id="mdb-state" class="badge text-bg-secondary">-</span>

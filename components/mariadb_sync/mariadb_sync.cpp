@@ -7,6 +7,7 @@
 #include <cinttypes>
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -18,6 +19,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "mariadb_client.h"
+#include "mariadb_schema.h"
 #include "mariadb_sync_internal.h"
 extern "C" {
 #include "network_manager.h"
@@ -44,6 +46,12 @@ bool settings_loaded = false;
 Status current_status;
 TaskHandle_t worker_handle = nullptr;
 int64_t last_attempt_us = 0;
+bool startup_schema_check_pending = false;
+struct MigrationCredentials {
+    std::string user;
+    std::string password;
+};
+MigrationCredentials pending_migration;
 
 time_t wall_clock()
 {
@@ -109,10 +117,33 @@ void finish(State state, const std::string &message)
     current_status.state = state;
     current_status.message = message;
     current_status.busy = false;
-    if (state == State::Error) {
-        ESP_LOGW(TAG, "%s", message.c_str());
-    } else {
+    if (state != State::Error) {
         ESP_LOGI(TAG, "%s", message.c_str());
+    }
+}
+
+void record_schema_check(const SchemaCheck &check)
+{
+    std::lock_guard<std::mutex> lock(state_mutex);
+    switch (check.state) {
+    case SchemaResultState::Ready:
+        current_status.schema_state = SchemaState::Ready;
+        break;
+    case SchemaResultState::NeedsMigration:
+        current_status.schema_state = SchemaState::NeedsMigration;
+        break;
+    case SchemaResultState::Incompatible:
+        current_status.schema_state = SchemaState::Incompatible;
+        break;
+    default:
+        current_status.schema_state = SchemaState::Error;
+        break;
+    }
+    current_status.schema_message = check.message;
+    if (check.state != SchemaResultState::Ready) {
+        current_status.state = State::Error;
+        current_status.message = check.message;
+        current_status.busy = false;
     }
 }
 
@@ -688,9 +719,88 @@ bool check_preconditions(const Settings &settings, std::string &error)
     return network_ready(error);
 }
 
+bool check_remote_schema(MariaDbClient &client)
+{
+    const SchemaCheck result = inspect_schema(client);
+    {
+        std::lock_guard<std::mutex> lock(state_mutex);
+        startup_schema_check_pending = false;
+    }
+    record_schema_check(result);
+    return result.state == SchemaResultState::Ready;
+}
+
+void run_schema_check(const Settings &settings)
+{
+    std::string error;
+    if (!check_preconditions(settings, error)) {
+        finish(State::Error, error);
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> lock(state_mutex);
+        startup_schema_check_pending = false;
+    }
+    MariaDbClient client;
+    if (!client.connect(client_config(settings), error)) {
+        record_schema_check({SchemaResultState::Error, "Connection failed: " + error});
+        finish(State::Error, "Connection failed: " + error);
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> lock(state_mutex);
+        current_status.server_version = client.server_version();
+    }
+    const SchemaCheck result = inspect_schema(client);
+    record_schema_check(result);
+    if (result.state == SchemaResultState::Ready) {
+        finish(State::Ok, result.message);
+    }
+}
+
+void run_schema_migration(const Settings &settings, MigrationCredentials credentials)
+{
+    Settings admin_settings = settings;
+    admin_settings.user = std::move(credentials.user);
+    admin_settings.password = std::move(credentials.password);
+    std::string error;
+    if (!check_preconditions(admin_settings, error)) {
+        finish(State::Error, error);
+        return;
+    }
+    MariaDbClient client;
+    if (!client.connect(client_config(admin_settings), error)) {
+        record_schema_check({SchemaResultState::Error, "Migration login failed: " + error});
+        finish(State::Error, "Migration login failed: " + error);
+        return;
+    }
+    if (!migrate_schema(client, error)) {
+        const SchemaCheck check = inspect_schema(client);
+        if (check.state != SchemaResultState::Ready) {
+            record_schema_check(check);
+            std::lock_guard<std::mutex> lock(state_mutex);
+            current_status.state = State::Error;
+            current_status.message = error;
+            current_status.schema_message = error;
+            current_status.busy = false;
+        } else {
+            finish(State::Error, error);
+        }
+        std::fill(admin_settings.password.begin(), admin_settings.password.end(), '\0');
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> lock(state_mutex);
+        current_status.server_version = client.server_version();
+    }
+    record_schema_check({SchemaResultState::Ready, "MariaDB structure created and verified."});
+    finish(State::Ok, "MariaDB structure created and verified.");
+    std::fill(admin_settings.password.begin(), admin_settings.password.end(), '\0');
+}
+
 void run_test(const Settings &settings)
 {
-    update_status(State::Testing, "Verbindung wird getestet ...");
+    update_status(State::Testing, "Testing MariaDB connection ...");
     std::string error;
     if (!check_preconditions(settings, error)) {
         finish(State::Error, error);
@@ -699,6 +809,9 @@ void run_test(const Settings &settings)
     MariaDbClient client;
     if (!client.connect(client_config(settings), error)) {
         finish(State::Error, "Connection failed: " + error);
+        return;
+    }
+    if (!check_remote_schema(client)) {
         return;
     }
     std::vector<std::vector<std::string>> rows;
@@ -721,11 +834,19 @@ void run_sync(const Settings &settings, bool full)
         current_status.last_attempt = wall_clock();
         last_attempt_us = esp_timer_get_time();
     }
-    update_status(State::Syncing, full ? "Vollstaendige Uebertragung wird vorbereitet ..."
+    update_status(State::Syncing, full ? "Preparing full transfer ..."
                                        : "Preparing synchronization ...");
     std::string error;
     if (!check_preconditions(settings, error)) {
         finish(State::Error, error);
+        return;
+    }
+    MariaDbClient client;
+    if (!client.connect(client_config(settings), error)) {
+        finish(State::Error, "Connection failed: " + error);
+        return;
+    }
+    if (!check_remote_schema(client)) {
         return;
     }
     PrepareContext prepare;
@@ -747,11 +868,6 @@ void run_sync(const Settings &settings, bool full)
         current_status.state = State::Ok;
         current_status.message = "Everything up to date — no new data";
         current_status.busy = false;
-        return;
-    }
-    MariaDbClient client;
-    if (!client.connect(client_config(settings), error)) {
-        finish(State::Error, "Connection failed: " + error);
         return;
     }
     uint32_t measurements = 0;
@@ -776,6 +892,27 @@ void run_sync(const Settings &settings, bool full)
     finish(State::Ok, message);
 }
 
+bool claim_startup_schema_check()
+{
+    std::lock_guard<std::mutex> lock(state_mutex);
+    load_settings_locked();
+    if (!startup_schema_check_pending || !settings_loaded || current_status.busy ||
+        current_settings.host.empty() || current_settings.user.empty() ||
+        current_settings.database.empty() || current_settings.password.empty()) {
+        return false;
+    }
+    network_status_t network = {};
+    network_manager_get_status(&network);
+    if (!network.connected) {
+        return false;
+    }
+    startup_schema_check_pending = false;
+    current_status.busy = true;
+    current_status.state = State::Testing;
+    current_status.message = "Checking MariaDB database structure ...";
+    return true;
+}
+
 /* Claims the worker for an automatic sync when enabled, due and the prerequisites are met. */
 bool claim_automatic_sync()
 {
@@ -784,7 +921,9 @@ bool claim_automatic_sync()
     const int64_t now = esp_timer_get_time();
     if (!settings_loaded || !current_settings.enabled || current_settings.interval_minutes == 0 ||
         current_settings.password.empty() || current_status.busy || now < AUTO_START_DELAY_US ||
-        !battery_database_is_ready()) {
+        current_status.schema_state == SchemaState::NeedsMigration ||
+        current_status.schema_state == SchemaState::Incompatible ||
+        current_status.schema_state == SchemaState::Disabled || !battery_database_is_ready()) {
         return false;
     }
     if (last_attempt_us != 0 &&
@@ -806,16 +945,29 @@ void worker_task(void *)
         uint32_t commands = 0;
         xTaskNotifyWait(0, UINT32_MAX, &commands, WORKER_POLL);
         if (commands == 0) {
-            if (!claim_automatic_sync()) {
+            if (claim_startup_schema_check()) {
+                commands = COMMAND_SCHEMA_CHECK;
+            } else if (!claim_automatic_sync()) {
                 continue;
+            } else {
+                ESP_LOGI(TAG, "Starting automatic MariaDB sync");
+                commands = COMMAND_SYNC;
             }
-            ESP_LOGI(TAG, "Starting automatic MariaDB sync");
-            commands = COMMAND_SYNC;
         }
         const Settings settings = get_settings();
-        if ((commands & COMMAND_TEST) != 0) {
+        if ((commands & COMMAND_SCHEMA_MIGRATION) != 0) {
+            MigrationCredentials credentials;
+            {
+                std::lock_guard<std::mutex> lock(state_mutex);
+                credentials = std::move(pending_migration);
+                pending_migration = {};
+            }
+            run_schema_migration(settings, std::move(credentials));
+        } else if ((commands & COMMAND_SCHEMA_CHECK) != 0) {
+            run_schema_check(settings);
+        } else if ((commands & COMMAND_TEST) != 0) {
             run_test(settings);
-        } else {
+        } else if ((commands & COMMAND_SYNC) != 0) {
             run_sync(settings, (commands & COMMAND_FULL_SYNC) != 0);
         }
     }
@@ -869,6 +1021,9 @@ esp_err_t save_settings(const Settings &settings, bool keep_password)
     if (err == ESP_OK) {
         current_settings = std::move(updated);
         settings_loaded = true;
+        if (current_settings.enabled) {
+            current_status.schema_state = SchemaState::Unknown;
+        }
         ESP_LOGI(TAG, "MariaDB settings saved (%s@%s:%u/%s, auto=%d, every %u min)",
                  current_settings.user.c_str(), current_settings.host.c_str(),
                  static_cast<unsigned>(current_settings.port), current_settings.database.c_str(),
@@ -889,10 +1044,58 @@ esp_err_t request(uint32_t command)
     if (worker_handle == nullptr || current_status.busy) {
         return ESP_ERR_INVALID_STATE;
     }
+    if (current_status.schema_state == SchemaState::Disabled &&
+        (command & (COMMAND_TEST | COMMAND_SYNC)) != 0) {
+        return ESP_ERR_INVALID_STATE;
+    }
     current_status.busy = true;
     current_status.state = (command & COMMAND_TEST) != 0 ? State::Testing : State::Syncing;
     current_status.message = "Starting operation ...";
     xTaskNotify(worker_handle, command, eSetBits);
+    return ESP_OK;
+}
+
+esp_err_t request_schema_migration(const std::string &user, const std::string &password)
+{
+    std::lock_guard<std::mutex> lock(state_mutex);
+    if (worker_handle == nullptr || current_status.busy || user.empty() || password.empty()) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    pending_migration.user = user;
+    pending_migration.password = password;
+    current_status.busy = true;
+    current_status.state = State::Testing;
+    current_status.message = "Starting one-time MariaDB schema migration ...";
+    xTaskNotify(worker_handle, COMMAND_SCHEMA_MIGRATION, eSetBits);
+    return ESP_OK;
+}
+
+esp_err_t disable_after_migration_declined()
+{
+    std::lock_guard<std::mutex> lock(state_mutex);
+    if (worker_handle == nullptr || current_status.busy) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    load_settings_locked();
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = nvs_set_u8(handle, "enabled", 0);
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+    nvs_close(handle);
+    if (err != ESP_OK) {
+        return err;
+    }
+    current_settings.enabled = false;
+    current_status.schema_state = SchemaState::Disabled;
+    current_status.schema_message = "MariaDB was disabled because schema migration was declined.";
+    current_status.state = State::Error;
+    current_status.message = current_status.schema_message;
+    current_status.busy = false;
     return ESP_OK;
 }
 
@@ -906,6 +1109,14 @@ esp_err_t start_worker()
         ESP_LOGE(TAG, "Cannot create MariaDB sync task");
         return ESP_ERR_NO_MEM;
     }
+    {
+        std::lock_guard<std::mutex> lock(state_mutex);
+        startup_schema_check_pending = true;
+        current_status.busy = true;
+        current_status.state = State::Testing;
+        current_status.message = "Checking MariaDB database structure ...";
+    }
+    xTaskNotify(worker_handle, COMMAND_SCHEMA_CHECK, eSetBits);
     return ESP_OK;
 }
 
