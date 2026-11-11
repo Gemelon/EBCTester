@@ -659,8 +659,9 @@ The OTA manifest format is unchanged. See
 On GitHub, a push to `main` automatically builds a release when the version in
 `CMakeLists.txt` is newer than the latest release and has not already been
 published. The release includes the OTA image, full-install image, update
-manifest, and license bundle. Existing versions are never replaced. Update
-`CHANGELOG.md` and `PROJECT_VER` before publishing a new version.
+manifest pointing to its GitHub OTA image, and license bundle. Existing
+versions are never replaced. Update `CHANGELOG.md` and `PROJECT_VER` before
+publishing a new version.
 
 ## Limitations, safety, and contributions
 

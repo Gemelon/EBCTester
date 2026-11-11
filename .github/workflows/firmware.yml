@@ -96,7 +96,7 @@ jobs:
             "project": "EBCTester",
             "target": "esp32s3",
             "version": "$v",
-            "url": "https://ebctester.gemelon.de/EBCTester-${v}.bin",
+            "url": "https://github.com/${GITHUB_REPOSITORY}/releases/download/v${v}/EBCTester-${v}.bin",
             "size": $size,
             "sha256": "$sha256",
             "notes": "Manifest-based update availability; manual installation only."
