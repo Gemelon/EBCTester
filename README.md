@@ -3,6 +3,12 @@
 
 # EBCTester
 
+[![Latest release](https://img.shields.io/github/v/release/Gemelon/EBCTester?display_name=tag)](https://github.com/Gemelon/EBCTester/releases/latest)
+[![Firmware build](https://github.com/Gemelon/EBCTester/actions/workflows/firmware.yml/badge.svg)](https://github.com/Gemelon/EBCTester/actions/workflows/firmware.yml)
+[![Top language](https://img.shields.io/github/languages/top/Gemelon/EBCTester)](https://github.com/Gemelon/EBCTester)
+[![Languages](https://img.shields.io/github/languages/count/Gemelon/EBCTester)](https://github.com/Gemelon/EBCTester)
+[![License](https://img.shields.io/github/license/Gemelon/EBCTester)](LICENSE)
+
 > EBCTester V2 is the current stable release line.
 
 <p align="center">
@@ -16,6 +22,9 @@ microcontroller operates the tester, executes test plans, and records
 measurements on an SD card. Its local web interface lets you manage batteries,
 follow measurements, and view charts from a phone, even outside your home
 Wi-Fi network.
+
+Install EBCTester firmware directly from your browser with the
+[WebFlasher](https://gemelon.github.io/EBCTester/).
 
 ## User manuals
 
