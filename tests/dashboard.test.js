@@ -19,6 +19,8 @@ function page(runs = [], error = null) {
   const requests = [];
   const charts = [];
   const timers = [];
+  const pendingTimers = new Map();
+  let timerId = 0;
   const observers = new Map();
   const translations = { ...strings };
   function element(id) {
@@ -56,8 +58,19 @@ function page(runs = [], error = null) {
       constructor(canvas, options) { charts.push(options); }
       destroy() {}
     },
-    setTimeout(callback) { timers.push(callback); return timers.length; },
-    clearTimeout() {},
+    setTimeout(callback, delay) {
+      const id = ++timerId;
+      const scheduled = () => { pendingTimers.delete(id); callback(); };
+      scheduled.delay = delay;
+      pendingTimers.set(id, scheduled);
+      timers.push(scheduled);
+      return id;
+    },
+    clearTimeout(id) {
+      const index = timers.indexOf(pendingTimers.get(id));
+      if (index >= 0) timers.splice(index, 1);
+      pendingTimers.delete(id);
+    },
     addEventListener(name, listener) { documentListeners[name] = listener; },
     fetch: async (url, options) => {
       requests.push({ url, options });
@@ -80,7 +93,12 @@ function page(runs = [], error = null) {
   context.window = context;
   vm.createContext(context);
   vm.runInContext(script, context);
-  return { element, requests, charts, timers, documentListeners, observers, translations };
+  return {
+    element, requests, charts, timers, documentListeners, observers, translations,
+    document: context.document,
+    setError(value) { error = value; },
+    setRuns(value) { runs = value; },
+  };
 }
 
 const settle = () => new Promise(setImmediate);
@@ -135,6 +153,71 @@ test("database errors remain visible without generating or deleting data", async
   assert.match(view.element("dash-message").textContent, /Database not ready/);
   assert.match(view.element("dash-message").className, /alert-danger/);
   assert.equal(view.requests.length, 1);
+});
+
+test("catalog retries keep errors visible until the database recovers, then clear the alert", async () => {
+  const view = page([], "Database not ready.");
+  await settle();
+  view.element("dash-refresh").listeners.click();
+  await settle();
+  assert.equal(view.timers.length, 1, "manual retries must replace the pending automatic retry");
+  assert.equal(view.timers[0].delay, 15000);
+  view.timers.shift()();
+  await settle();
+  assert.match(view.element("dash-message").className, /alert-danger/);
+  assert.equal(view.timers.length, 1);
+  view.setError(null);
+  view.setRuns([{ id: "restored-run", batteryId: 1, status: "COMPLETED" }]);
+  view.timers.shift()();
+  await settle();
+  assert.equal(view.element("dash-message").textContent, "");
+  assert.match(view.element("dash-message").className, /d-none/);
+  assert.equal(view.element("dash-run").value, "restored-run");
+  assert.equal(view.element("dash-load").disabled, false);
+  assert.equal(view.timers.length, 0, "successful recovery must stop catalog retries");
+  assert.ok(view.requests.every(({ url }) => url === "/api/db/runs"));
+});
+
+test("manual catalog recovery clears the error and cancels retries", async () => {
+  const view = page([], "Database not ready.");
+  view.element("dash-refresh").listeners.click();
+  assert.equal(view.requests.length, 1, "an in-flight catalog request must not be duplicated");
+  await settle();
+  view.setError(null);
+  view.setRuns([{ id: "restored-run", batteryId: 1, status: "COMPLETED" }]);
+  view.element("dash-refresh").listeners.click();
+  await settle();
+  assert.equal(view.element("dash-message").textContent, "");
+  assert.match(view.element("dash-message").className, /d-none/);
+  assert.equal(view.timers.length, 0);
+});
+
+test("recovery with an empty database replaces the error with the empty-list message", async () => {
+  const view = page([], "Database not ready.");
+  await settle();
+  view.setError(null);
+  view.timers.shift()();
+  await settle();
+  assert.equal(view.element("dash-message").textContent, "No test runs in the database yet.");
+  assert.doesNotMatch(view.element("dash-message").className, /alert-danger|d-none/);
+  assert.equal(view.element("dash-load").disabled, true);
+  assert.equal(view.timers.length, 0);
+});
+
+test("catalog retries pause requests while the page is hidden and resume when visible", async () => {
+  const view = page([], "Database not ready.");
+  await settle();
+  view.document.visibilityState = "hidden";
+  view.timers.shift()();
+  await settle();
+  assert.equal(view.requests.length, 1);
+  assert.equal(view.timers.length, 1);
+  view.document.visibilityState = "visible";
+  view.setError(null);
+  view.timers.shift()();
+  await settle();
+  assert.equal(view.requests.length, 2);
+  assert.equal(view.timers.length, 0);
 });
 
 test("the header shows the saved tester model while disconnected and preserves mismatch errors", () => {

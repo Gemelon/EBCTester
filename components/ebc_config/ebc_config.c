@@ -27,6 +27,11 @@ static bool initialized;
 static bool config_active;
 static ebc_fw_mode_t firmware_mode;
 _Static_assert(sizeof(ebc_config_t) <= UINT16_MAX, "Configuration payload exceeds blob length field");
+_Static_assert(offsetof(ebc_config_t, sd.card_detect_active_high) ==
+               offsetof(ebc_config_t, sd.spi_clk_gpio) + 1 &&
+               offsetof(ebc_config_t, rtc) ==
+               offsetof(ebc_config_t, sd.card_detect_active_high) + 1,
+               "Card-detect polarity must occupy the legacy SD padding byte");
 
 static void copy_default(char *destination, size_t capacity, const char *source, const char *name)
 {
@@ -89,6 +94,9 @@ static void load_defaults(ebc_config_t *cfg)
     cfg->sd.card_detect_gpio = -1;
 #ifdef CONFIG_SD_CARD_MANAGER_GPIO_CARD_DETECT
     cfg->sd.card_detect_gpio = CONFIG_SD_CARD_MANAGER_GPIO_CARD_DETECT;
+#endif
+#ifdef CONFIG_SD_CARD_MANAGER_CARD_DETECT_ACTIVE_HIGH
+    cfg->sd.card_detect_active_high = 1;
 #endif
     copy_default(cfg->sd.mount_point, sizeof(cfg->sd.mount_point), CONFIG_SD_CARD_MANAGER_MOUNT_POINT, "mount point");
     cfg->sd.clk_gpio = cfg->sd.cmd_gpio = -1;
@@ -202,6 +210,7 @@ esp_err_t ebc_config_validate(const ebc_config_t *cfg, bool active)
         cfg->sd.sdmmc_freq_khz < 400 || cfg->sd.sdmmc_freq_khz > 20000 ||
         cfg->sd.spi_freq_khz < 400 || cfg->sd.spi_freq_khz > 20000 ||
         (cfg->sd.bus != SD_BUS_SDMMC_4BIT && cfg->sd.bus != SD_BUS_SPI) ||
+        cfg->sd.card_detect_active_high > 1 ||
         cfg->rtc.enabled > 1 || cfg->tester.mqtt_enabled > 1 || cfg->ota.allow_http > 1 ||
         cfg->ota.status_led_enabled > 1 || cfg->ota.settings_require_password > 1 ||
         cfg->ota.sd_languages > 1 || cfg->ota.login_enabled > 1 ||
@@ -371,11 +380,15 @@ static esp_err_t load(bool *valid)
                         size == offsetof(ebc_config_blob_t, payload) + legacy_length;
     if (err == ESP_OK && blob->magic == EBC_CONFIG_MAGIC &&
         (legacy || (size == sizeof(*blob) && blob->length == sizeof(blob->payload)))) {
-        if (!legacy && blob->version != EBC_CONFIG_VERSION) {
+        if (!legacy && blob->version != 2 && blob->version != EBC_CONFIG_VERSION) {
             ESP_LOGI(TAG, "Configuration validation: version mismatch (%u)", blob->version);
         } else if (blob->crc != esp_crc32_le(0, (const uint8_t *)&blob->payload, blob->length)) {
             ESP_LOGI(TAG, "Configuration validation: CRC mismatch");
         } else {
+            if (blob->version < 3) {
+                blob->payload.sd.card_detect_active_high = 1;
+                migrated = true;
+            }
             if (legacy) {
                 blob->payload.rtc.enabled = 0;
                 blob->payload.rtc.int_gpio = CONFIG_EBCTESTER_RTC_INT_GPIO;

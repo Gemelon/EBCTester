@@ -3,6 +3,38 @@
 
 # Changelog
 
+## [2.0.9] - 2026-11-12
+
+### Fixed
+
+- Retry failed dashboard run-list requests every 15 seconds while the page is
+  visible, and clear the error once the SD card database becomes available.
+- Successful manual refreshes also clear stale errors and cancel pending retries;
+  empty databases show the normal empty-list message instead.
+
+### Validation
+
+- All 25 dashboard and run-management host tests passed. Full ESP-IDF build and
+  local publication succeeded; the versioned image matches the built firmware
+  and the manifest's version, size and SHA256.
+- No hardware test, flashing or public OTA upload was performed.
+
+## [2.0.8] - 2026-11-12
+
+### Changed
+
+- Add configurable SD card-detect polarity in menuconfig and Maker Settings.
+  New/reset configurations default to active low; existing saved configurations
+  retain active-high behavior until changed.
+- Keep GPIO `-1` available to bypass card detection in both settings interfaces.
+
+### Validation
+
+- Full ESP-IDF build and local package verification succeeded, including image
+  size, SHA256 and manifest checks. Host tests passed for both polarities,
+  insertion/removal debounce, configuration migration and Maker Settings.
+- No hardware test, flashing or public OTA upload was performed.
+
 ## [2.0.7] – 2026-11-11
 
 ### Fixed

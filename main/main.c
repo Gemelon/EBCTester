@@ -90,6 +90,7 @@ static void configure_services(bool active)
         .enabled = active,
         .frequency_khz = cfg->sd.bus == SD_BUS_SPI ? cfg->sd.spi_freq_khz : cfg->sd.sdmmc_freq_khz,
         .card_detect_gpio = cfg->sd.card_detect_gpio,
+        .card_detect_active_high = cfg->sd.card_detect_active_high != 0,
         .clk_gpio = cfg->sd.clk_gpio, .cmd_gpio = cfg->sd.cmd_gpio,
         .d0_gpio = cfg->sd.d0_gpio, .d1_gpio = cfg->sd.d1_gpio,
         .d2_gpio = cfg->sd.d2_gpio, .d3_gpio = cfg->sd.d3_gpio,

@@ -75,6 +75,7 @@ const Field fields[] = {
     FIELD(sd, sdmmc_freq_khz, "sdmmc_freq_khz", "SDMMC frequency (kHz)", U32, 400, 20000),
     FIELD(sd, spi_freq_khz, "spi_freq_khz", "SPI frequency (kHz)", U32, 400, 20000),
     FIELD(sd, card_detect_gpio, "card_detect_gpio", "Card-detect GPIO (-1: not connected)", Gpio, -1, 48),
+    FIELD(sd, card_detect_active_high, "card_detect_active_high", "Card detect active high (off: active low)", Bool, 0, 1),
     FIELD(sd, mount_point, "mount_point", "SD mount point", String, 0, 0),
     FIELD(sd, clk_gpio, "clk_gpio", "SDMMC CLK GPIO", Gpio, -1, 48),
     FIELD(sd, cmd_gpio, "cmd_gpio", "SDMMC CMD GPIO", Gpio, -1, 48),

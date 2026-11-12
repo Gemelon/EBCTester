@@ -474,9 +474,13 @@ The current V2 configuration selects SPI for the SD card:
 | — / D3 | — | 17 |
 | Card detect | 13 | 13 |
 
-Both bus modes are configured for 10 MHz. Firmware expects the card-detect
-input to be high when a card is inserted. The original board's switch is
-active-low; configure card detect as `-1` for that wiring in Maker Settings.
+Both bus modes are configured for 10 MHz. Card detection defaults to active
+low, matching the original board's switch. Enable **Card detect active high
+(off: active low)** in Maker Settings or
+`CONFIG_SD_CARD_MANAGER_CARD_DETECT_ACTIVE_HIGH` in menuconfig for active-high
+wiring. Existing saved configurations retain active-high detection after an
+upgrade; clear the Maker checkbox for an active-low switch. Use GPIO `-1`
+only when no card-detect switch is connected. Changes take effect after restart.
 Cards are **never formatted automatically**; exFAT is unsupported. The RTC
 uses INT/SDA/SCL GPIO 14/15/16. The optional WS2812 LED uses GPIO 48.
 

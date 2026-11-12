@@ -47,7 +47,8 @@ restart that follows <span class="ui">Save and restart</span>.</p>
   <tbody>
   <tr><td class="k">SD bus</td><td>4-bit SDMMC / SPI</td><td>Bus mode of the card socket. Only the pins of the selected bus are used.</td></tr>
   <tr><td class="k">SDMMC / SPI frequency</td><td>400 … 20000 kHz</td><td>Bus clock, default 10 000 kHz. Reduce it for long wires.</td></tr>
-  <tr><td class="k">Card-detect GPIO</td><td>−1 … 48</td><td>Input that is <b>high</b> when a card is inserted. <code>−1</code> = no card-detect switch; the card is then assumed to be present. For a switch that pulls the signal low with a card inserted (as on the original board), enter <code>−1</code>.</td></tr>
+  <tr><td class="k">Card-detect GPIO</td><td>−1 … 48</td><td>Card-detect input. <code>−1</code> = no card-detect switch; the card is then assumed to be present regardless of polarity.</td></tr>
+  <tr><td class="k">Card detect active high (off: active low)</td><td>on / off</td><td>Off by default: a low input means a card is inserted, matching the original board. Enable for active-high wiring. Existing saved configurations retain active-high behavior after an upgrade; clear this checkbox for active-low wiring and set the actual detect GPIO. Saving restarts the device.</td></tr>
   <tr><td class="k">SD mount point</td><td><code>/name</code></td><td>Mount point of the file system, default <code>/sdcard</code>. One level only.</td></tr>
   <tr><td class="k">SDMMC CLK, CMD, D0 … D3 GPIO</td><td>−1 … 48</td><td>Pins for 4-bit SDMMC; all six are required with this bus.</td></tr>
   <tr><td class="k">SPI MISO, MOSI, CS, CLK GPIO</td><td>−1 … 48</td><td>Pins for SPI; all four are required with this bus.</td></tr>

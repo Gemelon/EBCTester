@@ -19,7 +19,7 @@ extern "C" {
 #define EBC_CONFIG_DEVICE_ID_MAX 65
 #define EBC_CONFIG_MOUNT_POINT_MAX 64
 #define EBC_CONFIG_MAGIC UINT32_C(0x45424332)
-#define EBC_CONFIG_VERSION 2
+#define EBC_CONFIG_VERSION 3
 
 typedef enum { EBC_FW_MAKER = 0, EBC_FW_FACTORY = 1 } ebc_fw_mode_t;
 typedef enum { IO47_OPEN, IO47_LOW, IO47_HIGH, IO47_ERROR } ebc_io47_state_t;
@@ -77,6 +77,8 @@ typedef struct {
         int8_t spi_mosi_gpio;
         int8_t spi_cs_gpio;
         int8_t spi_clk_gpio;
+        /* Uses the former trailing SD padding byte, preserving v1/v2 offsets. */
+        uint8_t card_detect_active_high;
     } sd;
 #ifdef __cplusplus
     alignas(4)

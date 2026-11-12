@@ -55,6 +55,7 @@ with tempfile.TemporaryDirectory(prefix="ebctester-config-") as temporary:
         selected = dict(defaults)
         if spi:
             selected["SD_CARD_MANAGER_BUS_SPI"] = "1"
+            selected["SD_CARD_MANAGER_CARD_DETECT_ACTIVE_HIGH"] = "1"
         else:
             selected["SD_CARD_MANAGER_BUS_SDMMC_4BIT"] = "1"
         (work / "sdkconfig.h").write_text(

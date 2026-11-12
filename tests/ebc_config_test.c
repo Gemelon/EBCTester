@@ -226,6 +226,11 @@ int main(void)
 #endif
         assert(cfg->sd.sdmmc_freq_khz == 12000 && cfg->sd.spi_freq_khz == 8000);
         assert(cfg->sd.card_detect_gpio == 13 && strcmp(cfg->sd.mount_point, "/sdcard") == 0);
+#ifdef CONFIG_SD_CARD_MANAGER_CARD_DETECT_ACTIVE_HIGH
+        assert(cfg->sd.card_detect_active_high == 1);
+#else
+        assert(cfg->sd.card_detect_active_high == 0);
+#endif
         assert(cfg->sd.clk_gpio == 10 && cfg->sd.cmd_gpio == 11);
         assert(cfg->sd.d0_gpio == 12 && cfg->sd.d1_gpio == 4);
         assert(cfg->sd.d2_gpio == 5 && cfg->sd.d3_gpio == 6);
@@ -260,6 +265,16 @@ int main(void)
     reboot();
     assert(ebc_config_init() == ESP_OK && reads == 6);
     ebc_config_t next = *ebc_config_get();
+    next.sd.card_detect_active_high = 2;
+    assert(ebc_config_validate(&next, false) == ESP_ERR_INVALID_ARG);
+    for (unsigned polarity = 0; polarity <= 1; ++polarity) {
+        next.sd.card_detect_active_high = polarity;
+        assert(ebc_config_save(&next) == ESP_OK);
+        reboot();
+        assert(ebc_config_init() == ESP_OK && reads == 0);
+        assert(ebc_config_get()->sd.card_detect_active_high == polarity);
+    }
+    next = *ebc_config_get();
     next.rtc.enabled = 1;
     next.rtc.sda_gpio = next.sd.bus == SD_BUS_SPI ? next.sd.spi_mosi_gpio : next.sd.cmd_gpio;
     assert(ebc_config_validate(&next, true) != ESP_OK);
@@ -284,6 +299,7 @@ int main(void)
     fresh(1, 1);
     assert(ebc_config_init() == ESP_OK);
     strcpy(stored_blob.payload.tester.device_id, "preserve-on-upgrade");
+    stored_blob.payload.sd.card_detect_active_high = 0xff;
     stored_blob.version = 1;
     stored_blob.length = (uint16_t)offsetof(ebc_config_t, rtc);
     stored_blob.crc = esp_crc32_le(0, (const uint8_t *)&stored_blob.payload, stored_blob.length);
@@ -293,6 +309,15 @@ int main(void)
     assert(ebc_config_is_active() && ebc_config_get_mode() == EBC_FW_FACTORY);
     assert(strcmp(ebc_config_get()->tester.device_id, "preserve-on-upgrade") == 0);
     assert(ebc_config_get()->rtc.enabled && ebc_config_get()->rtc.sda_gpio == 15);
+    assert(stored_blob.version == EBC_CONFIG_VERSION && strcmp(write_order, "BMAC") == 0);
+    assert(ebc_config_get()->sd.card_detect_active_high == 1);
+    stored_blob.version = 2;
+    stored_blob.payload.sd.card_detect_active_high = 0xff;
+    stored_blob.crc = esp_crc32_le(0, (const uint8_t *)&stored_blob.payload, stored_blob.length);
+    reboot();
+    assert(ebc_config_init() == ESP_OK && reads == 0 && ebc_config_is_active());
+    assert(strcmp(ebc_config_get()->tester.device_id, "preserve-on-upgrade") == 0);
+    assert(ebc_config_get()->sd.card_detect_active_high == 1);
     assert(stored_blob.version == EBC_CONFIG_VERSION && strcmp(write_order, "BMAC") == 0);
     stored_blob.payload.rtc.enabled = 0;
     stored_blob.payload.rtc.int_gpio = 1;

@@ -150,7 +150,7 @@ configuration.</p>
 <table>
   <thead><tr><th>Key</th><th>Type</th><th>Content</th></tr></thead>
   <tbody>
-  <tr><td class="k"><code>config</code></td><td>blob</td><td>Header (magic <code>0x45424332</code> "EBC2", structure version 2, payload length, CRC-32) followed by the complete configuration structure</td></tr>
+  <tr><td class="k"><code>config</code></td><td>blob</td><td>Header (magic <code>0x45424332</code> "EBC2", structure version 3, payload length, CRC-32) followed by the complete configuration structure</td></tr>
   <tr><td class="k"><code>FirmwareMode</code></td><td>u8</td><td>0 = MakerMode, 1 = FactoryMode</td></tr>
   <tr><td class="k"><code>ConfigAktive</code></td><td>u8</td><td>0 = inactive (setup only), 1 = active</td></tr>
   </tbody>
@@ -175,7 +175,7 @@ erase), the partition is erased and initialised again; the device then starts li
   <tbody>
   <tr><td class="k">tester</td><td>tester UART TX/RX/baud, dongle UART TX/RX/baud, averaging length, device ID, MQTT enabled</td></tr>
   <tr><td class="k">ota</td><td>AP password, SNTP server, manifest URL, web (login) password, primary tabs, tab order, HTTP OTA allowed, status LED enabled and GPIO, settings-password confirmation, SD languages, session duration (1/7 days), browser login enabled</td></tr>
-  <tr><td class="k">sd</td><td>bus (0 = 4-bit SDMMC, 1 = SPI), SDMMC and SPI frequency, card-detect GPIO, mount point, CLK/CMD/D0–D3, MISO/MOSI/CS/CLK</td></tr>
+  <tr><td class="k">sd</td><td>bus (0 = 4-bit SDMMC, 1 = SPI), SDMMC and SPI frequency, card-detect GPIO and active-high flag (structure version 3; new/reset default: active low), mount point, CLK/CMD/D0–D3, MISO/MOSI/CS/CLK</td></tr>
   <tr><td class="k">rtc</td><td>RTC enabled, INT GPIO (reserved input), I²C SDA and SCL GPIO (structure version 2). FactoryMode forces enabled with GPIO 14/15/16 on every load and save.</td></tr>
   </tbody>
 </table>
@@ -221,9 +221,10 @@ in FactoryMode without any setting. On a Maker device they are only a proposal i
   <tr><td class="k">Real-time clock</td><td>INT / SDA / SCL = GPIO 14 / 15 / 16; Factory: on, Maker: off</td><td class="k">LED functions</td><td>2 LEDs: tester mode + OTA, message frames</td></tr>
   </tbody>
 </table>
-<only maker><div class="caution"><b>Caution</b>Firmware 2.0.0 evaluates the card-detect input as active-high
-only. The switch of the original board is active-low (GPIO 13 reads low with a card inserted). On a Maker device
-with this circuit, enter <code>−1</code> for the card-detect GPIO until a polarity option is available.</div></only>
+<only maker><div class="caution"><b>Card-detect polarity</b>The original board is active-low
+(GPIO 13 reads low with a card inserted). Clear <span class="ui">Card detect active high (off: active low)</span>
+in Maker Settings and enter the actual detect GPIO. New/reset configurations default to active low;
+upgraded saved configurations retain active high until changed.</div></only>
 
 <h2 class="chapter">Hardware</h2>
 <p>The EBCTester board is a compact controller board. It contains no measurement circuit of its own – all
@@ -444,7 +445,7 @@ point.</p>
 <ul>
   <li>Use a level shifter between the 5 V tester port and the ESP32. A plain resistor divider on the RX line works, but the TX line needs a real driver for reliable 5 V levels.</li>
   <li>SD lines need 10 kΩ pull-ups to 3.3 V; keep the wires short (a few cm) or lower the SD frequency.</li>
-  <li>The card-detect input must be high when a card is inserted (firmware 2.0.0). Without a switch, or with an active-low switch, enter −1.</li>
+  <li>Card detection defaults to active low. Enable the active-high option for wiring that is high with a card inserted. Without a switch, enter −1.</li>
   <li>A DS3231 needs pull-ups of 2.2–10 kΩ to 3.3 V on SDA and SCL (most modules have them). Supply the module with 3.3 V so that its pull-ups do not pull the ESP32 pins to 5 V.</li>
   <li>For a WS2812 supplied with 5 V, make sure that 3.3 V data is recognised as high (supply the first LED via a diode as on the original board, or use a level shifter).</li>
 </ul>
@@ -939,7 +940,6 @@ firmware.</p>
   <li>Only EBC-A20, EBC-A40L and EBC-A50L can be controlled; physical tests with the A50L are pending.</li>
   <li>No battery-chemistry profiles and no temperature measurement.</li>
   <li>MQTT publishes measurements only; status entities do not yet receive values.</li>
-  <only maker><li>The card-detect input is active-high only.</li></only>
   <li>A forgotten login password can only be reset by erasing the settings memory over USB.</li>
 </ul>
 <h3>License</h3>

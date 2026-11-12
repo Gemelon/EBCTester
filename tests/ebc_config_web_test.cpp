@@ -148,6 +148,36 @@ int main()
     mock_config.rtc.int_gpio = 14;
     mock_config.rtc.sda_gpio = 15;
     mock_config.rtc.scl_gpio = 16;
+    for (const bool active_high : {false, true}) {
+        mock_config.sd.card_detect_active_high = active_high;
+        httpd_req_t polarity_get;
+        get_handler(&polarity_get);
+        Json response(cJSON_Parse(polarity_get.response.c_str()), cJSON_Delete);
+        const cJSON *item = nullptr;
+        bool found = false;
+        cJSON_ArrayForEach(item, cJSON_GetObjectItemCaseSensitive(response.get(), "fields")) {
+            if (std::strcmp(cJSON_GetObjectItemCaseSensitive(item, "name")->valuestring,
+                            "card_detect_active_high") != 0) continue;
+            assert(std::strcmp(cJSON_GetObjectItemCaseSensitive(item, "type")->valuestring,
+                               "checkbox") == 0);
+            assert((cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(item, "value")) != 0) == active_high);
+            found = true;
+        }
+        assert(found);
+        Json body(cJSON_Parse(request_body().c_str()), cJSON_Delete);
+        cJSON *sd = cJSON_GetObjectItemCaseSensitive(body.get(), "sd");
+        const Field *polarity = nullptr;
+        for (const Field &field : fields) {
+            if (std::strcmp(field.name, "card_detect_active_high") == 0) polarity = &field;
+        }
+        assert(polarity != nullptr);
+        mock_config.sd.card_detect_active_high = !active_high;
+        assert(parse_field(mock_config, *polarity,
+                           cJSON_GetObjectItemCaseSensitive(sd, "card_detect_active_high")));
+        assert((mock_config.sd.card_detect_active_high != 0) == active_high);
+        Json invalid(cJSON_CreateNumber(1), cJSON_Delete);
+        assert(!parse_field(mock_config, *polarity, invalid.get()));
+    }
     assert(ebc_config_web_init() == ESP_OK && registered.size() == 1 &&
            registered[0] == "maker-settings");
     assert(ebc_config_web_register_reset() == ESP_OK && registered.size() == 2 &&
@@ -170,6 +200,7 @@ int main()
     req = request(good);
     save_handler(&req);
     assert(req.status == "200 OK" && saves == 1 && notifications == 1 && active);
+    assert(mock_config.sd.card_detect_active_high == 1);
     assert(std::strcmp(mock_config.ota.web_password, "private-web-password") == 0);
     restart_task = nullptr;
     for (const std::string bad : {"{}", "{\"active\":true,\"unknown\":{}}",

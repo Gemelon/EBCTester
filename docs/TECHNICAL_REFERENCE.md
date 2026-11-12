@@ -488,10 +488,22 @@ The V2 `sdkconfig` selects SPI at 10 MHz: CLK=GPIO6, MOSI=GPIO7, MISO=GPIO5
 and CS=GPIO17. The configured card-detect input is GPIO13. The alternative
 4-bit SDMMC mapping is CLK=GPIO6, CMD=GPIO7, D0=GPIO5, D1=GPIO4, D2=GPIO18
 and D3=GPIO17. Both bus modes support configurable pins and a 10 MHz clock.
-Firmware expects card detect to be high when a card is inserted. The original
-board's switch is active-low; configure card detect as `-1` for that wiring in
-Maker Settings. Ensure the chosen pins are available on the board and use
-suitable external pull-ups on the SD signal lines (3.3 V only).
+Card detection defaults to active low, matching the original board's switch.
+`CONFIG_SD_CARD_MANAGER_CARD_DETECT_ACTIVE_HIGH` selects active-high detection;
+the same boolean is stored as `sd.card_detect_active_high` and exposed as
+**Card detect active high (off: active low)** in Maker Settings. It applies to
+both SDMMC and SPI after restart. GPIO `-1` bypasses detection and assumes a
+card is present, regardless of polarity. The detect input retains its internal
+pull-up; active-high wiring must drive a stable low level when no card is present.
+Four consistent samples at 250 ms intervals still debounce insertion/removal.
+Configuration structure version 3 uses the former SD padding byte for this
+boolean without shifting existing fields. Version 1/2 blobs are CRC-checked
+before migration and retain active-high behavior and all other saved settings.
+For an existing active-low board, clear the checkbox and configure its actual
+detect GPIO instead of the former `-1` workaround. New/reset configurations use
+the menuconfig default (active low unless overridden).
+Ensure the chosen pins are available on the board and use suitable external
+pull-ups on the SD signal lines (3.3 V only).
 
 Format cards as FAT32. The ESP-IDF 6.0.1 bundled FatFs configuration disables
 exFAT, which this component therefore does not support. FatFs API UTF-8 encoding
@@ -541,6 +553,11 @@ on the setup AP without internet. It shows battery/run selection, cards for
 current, voltage, capacity and status, voltage/current and capacity charts per
 segment, capacity per segment, and the segment timeline. Running tests refresh
 every 15 seconds.
+
+If loading the run list fails (for example while the SD card is missing or the
+database is initializing), the visible page retries every 15 seconds. The
+error remains visible until a request succeeds, then disappears or is replaced
+by the empty-list message. A successful manual refresh also cancels the retry.
 
 | Endpoint | Purpose |
 | --- | --- |

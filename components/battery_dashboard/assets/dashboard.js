@@ -120,6 +120,8 @@
   let charts = {};
   let currentRunId = "";
   let refreshTimer = 0;
+  let catalogRetryTimer = 0;
+  let catalogBusy = false;
   let busy = false;
 
   const modeInfo = (mode) => MODES[mode] || { label: mode || "?", badge: "text-bg-light" };
@@ -446,16 +448,29 @@
     }
   }
 
+  function scheduleCatalogRetry() {
+    clearTimeout(catalogRetryTimer);
+    catalogRetryTimer = setTimeout(() => {
+      if ($("dash-run") && document.visibilityState === "visible") void refreshCatalog();
+      else scheduleCatalogRetry();
+    }, REFRESH_MS);
+  }
+
   async function refreshCatalog(preferredRun) {
+    if (catalogBusy) return false;
+    catalogBusy = true;
+    clearTimeout(catalogRetryTimer);
+    catalogRetryTimer = 0;
     try {
       await loadCatalog(preferredRun || $("dash-run").value);
-      if (!catalog.runs.length) {
-        showMessage(I18n.t("dashboard.noRuns"), "secondary");
-      }
+      showMessage(catalog.runs.length ? "" : I18n.t("dashboard.noRuns"), "secondary");
       return true;
     } catch (error) {
       showMessage(I18n.f("text.9ee28309cc48", {p0: error.message}), "danger");
+      scheduleCatalogRetry();
       return false;
+    } finally {
+      catalogBusy = false;
     }
   }
 
