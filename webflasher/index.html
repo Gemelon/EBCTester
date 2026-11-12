@@ -1,20 +1,306 @@
 <!DOCTYPE html>
+<!-- SPDX-FileCopyrightText: 2026 Thomas Stoll
+     SPDX-License-Identifier: Apache-2.0 -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EBCTester V2 – Web Installer</title>
+  <meta name="description" content="Install the EBCTester V2 firmware on your ESP32-S3 directly from the browser.">
   <script type="module"
     src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
   <style>
-    body { font-family: sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }
+    :root {
+      --navy: #0b1628;
+      --navy-2: #13233d;
+      --teal: #17a2a6;
+      --teal-dark: #0f7f83;
+      --yellow: #f5c72c;
+      --text: #1b2433;
+      --muted: #5c6b7f;
+      --line: #e3e8ef;
+      --bg: #f5f7fa;
+      --card: #ffffff;
+      --radius: 14px;
+
+      /* ESP Web Tools dialog colours */
+      --improv-primary-color: var(--teal);
+      --improv-on-primary-color: #fff;
+      --mdc-theme-primary: var(--teal);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.55;
+    }
+    a { color: var(--teal-dark); }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+
+    /* ---------- Hero ---------- */
+    header.hero {
+      background:
+        radial-gradient(circle at 85% 20%, rgba(23,162,166,.35), transparent 45%),
+        linear-gradient(160deg, var(--navy-2) 0%, var(--navy) 70%);
+      color: #fff;
+      padding: 48px 0 96px;
+    }
+    .logo-card {
+      display: inline-block;
+      background: #fff;
+      border-radius: var(--radius);
+      padding: 14px 22px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    .logo-card img { display: block; height: 64px; width: auto; }
+    .hero h1 {
+      font-size: clamp(1.9rem, 4vw, 2.7rem);
+      line-height: 1.15;
+      margin: 32px 0 12px;
+      letter-spacing: -.02em;
+    }
+    .hero h1 span { color: var(--yellow); }
+    .hero p.lead { font-size: 1.1rem; color: #c9d4e3; max-width: 620px; margin: 0; }
+    .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+    .badge {
+      font-size: .82rem; font-weight: 600;
+      padding: 5px 12px; border-radius: 999px;
+      background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18);
+      color: #e6edf6;
+    }
+    .badge.version { background: var(--teal); border-color: var(--teal); color: #fff; }
+
+    /* ---------- Install card ---------- */
+    .install {
+      margin-top: -64px;
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: 0 12px 40px rgba(11,22,40,.12);
+      padding: 32px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: center;
+    }
+    .install h2 { margin: 0 0 6px; font-size: 1.35rem; }
+    .install p { margin: 0; color: var(--muted); }
+    .btn {
+      display: inline-flex; align-items: center; gap: 10px;
+      font: inherit; font-size: 1.05rem; font-weight: 700;
+      padding: 15px 28px; border: 0; border-radius: 12px; cursor: pointer;
+      background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%);
+      color: #fff;
+      box-shadow: 0 6px 18px rgba(23,162,166,.35);
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(23,162,166,.45); }
+    .btn svg { width: 22px; height: 22px; }
+    esp-web-install-button:not(:defined) .alert { display: none; }
+    .alert {
+      max-width: 380px;
+      border-radius: 10px; padding: 14px 16px; font-size: .95rem;
+      background: #fff7e0; border: 1px solid #f3d27a; color: #6b5200;
+    }
+
+    /* ---------- Sections ---------- */
+    section { padding: 48px 0 0; }
+    section h2 { font-size: 1.4rem; margin: 0 0 18px; }
+    .steps { counter-reset: step; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+    .step {
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 20px; position: relative;
+    }
+    .step::before {
+      counter-increment: step; content: counter(step);
+      display: grid; place-items: center;
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--navy); color: var(--yellow); font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .step h3 { margin: 0 0 6px; font-size: 1.02rem; }
+    .step p { margin: 0; color: var(--muted); font-size: .94rem; }
+
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+    .panel {
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px;
+    }
+    .panel h3 { margin: 0 0 10px; font-size: 1.05rem; }
+    .panel ul { margin: 0; padding-left: 20px; }
+    .panel li { margin: 6px 0; color: var(--text); }
+    .panel li::marker { color: var(--teal); }
+
+    details {
+      background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+      padding: 0 18px; margin-bottom: 10px;
+    }
+    summary { cursor: pointer; font-weight: 600; padding: 15px 0; list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+    summary::before { content: "＋"; color: var(--teal); margin-right: 10px; font-weight: 700; }
+    details[open] summary::before { content: "－"; }
+    details p { margin: 0 0 16px; color: var(--muted); }
+
+    .links { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .links a {
+      display: block; text-decoration: none; color: var(--text);
+      background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px;
+      transition: border-color .15s ease, transform .15s ease;
+    }
+    .links a:hover { border-color: var(--teal); transform: translateY(-1px); }
+    .links strong { display: block; }
+    .links span { color: var(--muted); font-size: .9rem; }
+
+    footer { margin: 56px 0 0; padding: 24px 0 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: .88rem; }
+    code { background: #eef2f6; padding: 1px 6px; border-radius: 5px; font-size: .9em; }
+
+    @media (max-width: 640px) {
+      .install { grid-template-columns: 1fr; text-align: center; }
+      .logo-card img { height: 48px; }
+    }
   </style>
 </head>
 <body>
-  <h1>EBCTester V2 – Firmware Installer</h1>
-  <p>Connect the EBCTester via USB and click the button below.
-     Works with Chrome or Edge on desktop.</p>
-  <esp-web-install-button manifest="manifest.json"></esp-web-install-button>
-  <p><small>If the device is not detected, hold the BOOT button while plugging in USB.</small></p>
+
+  <header class="hero">
+    <div class="wrap">
+      <div class="logo-card">
+        <img src="https://raw.githubusercontent.com/Gemelon/EBCTester/main/docs/images/readme-logo.png"
+             alt="EBCTester">
+      </div>
+      <h1>Firmware installer for <span>EBCTester V2</span></h1>
+      <p class="lead">Flash the latest EBCTester firmware onto your ESP32-S3 straight from the
+        browser – no ESP-IDF, no Python, no command line.</p>
+      <div class="badges">
+        <span class="badge version" id="fw-version">Latest release</span>
+        <span class="badge">ESP32-S3</span>
+        <span class="badge">Factory &amp; Maker builds</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <div class="install">
+      <div>
+        <h2>Ready to install?</h2>
+        <p>Connect the EBCTester to this computer via USB, then click the button.</p>
+      </div>
+      <esp-web-install-button manifest="manifest.json">
+        <button slot="activate" class="btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/>
+          </svg>
+          Connect &amp; install
+        </button>
+        <div slot="unsupported" class="alert">
+          <strong>Your browser is not supported.</strong>
+          Please open this page in <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>
+          on a desktop computer (Windows, macOS or Linux).
+        </div>
+        <div slot="not-allowed" class="alert">
+          <strong>Secure connection required.</strong>
+          Open this page via <code>https://</code> to access the serial port.
+        </div>
+      </esp-web-install-button>
+    </div>
+
+    <section>
+      <h2>How it works</h2>
+      <div class="steps">
+        <div class="step">
+          <h3>Connect via USB</h3>
+          <p>Use a USB data cable – a charge-only cable will not work.</p>
+        </div>
+        <div class="step">
+          <h3>Select the port</h3>
+          <p>Click <em>Connect &amp; install</em> and choose the EBCTester port in the browser dialog.</p>
+        </div>
+        <div class="step">
+          <h3>Install</h3>
+          <p>Confirm the installation. Flashing takes about one to two minutes.</p>
+        </div>
+        <div class="step">
+          <h3>Restart</h3>
+          <p>The device restarts automatically. Then continue with the setup described in the manual.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Requirements</h3>
+          <ul>
+            <li>Chrome or Edge on a desktop computer</li>
+            <li>USB data cable</li>
+            <li>EBCTester V2 board or a Maker build with ESP32-S3</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Erase or keep settings?</h3>
+          <ul>
+            <li><strong>New device:</strong> tick <em>Erase device</em> for a clean installation.</li>
+            <li><strong>Update:</strong> leave it unticked to keep your settings – or simply use the
+              built-in OTA update in the web interface.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Troubleshooting</h2>
+      <details>
+        <summary>No serial port is listed</summary>
+        <p>Check the USB cable (data, not charge-only) and try another USB port. Close any other program
+          that uses the port, e.g. a serial monitor in VS Code or the Arduino IDE.</p>
+      </details>
+      <details>
+        <summary>The connection fails or flashing does not start</summary>
+        <p>Hold the <strong>BOOT</strong> button while plugging in the USB cable, release it, and click
+          <em>Connect &amp; install</em> again.</p>
+      </details>
+      <details>
+        <summary>The device does not start after flashing</summary>
+        <p>Press <strong>RESET</strong> once or unplug and reconnect the USB cable.</p>
+      </details>
+    </section>
+
+    <section>
+      <h2>Documentation &amp; downloads</h2>
+      <div class="links">
+        <a href="https://github.com/Gemelon/EBCTester/blob/main/docs/EBCTester_Manual_Factory_EN.pdf">
+          <strong>User Manual – Factory</strong>
+          <span>Original EBCTester board</span>
+        </a>
+        <a href="https://github.com/Gemelon/EBCTester/blob/main/docs/EBCTester_Manual_Maker_EN.pdf">
+          <strong>User Manual – Maker</strong>
+          <span>Self-built devices &amp; technical reference</span>
+        </a>
+        <a href="https://github.com/Gemelon/EBCTester/releases/latest">
+          <strong>Release files</strong>
+          <span>Firmware images &amp; changelog</span>
+        </a>
+        <a href="https://github.com/Gemelon/EBCTester">
+          <strong>Source code</strong>
+          <span>GitHub repository</span>
+        </a>
+      </div>
+    </section>
+
+    <footer>
+      EBCTester © 2026 Thomas Stoll · Apache-2.0 ·
+      Installer powered by <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a>
+    </footer>
+  </main>
+
+  <script>
+    fetch("manifest.json", { cache: "no-store" })
+      .then(r => r.ok ? r.json() : null)
+      .then(m => { if (m && m.version) document.getElementById("fw-version").textContent = "Firmware v" + m.version; })
+      .catch(() => {});
+  </script>
 </body>
 </html>
