@@ -25,8 +25,8 @@ test("fresh checkouts use pinned packages and opt-in publication without private
   assert.match(source, /file\(MAKE_DIRECTORY "\$\{EBCTESTER_PUBLISH_DIR\}"\)/);
   assert.doesNotMatch(source, /192\.168\.0\.236|J:/);
   const defaults = fs.readFileSync(path.join(root, "sdkconfig.defaults"), "utf8");
-  assert.match(defaults, /https:\/\/updates\.example\.org/);
-  assert.match(defaults, /CONFIG_ESP_HTTPS_OTA_ALLOW_HTTP=n/);
+  assert.match(defaults, /CONFIG_OTA_SUITE_UPDATE_MANIFEST_URL="https:\/\/ebctester\.gemelon\.de\/firmware\.json"/);
+  assert.doesNotMatch(defaults, /^CONFIG_(ESP_HTTPS_OTA_ALLOW_HTTP|OTA_SUITE_OTA_ALLOW_HTTP)=y$/m);
   const settings = fs.readFileSync(path.join(root, "components", "mariadb_sync", "mariadb_sync_internal.h"), "utf8");
   assert.match(settings, /bool enabled = false;/);
   assert.match(settings, /std::string host;/);

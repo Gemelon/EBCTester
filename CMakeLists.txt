@@ -3,7 +3,7 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-set(PROJECT_VER "2.0.9")
+set(PROJECT_VER "2.0.11")
 include("${CMAKE_CURRENT_LIST_DIR}/CMakeUserConfig.cmake" OPTIONAL)
 option(EBCTESTER_VALIDATE_ONLY "Build without publishing intermediate firmware" OFF)
 if(EBCTESTER_VALIDATE_ONLY)
@@ -27,6 +27,8 @@ set(EXTRA_COMPONENT_DIRS
     "${SD_CARD_MANAGER_DIR}/components")
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(EBCTester)
+
+add_dependencies(app save-defconfig)
 
 option(EBCTESTER_PUBLISH_FIRMWARE "Publish firmware after each successful build" OFF)
 set(EBCTESTER_PUBLISH_DIR "" CACHE PATH "Local publication directory; empty uses build staging for SFTP")

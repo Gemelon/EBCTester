@@ -212,6 +212,16 @@ static void fresh(int up, int down)
 }
 int main(void)
 {
+#ifdef EBC_CONFIG_BOARD_DEFAULTS
+    fresh(1, 1);
+    assert(ebc_config_init() == ESP_OK);
+    assert(ebc_config_get_mode() == EBC_FW_FACTORY && ebc_config_is_active());
+    assert(ebc_config_validate(ebc_config_get(), true) == ESP_OK);
+    reboot();
+    assert(ebc_config_init() == ESP_OK && ebc_config_is_active() && gpio_calls == 0);
+    puts("Fresh board defaults initialize FactoryMode without GPIO conflicts.");
+    return 0;
+#endif
     const int levels[][2] = {{1, 0}, {0, 0}, {1, 1}, {0, 1}};
     for (unsigned i = 0; i < 4; ++i) {
         fresh(levels[i][0], levels[i][1]);

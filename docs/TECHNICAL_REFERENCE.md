@@ -337,12 +337,23 @@ passwords. Only logged-in users can read them.
 ## Setup and migration
 
 Use the ESP-IDF VS Code extension, target **esp32s3**. The starter package's
-components are imported through `EXTRA_COMPONENT_DIRS`. On first reconfigure,
-the project maps saved BatteryTester settings to their OTA Suite symbols,
-including the configured AP password, SNTP server, manifest URL, HTTP opt-in,
-and LED GPIO. Station credentials and a generated AP password remain in the
-same `network` NVS namespace and are not erased. New builds keep the
-`BatteryTester-XXXXXX` setup AP name and enable the onboard LED on GPIO 48.
+components are imported through `EXTRA_COMPONENT_DIRS`. Configure the AP
+password, SNTP server, manifest URL, HTTP opt-in and LED GPIO directly through
+their OTA Suite settings. The legacy `BATTERY_*` Kconfig options and their
+fallback mappings have been removed. Station credentials and a generated AP
+password remain in the same `network` NVS namespace and are not erased.
+New builds keep the `BatteryTester-XXXXXX` setup AP name and enable the onboard
+LED on GPIO 48.
+
+The local, untracked `sdkconfig` takes priority over `sdkconfig.defaults`.
+Each application build depends on ESP-IDF's `save-defconfig` target, which
+exports the effective configuration to the tracked defaults file. Commit this
+export so clean GitHub builds use the same board settings. CI checks that its
+own export does not change the committed defaults and tests FactoryMode startup
+using a fresh configuration generated from those defaults.
+Use menuconfig to change settings; deleting generated entries does not remove
+their Kconfig definitions. Firmware defaults seed a new device configuration,
+but do not replace an existing valid `ebc_cfg/config` NVS blob.
 
 In menuconfig:
 
@@ -358,11 +369,8 @@ In menuconfig:
 - **OTA Suite update checks → Fixed firmware manifest URL**:
   your deployment URL, e.g. `https://updates.example.org/BatteryTester/firmware.json`.
 - HTTP requires **OTA Suite firmware updates → Allow unencrypted HTTP OTA**.
-  Fresh configurations default to HTTP disabled; the existing saved opt-in is
-  migrated. HTTPS always retains CA,
+  Fresh configurations default to HTTP disabled. HTTPS always retains CA,
   hostname and certificate date validation, including when HTTP is allowed.
-- The legacy **Fixed firmware URL** setting is retained for configuration
-  compatibility but is not used by the manifest-based updater.
 - **OTA Suite network**: optional AP/admin password (8–63 characters)
   and SNTP server. An empty password setting uses the stored password or
   generates and persists one in NVS. NVS errors never silently erase settings.
@@ -416,7 +424,8 @@ rules; it never substitutes its own wall clock. After 15 seconds without a
 fresh device status, time/date become placeholders.
 RTC-disabled devices retain their existing SNTP interval and synchronization.
 
-Host-only verification (MSVC developer shell on Windows):
+Host-only verification after an ESP-IDF build, using its Python environment
+and a host C/C++ compiler (MSVC developer shell on Windows):
 
 ```powershell
 python tests\rtc_clock_test.py

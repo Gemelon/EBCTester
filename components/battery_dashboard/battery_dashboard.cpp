@@ -27,6 +27,8 @@ extern const unsigned char brand_logo_start[] asm("_binary_brand_logo_png_start"
 extern const unsigned char brand_logo_end[] asm("_binary_brand_logo_png_end");
 extern const unsigned char brand_icon_start[] asm("_binary_brand_icon_png_start");
 extern const unsigned char brand_icon_end[] asm("_binary_brand_icon_png_end");
+extern const unsigned char favicon_start[] asm("_binary_favicon_ico_start");
+extern const unsigned char favicon_end[] asm("_binary_favicon_ico_end");
 
 static const char *TAG = "dashboard";
 esp_err_t run_management_init();
@@ -417,25 +419,30 @@ esp_err_t chart_library_handler(httpd_req_t *req)
 }
 
 esp_err_t send_branding_image(httpd_req_t *req, const unsigned char *start,
-                              const unsigned char *end)
+                              const unsigned char *end, const char *content_type)
 {
     if (!web_interface_authorize_request(req, false)) {
         return ESP_OK;
     }
     httpd_resp_set_hdr(req, "Cache-Control", "private, max-age=86400");
     httpd_resp_set_hdr(req, "X-Content-Type-Options", "nosniff");
-    httpd_resp_set_type(req, "image/png");
+    httpd_resp_set_type(req, content_type);
     return httpd_resp_send(req, reinterpret_cast<const char *>(start), end - start);
 }
 
 esp_err_t brand_logo_handler(httpd_req_t *req)
 {
-    return send_branding_image(req, brand_logo_start, brand_logo_end);
+    return send_branding_image(req, brand_logo_start, brand_logo_end, "image/png");
 }
 
 esp_err_t brand_icon_handler(httpd_req_t *req)
 {
-    return send_branding_image(req, brand_icon_start, brand_icon_end);
+    return send_branding_image(req, brand_icon_start, brand_icon_end, "image/png");
+}
+
+esp_err_t favicon_handler(httpd_req_t *req)
+{
+    return send_branding_image(req, favicon_start, favicon_end, "image/x-icon");
 }
 
 esp_err_t runs_handler(httpd_req_t *req)
@@ -517,6 +524,7 @@ const httpd_uri_t routes[] = {
     {.uri = "/ui/dashboard/chart.js", .method = HTTP_GET, .handler = chart_library_handler, .user_ctx = NULL},
     {.uri = "/ui/dashboard/brand-logo.png", .method = HTTP_GET, .handler = brand_logo_handler, .user_ctx = NULL},
     {.uri = "/ui/dashboard/brand-icon.png", .method = HTTP_GET, .handler = brand_icon_handler, .user_ctx = NULL},
+    {.uri = "/ui/dashboard/favicon.ico", .method = HTTP_GET, .handler = favicon_handler, .user_ctx = NULL},
     {.uri = "/api/db/runs", .method = HTTP_GET, .handler = runs_handler, .user_ctx = NULL},
     {.uri = "/api/db/run", .method = HTTP_GET, .handler = run_handler, .user_ctx = NULL},
     {.uri = "/api/db/measurements", .method = HTTP_GET, .handler = measurements_handler, .user_ctx = NULL},

@@ -54,6 +54,13 @@ jobs:
           idf.py build
           idf.py merge-bin -o merged.bin
 
+      - name: Verify synchronized configuration and factory startup
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          git diff --exit-code -- sdkconfig.defaults
+          python tests/ebc_config_test.py
+
       - name: Package release files
         shell: bash
         run: |

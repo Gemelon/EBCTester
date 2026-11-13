@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 
 root = Path(__file__).resolve().parents[1]
@@ -51,25 +52,50 @@ with tempfile.TemporaryDirectory(prefix="ebctester-config-") as temporary:
         "SD_CARD_MANAGER_GPIO_SPI_MISO": "2", "SD_CARD_MANAGER_GPIO_SPI_MOSI": "7",
         "SD_CARD_MANAGER_GPIO_SPI_CS": "3", "SD_CARD_MANAGER_GPIO_SPI_CLK": "10",
     }
-    for spi in (False, True):
+    for mode in ("sdmmc", "spi", "board"):
         selected = dict(defaults)
-        if spi:
+        if mode == "spi":
             selected["SD_CARD_MANAGER_BUS_SPI"] = "1"
             selected["SD_CARD_MANAGER_CARD_DETECT_ACTIVE_HIGH"] = "1"
         else:
             selected["SD_CARD_MANAGER_BUS_SDMMC_4BIT"] = "1"
-        (work / "sdkconfig.h").write_text(
-            "".join(f"#define CONFIG_{name} {value}\n" for name, value in selected.items()),
-            encoding="ascii")
+        if mode == "board":
+            built_config = json.loads((root / "build" / "config" / "sdkconfig.json").read_text(encoding="utf-8"))
+            subprocess.run([
+                sys.executable, "-m", "kconfgen", "--list-separator=semicolon",
+                "--kconfig", str(Path(idf_path) / "Kconfig"),
+                "--sdkconfig-rename", str(Path(idf_path) / "sdkconfig.rename"),
+                "--config", str(work / "sdkconfig"),
+                "--defaults", str(root / "sdkconfig.defaults"),
+                "--env-file", str(root / "build" / "config.env"),
+                "--env", f"IDF_INIT_VERSION={built_config['IDF_INIT_VERSION']}",
+                "--dont-write-deprecated",
+                "--output", "header", str(work / "sdkconfig.h"),
+                "--output", "json", str(work / "sdkconfig.json"),
+            ], cwd=root, check=True)
+            assert "CONFIG_BATTERY_" not in (work / "sdkconfig.h").read_text(encoding="utf-8"), \
+                "Legacy settings must not be regenerated."
+            fresh_config = json.loads((work / "sdkconfig.json").read_text(encoding="utf-8"))
+            differences = sorted(
+                name for name in fresh_config.keys() | built_config.keys()
+                if fresh_config.get(name) != built_config.get(name))
+            assert not differences, f"Defaults differ from the built configuration: {', '.join(differences)}"
+        else:
+            (work / "sdkconfig.h").write_text(
+                "".join(f"#define CONFIG_{name} {value}\n" for name, value in selected.items()),
+                encoding="ascii")
         includes = [work, root / "components" / "ebc_config" / "include", parser]
-        executable = work / ("config-spi" if spi else "config-sdmmc")
+        executable = work / f"config-{mode}"
         source = root / "tests" / "ebc_config_test.c"
+        defines = ["EBC_CONFIG_BOARD_DEFAULTS"] if mode == "board" else []
         if Path(compiler).name.lower() in ("cl", "cl.exe"):
             executable = executable.with_suffix(".exe")
             command = [compiler, "/nologo", "/std:c11", "/D_CRT_SECURE_NO_WARNINGS",
+                       *[f"/D{name}" for name in defines],
                        *[f"/I{p}" for p in includes], str(source), str(parser / "http_parser.c"), f"/Fe:{executable}"]
         else:
             command = [compiler, "-std=c11", "-Wall", "-Wextra",
+                       *[f"-D{name}" for name in defines],
                        *[f"-I{p}" for p in includes], str(source), str(parser / "http_parser.c"), "-o", str(executable)]
         subprocess.run(command, cwd=work, check=True)
         subprocess.run([str(executable)], cwd=work, check=True)

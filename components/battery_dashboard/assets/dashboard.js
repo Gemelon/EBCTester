@@ -93,8 +93,8 @@
     favicon.rel = "icon";
     document.head.append(favicon);
   }
-  favicon.type = "image/png";
-  favicon.href = "/ui/dashboard/brand-icon.png";
+  favicon.type = "image/x-icon";
+  favicon.href = "/ui/dashboard/favicon.ico";
 
   const $ = (id) => document.getElementById(id);
   const MAX_POINTS = 1500;

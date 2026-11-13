@@ -22,6 +22,7 @@ function page(runs = [], error = null) {
   const pendingTimers = new Map();
   let timerId = 0;
   const observers = new Map();
+  const headElements = [];
   const translations = { ...strings };
   function element(id) {
     assert.notEqual(id, "dash-demo");
@@ -41,8 +42,8 @@ function page(runs = [], error = null) {
   }
   const context = {
     document: {
-      getElementById: element, querySelector: () => ({}), head: { append() {} },
-      createElement: () => ({ append() {}, setAttribute() {} }), visibilityState: "visible",
+      getElementById: element, querySelector: () => null, head: { append(child) { headElements.push(child); } },
+      createElement: (tag) => ({ tag, append() {}, setAttribute() {} }), visibilityState: "visible",
       addEventListener(name, listener) { documentListeners[name] = listener; },
     },
     MutationObserver: class {
@@ -95,13 +96,23 @@ function page(runs = [], error = null) {
   vm.runInContext(script, context);
   return {
     element, requests, charts, timers, documentListeners, observers, translations,
-    document: context.document,
+    document: context.document, headElements,
     setError(value) { error = value; },
     setRuns(value) { runs = value; },
   };
 }
 
 const settle = () => new Promise(setImmediate);
+
+test("dashboard uses the embedded ICO favicon", () => {
+  const view = page();
+  const favicon = view.headElements.find(({ tag }) => tag === "link");
+  assert.ok(favicon);
+  assert.equal(favicon.rel, "icon");
+  assert.equal(favicon.type, "image/x-icon");
+  assert.equal(favicon.href, "/ui/dashboard/favicon.ico");
+  assert.equal(fs.readFileSync(path.join(dashboard, "assets", "favicon.ico")).readUInt16LE(2), 1);
+});
 
 test("empty dashboard initializes and refreshes without demo/delete controls", async () => {
   const view = page();

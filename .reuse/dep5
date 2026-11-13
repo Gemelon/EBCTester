@@ -3,7 +3,7 @@ Upstream-Name: EBCTester
 Source: https://github.com/Gemelon/EBCTester
 
 Files: .devcontainer/*.json .gitattributes .gitignore .gitmodules
-       dependencies.lock main/idf_component.yml partitions.csv
+       dependencies.lock main/idf_component.yml partitions.csv sdkconfig.defaults
        sd_card/languages/*.json
 Copyright: 2026 Thomas Stoll
 License: Apache-2.0

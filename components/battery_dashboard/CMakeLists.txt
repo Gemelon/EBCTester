@@ -6,5 +6,6 @@ idf_component_register(
     INCLUDE_DIRS "include"
     PRIV_REQUIRES battery_database web_interface esp_http_server espressif__cjson test_store
     EMBED_FILES "assets/dashboard.html" "assets/dashboard.js" "assets/chart.umd.js"
+                "assets/favicon.ico"
                 "assets/brand_logo.png" "assets/brand_icon.png" "assets/test_runs.html" "assets/test_runs.js"
 )

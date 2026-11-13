@@ -3,6 +3,39 @@
 
 # Changelog
 
+## [2.0.11] - 2026-11-13
+
+### Fixed
+
+- Export the effective local build configuration to `sdkconfig.defaults` on
+  every application build. Fresh builds now use the correct board UART and SD
+  pins instead of component defaults that conflict with RTC GPIO14/15.
+- Remove obsolete `BATTERY_*` Kconfig settings and fallback mappings so the
+  legacy menu and entries no longer reappear in generated configurations.
+
+### Validation
+
+- Configuration host tests passed for SDMMC, SPI and FactoryMode startup with
+  freshly generated board defaults. The fresh configuration matches every
+  effective setting in the local build and contains no legacy entries.
+- Full ESP-IDF build and local publication succeeded; a repeat build preserved
+  the defaults and firmware bytes. The versioned image matches the built image
+  and the manifest's version, size and SHA256.
+- No hardware test, flashing or public OTA upload was performed.
+
+## [2.0.10] - 2026-11-13
+
+### Changed
+
+- Use the supplied ICO artwork as the dashboard favicon.
+
+### Validation
+
+- Dashboard host tests passed. Full ESP-IDF build and local publication
+  succeeded; the versioned image matches the built firmware and the manifest's
+  version, size and SHA256.
+- No hardware test, flashing or public OTA upload was performed.
+
 ## [2.0.9] - 2026-11-12
 
 ### Fixed
