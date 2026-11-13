@@ -3,6 +3,28 @@
 
 # Changelog
 
+## [2.0.12] - 2026-11-13
+
+### Added
+
+- Access the web UI at `http://ebct-XXXXXX.local/` through mDNS on the setup AP
+  and router WLAN, with HTTP service discovery on port 80. The hostname reuses
+  the AP name and its stable six-digit SoftAP MAC suffix.
+
+### Changed
+
+- Shorten the default setup AP name to `ebct-XXXXXX`. Reconnect to the new SSID
+  after updating; saved passwords and router credentials remain unchanged.
+
+### Validation and limitations
+
+- Discovery startup/error-cleanup and fresh-board configuration host tests
+  passed, along with publication tests. Full ESP-IDF build and local firmware
+  packaging succeeded; the versioned BIN matches the built image and manifest.
+- mDNS requires client support and local multicast; IP access remains available.
+  Resolution on real phones/routers is not hardware-tested. No flashing or
+  public OTA upload was performed.
+
 ## [2.0.11] - 2026-11-13
 
 ### Fixed

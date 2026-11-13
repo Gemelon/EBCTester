@@ -60,6 +60,7 @@ jobs:
           . "$IDF_PATH/export.sh"
           git diff --exit-code -- sdkconfig.defaults
           python tests/ebc_config_test.py
+          python tests/local_discovery_test.py
 
       - name: Package release files
         shell: bash

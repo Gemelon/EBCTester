@@ -17,6 +17,7 @@ This does not relicense any upstream software.
 | SQLite 3.53.4 | https://sqlite.org/2026/sqlite-amalgamation-3530400.zip | Public domain, https://sqlite.org/copyright.html; original SQLite source notices remain in the downloaded archive |
 | espressif/cjson 1.7.19~2 | https://components.espressif.com/components/espressif/cjson | [MIT](third_party/licenses/cjson/LICENSE), Dave Gamble and cJSON contributors |
 | espressif/led_strip 3.1.0~1 | https://components.espressif.com/components/espressif/led_strip | [Apache-2.0](third_party/licenses/led_strip/LICENSE), original Espressif source headers remain in managed_components |
+| espressif/mdns 1.15.1 | https://components.espressif.com/components/espressif/mdns | [Apache-2.0](third_party/licenses/mdns/LICENSE), original Espressif source headers remain in managed_components |
 
 Bootstrap and Chart.js bundles and their existing license files are not
 modified by the project's Apache licensing. The missing kurkle license text

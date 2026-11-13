@@ -26,6 +26,7 @@
 #include "ha_mqtt_web.h"
 #include "rtc_clock.h"
 #include "ds3231_time.h"
+#include "local_discovery.h"
 
 static const char *TAG = "app_main";
 static ebc_config_t boot_config;
@@ -143,6 +144,11 @@ void app_main(void)
     ESP_ERROR_CHECK(ebc_config_web_register_reset());
     ESP_LOGI(TAG, "Starting device services");
     ESP_ERROR_CHECK(device_app_start());
+    const esp_err_t discovery_err = local_discovery_start();
+    if (discovery_err != ESP_OK) {
+        ESP_LOGW(TAG, "Cannot start mDNS discovery: %s; use the device IP address",
+                 esp_err_to_name(discovery_err));
+    }
     const esp_err_t debug_err = debug_log_web_start();
     if (debug_err != ESP_OK) {
         ESP_LOGW(TAG, "Cannot apply debug log setting: %s", esp_err_to_name(debug_err));

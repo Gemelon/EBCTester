@@ -342,8 +342,8 @@ password, SNTP server, manifest URL, HTTP opt-in and LED GPIO directly through
 their OTA Suite settings. The legacy `BATTERY_*` Kconfig options and their
 fallback mappings have been removed. Station credentials and a generated AP
 password remain in the same `network` NVS namespace and are not erased.
-New builds keep the `BatteryTester-XXXXXX` setup AP name and enable the onboard
-LED on GPIO 48.
+New builds use the `ebct-XXXXXX` setup AP name and enable the onboard LED on
+GPIO 48.
 
 The local, untracked `sdkconfig` takes priority over `sdkconfig.defaults`.
 Each application build depends on ESP-IDF's `save-defconfig` target, which
@@ -450,11 +450,10 @@ LittleFS but is not mounted or used by the application yet.
 Changing the partition table cannot be done through OTA; install the new
 partition table and firmware over USB. Back up important device settings before
 repartitioning, and verify the exact module marking before flashing.
-Existing `sdkconfig` selections take priority over defaults; legacy BatteryTester
-settings are imported by Kconfig on the first rebuild.
+Existing `sdkconfig` selections take priority over defaults.
 
-Connect to `BatteryTester-XXXXXX` using the password printed on the serial
-console, open **http://192.168.4.1**, log in as **admin** with the initial
+Connect to `ebct-XXXXXX` using the configured AP password,
+open **http://ebct-XXXXXX.local/** (or **http://192.168.4.1**), log in as **admin** with the initial
 web password **ebctester** (or the password saved in Login Settings),
 and enter WLAN credentials. The protected AP remains a recovery path; channel
 changes can briefly interrupt AP access. The UI also displays the station IP.
@@ -490,6 +489,32 @@ blocking the database writer. Without newly recorded samples, measurement
 entities become unavailable after three times the configured recording
 interval. Mode, plan status, connection, battery and result entities are
 currently discovered but do not yet receive state updates.
+
+### Local hostname and service discovery
+
+`main/local_discovery.c` starts Espressif mDNS after the network and web server
+have started. It reuses `network_manager`'s AP SSID as both the hostname and the
+`_http._tcp` service instance on port 80. The default name `ebct-XXXXXX` uses
+the last three bytes of the SoftAP MAC, preserving leading zeros. It does not
+depend on the SD card, assigned IP or database device ID. DNS names are
+case-insensitive, so lowercase suffixes work too.
+
+The managed mDNS component handles the default AP and station interfaces and
+network address changes. The device remains accessible by IP if discovery
+fails; startup failures are logged and do not stop the web UI or recording.
+Name resolution requires client mDNS support and local multicast connectivity
+(UDP 5353); it is not guaranteed across guest networks, VLANs or VPNs. Direct
+AP access still uses `192.168.4.1` as the fallback. Different device APs remain
+separate networks; mDNS does not make them simultaneously reachable through
+one Wi-Fi connection.
+
+The `ebct` prefix is a build setting, exported to `sdkconfig.defaults`, rather
+than a stored NVS setting. Updating from the old `BatteryTester` prefix changes
+the AP SSID but preserves its MAC suffix and saved credentials.
+Host verification: `python tests\local_discovery_test.py` in a host C compiler
+environment. Tests cover two device names and cleanup/error propagation during
+mDNS startup; actual multicast resolution on phones and routers requires
+hardware validation.
 
 ## SD card
 

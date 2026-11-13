@@ -3,6 +3,7 @@
 
 idf_component_register(
     SRCS "led_settings.cpp" "led_policy.c" "main.c" "ebc_config_web.cpp" "rtc_clock.c" "ds3231_time.c"
+         "local_discovery.c"
     INCLUDE_DIRS "."
     REQUIRES device_app sd_card_manager battery_database battery_dashboard mariadb_sync
              test_control ui_localization debug_log ha_mqtt ebc_config status_led ebc_link nvs_flash esp_timer esp_driver_i2c

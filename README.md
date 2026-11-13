@@ -553,14 +553,27 @@ battery test started by the host checks.
 
 1. Start the device using the setup AP password configured for the firmware.
    The standard project default is `ebctester`; change it before deployment.
-2. Connect a phone or computer to `BatteryTester-XXXXXX`.
-3. Open `http://192.168.4.1` and log in as `admin` with the initial web password
+2. Connect a phone or computer to `ebct-XXXXXX`.
+3. Open `http://ebct-XXXXXX.local/` (using the suffix from your device's AP name),
+   or `http://192.168.4.1`, and log in as `admin` with the initial web password
    `ebctester`. SDK configuration supplies initial defaults only; subsequent
    starts use the saved NVS configuration.
 4. Optionally configure home Wi-Fi. Local operation and recording do not
    require that connection.
 5. Insert a FAT32 card, check database readiness, create a battery, and connect
    the tester. Only then start a measurement or plan.
+
+The six hexadecimal suffix characters come from the device's SoftAP MAC
+address, not the SD card, and remain stable across reboots and firmware updates.
+The same `.local` address works through the setup AP and on the router WLAN;
+mDNS also advertises the HTTP service on port 80. Your phone/computer must
+support mDNS and be on the same local network; guest isolation, VPNs or blocked
+multicast can prevent resolution. In that case, use the device's station IP
+or, while directly connected to its AP, `192.168.4.1`.
+Updating this firmware changes the default AP prefix from `BatteryTester`
+to `ebct`; reconnect to the new SSID. Saved passwords and router credentials
+are unchanged. Custom firmware AP prefixes are also used as the mDNS hostname
+and must form a valid DNS label together with the MAC suffix.
 
 The **Battery tester** section contains Measurements, Battery, Manual,
 Automatic, and Internal resistance. **Administration** contains Device
